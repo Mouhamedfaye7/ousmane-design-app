@@ -13,7 +13,7 @@ interface Mesures {
 
 interface Client {
   id: string;
-  nom: string;
+  nom_complet: string;
   telephone: string;
   adresse: string;
   mesures: Mesures;
@@ -47,7 +47,7 @@ export default function ClientsPage() {
     } else if (data) {
       const formattedClients: Client[] = data.map((item: any) => ({
         id: item.id,
-        nom: item.nom || item.nom_complet || 'Sans nom',
+        nom_complet: item.nom_complet || item.nom || 'Sans nom',
         telephone: item.telephone || 'Non renseigné',
         adresse: item.adresse || 'Dakar',
         mesures: item.mesures || defaultMesures
@@ -118,7 +118,7 @@ export default function ClientsPage() {
 
       doc.setFontSize(10);
       doc.setTextColor(100, 116, 139);
-      doc.text(`Client : ${selectedClient.nom}`, 14, 38);
+      doc.text(`Client : ${selectedClient.nom_complet}`, 14, 38);
       doc.text(`Téléphone : ${selectedClient.telephone}`, 14, 44);
       doc.text(`Adresse : ${selectedClient.adresse}`, 14, 50);
       doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, 14, 56);
@@ -155,13 +155,13 @@ export default function ClientsPage() {
         doc.text(currentMesures.notes, 14, finalY + 16, { maxWidth: 180 });
       }
 
-      const fileName = `Mesures_${(selectedClient.nom || 'Client').replace(/\s+/g, '_')}.pdf`;
+      const fileName = `Mesures_${(selectedClient.nom_complet || 'Client').replace(/\s+/g, '_')}.pdf`;
       doc.save(fileName);
 
       let cleanPhone = (selectedClient.telephone || '').replace(/\s+/g, '').replace(/[^0-9]/g, '');
       if (cleanPhone.length === 9) cleanPhone = '221' + cleanPhone;
 
-      const messageText = `Bonjour ${selectedClient.nom},\n\nVoici vos mesures enregistrées chez *Ousmane Design* :\n` +
+      const messageText = `Bonjour ${selectedClient.nom_complet},\n\nVoici vos mesures enregistrées chez *Ousmane Design* :\n` +
         `- Cou: ${currentMesures.cou || '-'} cm\n` +
         `- Épaule: ${currentMesures.epaule || '-'} cm\n` +
         `- Poitrine: ${currentMesures.poitrine || '-'} cm\n` +
@@ -188,7 +188,6 @@ export default function ClientsPage() {
     if (!newNom) return;
 
     const newClientData = {
-      nom: newNom,
       nom_complet: newNom,
       telephone: newTel || 'Non renseigné',
       adresse: newAdresse || 'Dakar',
@@ -209,7 +208,7 @@ export default function ClientsPage() {
   };
 
   const filteredClients = clients.filter(c => 
-    (c.nom || '').toLowerCase().includes((search || '').toLowerCase()) || 
+    (c.nom_complet || '').toLowerCase().includes((search || '').toLowerCase()) || 
     (c.telephone || '').includes(search || '')
   );
 
@@ -263,7 +262,7 @@ export default function ClientsPage() {
                 }`}
               >
                 <div>
-                  <h4 className="font-bold text-sm text-slate-900">{c.nom}</h4>
+                  <h4 className="font-bold text-sm text-slate-900">{c.nom_complet}</h4>
                   <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
                     <Phone size={12} /> {c.telephone}
                   </p>
@@ -285,7 +284,7 @@ export default function ClientsPage() {
             <div className="flex justify-between items-start border-b border-slate-200 pb-4">
               <div>
                 <span className="text-xs font-bold text-amber-600 tracking-wider uppercase">Ousmane Design</span>
-                <h2 className="text-2xl font-bold text-slate-900 mt-1">{selectedClient.nom}</h2>
+                <h2 className="text-2xl font-bold text-slate-900 mt-1">{selectedClient.nom_complet}</h2>
                 <div className="flex items-center gap-4 text-xs text-slate-500 mt-1">
                   <span className="flex items-center gap-1"><Phone size={13} /> {selectedClient.telephone}</span>
                   <span className="flex items-center gap-1"><MapPin size={13} /> {selectedClient.adresse}</span>
@@ -394,7 +393,7 @@ export default function ClientsPage() {
                 <input 
                   type="text" 
                   required 
-                  placeholder="Ex: Ibrahima Diallo" 
+                  placeholder="Ex: Katim Touré" 
                   value={newNom} 
                   onChange={e => setNewNom(e.target.value)} 
                   className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none" 
@@ -405,7 +404,7 @@ export default function ClientsPage() {
                 <label className="block font-semibold text-slate-700 mb-1">Numéro de Téléphone (WhatsApp)</label>
                 <input 
                   type="text" 
-                  placeholder="Ex: 771234567" 
+                  placeholder="Ex: 765432190" 
                   value={newTel} 
                   onChange={e => setNewTel(e.target.value)} 
                   className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none" 
@@ -416,7 +415,7 @@ export default function ClientsPage() {
                 <label className="block font-semibold text-slate-700 mb-1">Adresse / Quartier</label>
                 <input 
                   type="text" 
-                  placeholder="Ex: Keur Massar" 
+                  placeholder="Ex: Yeumbeul" 
                   value={newAdresse} 
                   onChange={e => setNewAdresse(e.target.value)} 
                   className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none" 
