@@ -1,38 +1,54 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, UserPlus, Search, Save, Share2, Ruler } from 'lucide-react';
-import jsPDF from 'jspdf';
+import { ArrowLeft, UserPlus, Save, Search, Ruler, Phone, MapPin, Trash2, X } from 'lucide-react';
+
+interface Mesures {
+  cou: string;
+  epaule: string;
+  poitrine: string;
+  longueurBras: string;
+  tourBras: string;
+  poignet: string;
+  longueurHaut: string;
+  ceinture: string;
+  longueurPantalon: string;
+  tourCuisse: string;
+  tourCheville: string;
+  notes: string;
+}
 
 interface Client {
   id: string;
   nom: string;
   telephone: string;
   adresse: string;
-  mesures: {
-    cou: string;
-    epaule: string;
-    poitrine: string;
-    longueurBras: string;
-    tourBras: string;
-    poignet: string;
-    longueurHaut: string;
-    ceinture: string;
-    longueurPantalon: string;
-    tourCuisse: string;
-    tourCheville: string;
-    notes: string;
-  };
+  mesures: Mesures;
 }
+
+const defaultMesures: Mesures = {
+  cou: '',
+  epaule: '',
+  poitrine: '',
+  longueurBras: '',
+  tourBras: '',
+  poignet: '',
+  longueurHaut: '',
+  ceinture: '',
+  longueurPantalon: '',
+  tourCuisse: '',
+  tourCheville: '',
+  notes: ''
+};
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([
     {
-      id: '1',
+      id: 'CLI-1',
       nom: 'Mouhamed Faye',
       telephone: '785112139',
-      adresse: 'Keur massar',
+      adresse: 'Keur Massar',
       mesures: {
         cou: '41',
         epaule: '51',
@@ -49,124 +65,95 @@ export default function ClientsPage() {
       }
     },
     {
-      id: '2',
+      id: 'CLI-2',
       nom: 'Ousmane Faye',
       telephone: '77 646 21 02',
-      adresse: 'Dakar',
+      adresse: 'Hann Maristes',
       mesures: {
-        cou: '42', epaule: '52', poitrine: '', longueurBras: '',
-        tourBras: '', poignet: '', longueurHaut: '', ceinture: '',
-        longueurPantalon: '', tourCuisse: '', tourCheville: '', notes: ''
+        cou: '42',
+        epaule: '50',
+        poitrine: '105',
+        longueurBras: '65',
+        tourBras: '38',
+        poignet: '23',
+        longueurHaut: '100',
+        ceinture: '90',
+        longueurPantalon: '108',
+        tourCuisse: '60',
+        tourCheville: '40',
+        notes: 'Couture classique, broderie discrète.'
       }
     }
   ]);
 
-  const [selectedClient, setSelectedClient] = useState<Client>(clients[0]);
   const [search, setSearch] = useState('');
-  const [tailleurPhone, setTailleurPhone] = useState('');
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [currentMesures, setCurrentMesures] = useState<Mesures>(defaultMesures);
 
-  // Fonction de génération et partage du PDF
-  const generateAndSharePDF = () => {
-    const doc = new jsPDF();
-    const c = selectedClient;
-    const m = c.mesures;
+  // Modal Nouveau Client
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newNom, setNewNom] = useState('');
+  const [newTel, setNewTel] = useState('');
+  const [newAdresse, setNewAdresse] = useState('');
 
-    // En-tête du document
-    doc.setFillColor(180, 83, 9); // Couleur Amber/Chocolat Ousmane Design
-    doc.rect(0, 0, 210, 28, 'F');
-    
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(20);
-    doc.setFont('helvetica', 'bold');
-    doc.text("OUSMANE DESIGN", 14, 18);
-    
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text("Fiche de Mesures - Atelier de Couture", 130, 18);
-
-    // Infos Client
-    doc.setTextColor(30, 41, 59);
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Client : ${c.nom}`, 14, 40);
-
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Téléphone : ${c.telephone}  |  Adresse : ${c.adresse || 'N/A'}`, 14, 47);
-
-    doc.setLineWidth(0.5);
-    doc.setDrawColor(226, 232, 240);
-    doc.line(14, 52, 196, 52);
-
-    // Tableau des Mesures
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text("TABLEAU DES MESURES (en cm)", 14, 62);
-
-    const data = [
-      ["Cou", m.cou || '-', "Longueur Bras", m.longueurBras || '-'],
-      ["Épaule", m.epaule || '-', "Tour de Bras", m.tourBras || '-'],
-      ["Poitrine", m.poitrine || '-', "Poignet", m.poignet || '-'],
-      ["Longueur Haut / Boubou", m.longueurHaut || '-', "Ceinture / Taille", m.ceinture || '-'],
-      ["Longueur Pantalon", m.longueurPantalon || '-', "Tour Cuisse", m.tourCuisse || '-'],
-      ["Tour Cheville", m.tourCheville || '-', "-", "-"]
-    ];
-
-    let y = 72;
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-
-    data.forEach((row, idx) => {
-      if (idx % 2 === 0) {
-        doc.setFillColor(248, 250, 252);
-        doc.rect(14, y - 5, 182, 9, 'F');
-      }
-      doc.setFont('helvetica', 'bold');
-      doc.text(`${row[0]} :`, 18, y);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`${row[1]} cm`, 65, y);
-
-      if (row[2] !== '-') {
-        doc.setFont('helvetica', 'bold');
-        doc.text(`${row[2]} :`, 110, y);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`${row[3]} cm`, 160, y);
-      }
-      y += 10;
-    });
-
-    // Remarques / Instructions
-    if (m.notes) {
-      y += 5;
-      doc.setFont('helvetica', 'bold');
-      doc.text("Notes & Particularités :", 14, y);
-      y += 6;
-      doc.setFont('helvetica', 'normal');
-      doc.text(m.notes, 14, y);
+  useEffect(() => {
+    const saved = localStorage.getItem('ousmane_clients');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.length > 0) {
+          setClients(parsed);
+          setSelectedClient(parsed[0]);
+          setCurrentMesures(parsed[0].mesures || defaultMesures);
+          return;
+        }
+      } catch (e) {}
     }
+    // Par défaut
+    setSelectedClient(clients[0]);
+    setCurrentMesures(clients[0].mesures);
+    localStorage.setItem('ousmane_clients', JSON.stringify(clients));
+  }, []);
 
-    // Téléchargement automatique du fichier PDF
-    const fileName = `Mesures_${c.nom.replace(/\s+/g, '_')}.pdf`;
-    doc.save(fileName);
-
-    // Préparation du lien WhatsApp
-    const rawTailleur = tailleurPhone.match(/\d+/g)?.join('') || '';
-    let phone = rawTailleur.length === 9 ? `221${rawTailleur}` : rawTailleur;
-
-    const message = encodeURIComponent(
-      `Bonjour,\n\nVoici la fiche de mesures de *${c.nom}* (${c.telephone}) pour la confection chez *Ousmane Design*.\n` +
-      `Le fichier PDF *${fileName}* a été généré et téléchargé, vous pouvez le joindre ici.`
-    );
-
-    const waUrl = phone ? `https://wa.me/${phone}?text=${message}` : `https://wa.me/?text=${message}`;
-    window.open(waUrl, '_blank');
+  const saveClients = (newClients: Client[]) => {
+    setClients(newClients);
+    localStorage.setItem('ousmane_clients', JSON.stringify(newClients));
   };
 
-  const handleInputChange = (field: string, value: string) => {
-    setSelectedClient({
-      ...selectedClient,
-      mesures: { ...selectedClient.mesures, [field]: value }
-    });
+  const handleSelectClient = (c: Client) => {
+    setSelectedClient(c);
+    setCurrentMesures(c.mesures || defaultMesures);
+  };
+
+  const handleSaveMesures = () => {
+    if (!selectedClient) return;
+    const updated = clients.map(c => c.id === selectedClient.id ? { ...c, mesures: currentMesures } : c);
+    saveClients(updated);
+    setSelectedClient({ ...selectedClient, mesures: currentMesures });
+    alert('Mesures enregistrées avec succès !');
+  };
+
+  const handleAddClient = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newNom) return;
+
+    const newClient: Client = {
+      id: `CLI-${Date.now()}`,
+      nom: newNom,
+      telephone: newTel || 'Non renseigné',
+      adresse: newAdresse || 'Dakar',
+      mesures: defaultMesures
+    };
+
+    const updated = [newClient, ...clients];
+    saveClients(updated);
+    setSelectedClient(newClient);
+    setCurrentMesures(defaultMesures);
+
+    setNewNom('');
+    setNewTel('');
+    setNewAdresse('');
+    setShowAddModal(false);
   };
 
   const filteredClients = clients.filter(c => 
@@ -185,120 +172,274 @@ export default function ClientsPage() {
           <h1 className="text-2xl font-bold text-slate-900">Clients & Carnet de Mesures</h1>
           <p className="text-sm text-slate-500">Ousmane Design — Gestion des profils clients</p>
         </div>
-        <button className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-sm">
+
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-colors text-sm"
+        >
           <UserPlus size={18} /> Nouveau Client
         </button>
       </div>
 
-      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Colonne Gauche : Liste des clients */}
-        <div className="space-y-4">
+      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Liste des Clients (Gauche) */}
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
           <div className="relative">
-            <Search className="absolute left-3 top-3 text-slate-400" size={18} />
-            <input
+            <Search className="absolute left-3 top-3 text-slate-400" size={16} />
+            <input 
               type="text"
               placeholder="Rechercher nom, téléphone..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-white border border-slate-300 rounded-lg pl-10 pr-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-amber-500 outline-none"
+              className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-amber-500"
             />
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 max-h-[550px] overflow-y-auto pr-1">
             {filteredClients.map((c) => (
-              <div
+              <div 
                 key={c.id}
-                onClick={() => setSelectedClient(c)}
-                className={`p-4 rounded-xl border transition-all cursor-pointer flex justify-between items-center ${
-                  selectedClient.id === c.id
-                    ? 'bg-amber-50/80 border-amber-400 shadow-sm'
-                    : 'bg-white border-slate-200 hover:border-slate-300'
+                onClick={() => handleSelectClient(c)}
+                className={`p-3 rounded-lg border cursor-pointer transition-all flex justify-between items-center ${
+                  selectedClient?.id === c.id 
+                    ? 'border-amber-500 bg-amber-50/50 shadow-xs' 
+                    : 'border-slate-200 hover:border-slate-300 bg-white'
                 }`}
               >
                 <div>
-                  <h3 className="font-bold text-slate-900 text-sm">{c.nom}</h3>
-                  <p className="text-xs text-slate-500">📞 {c.telephone}</p>
+                  <h4 className="font-bold text-sm text-slate-900">{c.nom}</h4>
+                  <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                    <Phone size={12} /> {c.telephone}
+                  </p>
                 </div>
-                <Ruler size={16} className={selectedClient.id === c.id ? 'text-amber-600' : 'text-slate-300'} />
+                <Ruler size={16} className={selectedClient?.id === c.id ? 'text-amber-600' : 'text-slate-300'} />
               </div>
             ))}
+
+            {filteredClients.length === 0 && (
+              <p className="text-xs text-slate-400 text-center py-6">Aucun client trouvé</p>
+            )}
           </div>
         </div>
 
-        {/* Colonne Droite : Formulaire des Mesures & Partage */}
-        <div className="md:col-span-2 bg-white rounded-xl p-6 border border-slate-200 shadow-sm space-y-6">
-          <div className="flex justify-between items-start border-b border-slate-100 pb-4">
-            <div>
-              <h2 className="text-xl font-bold text-slate-900">{selectedClient.nom}</h2>
-              <p className="text-xs text-slate-500">📞 {selectedClient.telephone}  |  📍 {selectedClient.adresse || 'Keur Massar'}</p>
-            </div>
-            
-            <div className="flex gap-2">
-              <button className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 shadow-sm">
+        {/* Formulaire de Mesures (Droite) */}
+        {selectedClient ? (
+          <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
+            <div className="flex justify-between items-start border-b border-slate-100 pb-4">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">{selectedClient.nom}</h2>
+                <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
+                  <span className="flex items-center gap-1"><Phone size={13} /> {selectedClient.telephone}</span>
+                  <span className="flex items-center gap-1"><MapPin size={13} /> {selectedClient.adresse}</span>
+                </div>
+              </div>
+
+              <button
+                onClick={handleSaveMesures}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-1.5 transition-colors"
+              >
                 <Save size={16} /> Enregistrer
               </button>
             </div>
-          </div>
 
-          {/* Formulaire des mesures */}
-          <div className="grid grid-cols-3 gap-4">
-            {[
-              { label: 'Cou (cm)', key: 'cou' },
-              { label: 'Épaule (cm)', key: 'epaule' },
-              { label: 'Poitrine (cm)', key: 'poitrine' },
-              { label: 'Longueur Bras (cm)', key: 'longueurBras' },
-              { label: 'Tour de Bras (cm)', key: 'tourBras' },
-              { label: 'Poignet (cm)', key: 'poignet' },
-              { label: 'Longueur Boubou/Haut (cm)', key: 'longueurHaut' },
-              { label: 'Ceinture/Taille (cm)', key: 'ceinture' },
-              { label: 'Longueur Pantalon (cm)', key: 'longueurPantalon' },
-              { label: 'Tour Cuisse (cm)', key: 'tourCuisse' },
-              { label: 'Tour Cheville (cm)', key: 'tourCheville' },
-            ].map((field) => (
-              <div key={field.key}>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">{field.label}</label>
-                <input
-                  type="text"
-                  value={(selectedClient.mesures as any)[field.key] || ''}
-                  onChange={(e) => handleInputChange(field.key, e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none"
+            {/* Champs de Mesures */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Cou (cm)</label>
+                <input 
+                  type="text" 
+                  value={currentMesures.cou} 
+                  onChange={e => setCurrentMesures({ ...currentMesures, cou: e.target.value })} 
+                  className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
                 />
               </div>
-            ))}
-          </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Notes & Particularités du Modèle</label>
-            <textarea
-              rows={2}
-              value={selectedClient.mesures.notes || ''}
-              onChange={(e) => handleInputChange('notes', e.target.value)}
-              placeholder="Ex: Préfère les col officier, manches un peu plus larges..."
-              className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-amber-500 outline-none"
-            />
-          </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Épaule (cm)</label>
+                <input 
+                  type="text" 
+                  value={currentMesures.epaule} 
+                  onChange={e => setCurrentMesures({ ...currentMesures, epaule: e.target.value })} 
+                  className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
+                />
+              </div>
 
-          {/* Zone de Partage Tailleur / WhatsApp */}
-          <div className="bg-emerald-50/80 border border-emerald-200 rounded-xl p-4 flex flex-col md:flex-row justify-between items-center gap-4 pt-4">
-            <div className="w-full md:w-1/2">
-              <label className="block text-xs font-bold text-emerald-900 mb-1">Numéro du Tailleur (optionnel)</label>
-              <input
-                type="text"
-                placeholder="Ex: 771234567"
-                value={tailleurPhone}
-                onChange={(e) => setTailleurPhone(e.target.value)}
-                className="w-full border border-emerald-300 rounded-lg p-2 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-emerald-500 outline-none"
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Poitrine (cm)</label>
+                <input 
+                  type="text" 
+                  value={currentMesures.poitrine} 
+                  onChange={e => setCurrentMesures({ ...currentMesures, poitrine: e.target.value })} 
+                  className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Longueur Bras (cm)</label>
+                <input 
+                  type="text" 
+                  value={currentMesures.longueurBras} 
+                  onChange={e => setCurrentMesures({ ...currentMesures, longueurBras: e.target.value })} 
+                  className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Tour de Bras (cm)</label>
+                <input 
+                  type="text" 
+                  value={currentMesures.tourBras} 
+                  onChange={e => setCurrentMesures({ ...currentMesures, tourBras: e.target.value })} 
+                  className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Poignet (cm)</label>
+                <input 
+                  type="text" 
+                  value={currentMesures.poignet} 
+                  onChange={e => setCurrentMesures({ ...currentMesures, poignet: e.target.value })} 
+                  className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Longueur Boubou/Haut (cm)</label>
+                <input 
+                  type="text" 
+                  value={currentMesures.longueurHaut} 
+                  onChange={e => setCurrentMesures({ ...currentMesures, longueurHaut: e.target.value })} 
+                  className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Ceinture/Taille (cm)</label>
+                <input 
+                  type="text" 
+                  value={currentMesures.ceinture} 
+                  onChange={e => setCurrentMesures({ ...currentMesures, ceinture: e.target.value })} 
+                  className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Longueur Pantalon (cm)</label>
+                <input 
+                  type="text" 
+                  value={currentMesures.longueurPantalon} 
+                  onChange={e => setCurrentMesures({ ...currentMesures, longueurPantalon: e.target.value })} 
+                  className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Tour Cuisse (cm)</label>
+                <input 
+                  type="text" 
+                  value={currentMesures.tourCuisse} 
+                  onChange={e => setCurrentMesures({ ...currentMesures, tourCuisse: e.target.value })} 
+                  className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Tour Cheville (cm)</label>
+                <input 
+                  type="text" 
+                  value={currentMesures.tourCheville} 
+                  onChange={e => setCurrentMesures({ ...currentMesures, tourCheville: e.target.value })} 
+                  className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
+                />
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <label className="block font-semibold text-xs text-slate-700 mb-1">Notes & Particularités du Modèle</label>
+              <textarea 
+                rows={3} 
+                value={currentMesures.notes} 
+                onChange={e => setCurrentMesures({ ...currentMesures, notes: e.target.value })} 
+                placeholder="Ex: Épaule droite légèrement tombante, préfère les poches latérales..." 
+                className="w-full border border-slate-200 rounded-lg p-3 text-xs bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
               />
             </div>
-            <button
-              onClick={generateAndSharePDF}
-              className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 shadow-sm transition-colors"
-            >
-              <Share2 size={18} /> Télécharger & Partager PDF par WhatsApp
-            </button>
+          </div>
+        ) : (
+          <div className="lg:col-span-2 bg-white p-12 rounded-xl border border-slate-200 text-center text-slate-400">
+            Sélectionnez un client à gauche ou cliquez sur "+ Nouveau Client"
+          </div>
+        )}
+
+      </div>
+
+      {/* Modal Création Client */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-bold text-slate-900">Ajouter un Client</h2>
+              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddClient} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Nom complet *</label>
+                <input 
+                  type="text" 
+                  required 
+                  placeholder="Ex: Ibrahima Diallo" 
+                  value={newNom} 
+                  onChange={e => setNewNom(e.target.value)} 
+                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none" 
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Numéro de Téléphone (WhatsApp)</label>
+                <input 
+                  type="text" 
+                  placeholder="Ex: 771234567" 
+                  value={newTel} 
+                  onChange={e => setNewTel(e.target.value)} 
+                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none" 
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Adresse / Quartier</label>
+                <input 
+                  type="text" 
+                  placeholder="Ex: Keur Massar" 
+                  value={newAdresse} 
+                  onChange={e => setNewAdresse(e.target.value)} 
+                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none" 
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <button 
+                  type="button" 
+                  onClick={() => setShowAddModal(false)} 
+                  className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200"
+                >
+                  Annuler
+                </button>
+                <button 
+                  type="submit" 
+                  className="px-5 py-2.5 rounded-lg text-sm font-bold bg-amber-600 text-white hover:bg-amber-700 shadow-md"
+                >
+                  Créer le profil
+                </button>
+              </div>
+            </form>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
