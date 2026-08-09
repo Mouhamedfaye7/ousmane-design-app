@@ -23,6 +23,14 @@ export default function CommandesPage() {
       total: 50000,
       acompte: 20000,
       statut: 'Reçue'
+    },
+    {
+      id: 'CMD-390253',
+      client: 'Ibrahima Diallo (771234567)',
+      modele: 'Grand boubou',
+      total: 100000,
+      acompte: 50000,
+      statut: 'Prête'
     }
   ]);
 
@@ -59,6 +67,27 @@ export default function CommandesPage() {
     setCommandes(commandes.map(cmd => cmd.id === id ? { ...cmd, statut: newStatut } : cmd));
   };
 
+  // Envoi d'alerte WhatsApp
+  const sendWhatsApp = (cmd: Commande) => {
+    const rawPhone = cmd.client.match(/\d+/g)?.join('') || '';
+    let phone = rawPhone;
+    if (phone.length === 9) {
+      phone = `221${phone}`;
+    }
+
+    const reste = cmd.total - cmd.acompte;
+    const text = encodeURIComponent(
+      `Bonjour,\n\nVotre commande *${cmd.id}* (${cmd.modele}) est actuellement au statut : *${cmd.statut}* chez *Ousmane Design*.\n` +
+      `Total: ${cmd.total.toLocaleString()} FCFA | Reste à payer: ${reste.toLocaleString()} FCFA.\n\nMerci de votre confiance !`
+    );
+
+    if (phone) {
+      window.open(`https://wa.me/${phone}?text=${text}`, '_blank');
+    } else {
+      alert("Numéro de téléphone introuvable dans le nom du client !");
+    }
+  };
+
   const renderCards = (statutTarget: Commande['statut']) => {
     const filtered = commandes.filter(cmd => cmd.statut === statutTarget);
     if (filtered.length === 0) {
@@ -88,8 +117,14 @@ export default function CommandesPage() {
             <option value="Livrée">Livrée</option>
           </select>
           <div className="flex gap-2">
-            <button className="text-slate-500 hover:text-slate-700"><Printer size={16} /></button>
-            <button className="text-emerald-600 hover:text-emerald-700"><MessageCircle size={16} /></button>
+            <button className="text-slate-500 hover:text-slate-700" title="Imprimer"><Printer size={16} /></button>
+            <button 
+              onClick={() => sendWhatsApp(cmd)}
+              className="text-emerald-600 hover:text-emerald-700 p-1 rounded hover:bg-emerald-50 transition-colors" 
+              title="Alerter le client sur WhatsApp"
+            >
+              <MessageCircle size={16} />
+            </button>
           </div>
         </div>
       </div>
