@@ -33,7 +33,6 @@ interface Vente {
 }
 
 export default function VentesPage() {
-  // Articles du catalogue rapide avec sauvegarde locale
   const [articles, setArticles] = useState<Article[]>([
     { id: '1', nom: 'Diaspora', prix: 50000, categorie: 'Prêt-à-porter' },
     { id: '2', nom: 'Boubou VIP Getzner', prix: 85000, categorie: 'Sur-mesure' },
@@ -41,13 +40,11 @@ export default function VentesPage() {
     { id: '4', nom: 'Ensemble Tissu Brodé', prix: 35000, categorie: 'Prêt-à-porter' },
   ]);
 
-  // Modal Nouveau Article
   const [showArticleModal, setShowArticleModal] = useState(false);
   const [nomArticle, setNomArticle] = useState('');
   const [prixArticle, setPrixArticle] = useState('');
   const [catArticle, setCatArticle] = useState('Prêt-à-porter');
 
-  // États Caisse & Ventes
   const [panier, setPanier] = useState<PanierItem[]>([]);
   const [client, setClient] = useState('');
   const [telephone, setTelephone] = useState('');
@@ -55,7 +52,6 @@ export default function VentesPage() {
   const [avance, setAvance] = useState<number | ''>('');
   const [observations, setObservations] = useState('');
 
-  // Historique des ventes
   const [ventes, setVentes] = useState<Vente[]>([
     {
       id: 'FAC-80392',
@@ -74,18 +70,24 @@ export default function VentesPage() {
     }
   ]);
 
-  // Modal Facture
   const [selectedVente, setSelectedVente] = useState<Vente | null>(null);
 
-  // Charger le catalogue sauvegardé
   useEffect(() => {
-    const saved = localStorage.getItem('ousmane_catalogue');
-    if (saved) {
-      try { setArticles(JSON.parse(saved)); } catch (e) {}
+    const savedCat = localStorage.getItem('ousmane_catalogue');
+    if (savedCat) {
+      try { setArticles(JSON.parse(savedCat)); } catch (e) {}
+    }
+    const savedVentes = localStorage.getItem('ousmane_ventes');
+    if (savedVentes) {
+      try { setVentes(JSON.parse(savedVentes)); } catch (e) {}
     }
   }, []);
 
-  // Sauvegarder le catalogue
+  const saveVentes = (newVentes: Vente[]) => {
+    setVentes(newVentes);
+    localStorage.setItem('ousmane_ventes', JSON.stringify(newVentes));
+  };
+
   const saveCatalogue = (newArticles: Article[]) => {
     setArticles(newArticles);
     localStorage.setItem('ousmane_catalogue', JSON.stringify(newArticles));
@@ -150,7 +152,7 @@ export default function VentesPage() {
       observations: observations || 'Articles livrés en parfait état.'
     };
 
-    setVentes([nouvelleVente, ...ventes]);
+    saveVentes([nouvelleVente, ...ventes]);
     setSelectedVente(nouvelleVente);
 
     setPanier([]);
@@ -179,7 +181,6 @@ export default function VentesPage() {
 
   return (
     <div className="min-h-screen bg-slate-100 p-6 text-slate-800">
-      {/* En-tête */}
       <div className="max-w-7xl mx-auto mb-6 flex justify-between items-center">
         <div>
           <Link href="/" className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1 mb-2">
@@ -191,8 +192,6 @@ export default function VentesPage() {
       </div>
 
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        
-        {/* Colonne 1 : Catalogue d'Articles */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="font-bold text-slate-900 text-sm uppercase tracking-wider flex items-center gap-1.5">
@@ -225,7 +224,6 @@ export default function VentesPage() {
                   <button
                     onClick={(e) => handleDeleteArticle(art.id, e)}
                     className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 p-1 transition-opacity"
-                    title="Supprimer du catalogue"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -235,7 +233,6 @@ export default function VentesPage() {
           </div>
         </div>
 
-        {/* Colonne 2 & 3 : Caisse & Panier */}
         <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
           <h2 className="font-bold text-slate-900 text-sm uppercase tracking-wider flex items-center gap-2">
             <ShoppingCart size={18} className="text-amber-600"/> Nouvelle Vente / Caisse
@@ -267,7 +264,6 @@ export default function VentesPage() {
               </div>
             </div>
 
-            {/* Panier */}
             <div className="border border-slate-200 rounded-lg overflow-hidden">
               <table className="w-full text-xs text-left">
                 <thead className="bg-slate-50 text-slate-600 uppercase border-b border-slate-200">
@@ -303,7 +299,6 @@ export default function VentesPage() {
               </table>
             </div>
 
-            {/* Modalités Paiement */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Mode de Paiement</label>
@@ -346,7 +341,6 @@ export default function VentesPage() {
         </div>
       </div>
 
-      {/* Historique des Ventes */}
       <div className="max-w-7xl mx-auto bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
         <h2 className="font-bold text-slate-900 text-sm uppercase tracking-wider mb-4">Historique des Ventes</h2>
         <div className="overflow-x-auto">
@@ -392,12 +386,10 @@ export default function VentesPage() {
         </div>
       </div>
 
-      {/* Modal Nouvel Article */}
       {showArticleModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
             <h2 className="text-lg font-bold text-slate-900 mb-4">Ajouter un Article au Catalogue</h2>
-            
             <form onSubmit={handleAddArticle} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Nom du modèle / Tissu *</label>
@@ -456,11 +448,9 @@ export default function VentesPage() {
         </div>
       )}
 
-      {/* Modal Reçu / Facture Original Restauré */}
       {selectedVente && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
           <div className="bg-white rounded-xl max-w-2xl w-full p-8 relative shadow-2xl my-8 border border-amber-200">
-            
             <div className="absolute top-4 right-4 flex items-center gap-2 print:hidden">
               <button 
                 onClick={() => window.print()}
@@ -485,12 +475,8 @@ export default function VentesPage() {
             <div className="border-2 border-amber-600/80 p-6 rounded-lg bg-amber-50/10">
               <div className="flex justify-between items-start mb-6">
                 <div>
-                  <h1 className="text-3xl font-serif font-bold text-amber-900 tracking-wide">
-                    Ousmane Design
-                  </h1>
-                  <p className="text-xs font-serif italic text-amber-800 tracking-widest uppercase mt-0.5">
-                    Création & Couture Contemporaine
-                  </p>
+                  <h1 className="text-3xl font-serif font-bold text-amber-900 tracking-wide">Ousmane Design</h1>
+                  <p className="text-xs font-serif italic text-amber-800 tracking-widest uppercase mt-0.5">Création & Couture Contemporaine</p>
                 </div>
 
                 <div className="border border-amber-500/60 rounded-xl p-3 text-[11px] text-amber-900 space-y-1 bg-white/80 shadow-xs">
