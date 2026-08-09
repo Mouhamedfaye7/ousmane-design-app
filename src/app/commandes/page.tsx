@@ -1,139 +1,110 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Printer, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Plus, Printer, MessageCircle, X, Search } from 'lucide-react';
 
 interface Commande {
   id: string;
   client: string;
-  modele: string;
+  telephone: string;
+  habits: string;
   total: number;
-  acompte: number;
+  avance: number;
+  reste: number;
   statut: 'Reçue' | 'En Coupe' | 'Prête' | 'Livrée';
+  dateLivraison: string;
 }
 
 export default function CommandesPage() {
-  const [showModal, setShowModal] = useState(false);
   const [commandes, setCommandes] = useState<Commande[]>([
     {
       id: 'CMD-803678',
-      client: 'Mouhamed Faye (785112139)',
-      modele: 'caftane',
+      client: 'Mouhamed Faye',
+      telephone: '785112139',
+      habits: 'caftane',
       total: 50000,
-      acompte: 20000,
-      statut: 'Reçue'
+      avance: 20000,
+      reste: 30000,
+      statut: 'Reçue',
+      dateLivraison: '15/08/2026'
     },
     {
       id: 'CMD-390253',
-      client: 'Ibrahima Diallo (771234567)',
-      modele: 'Grand boubou',
+      client: 'Ibrahima Diallo',
+      telephone: '771234567',
+      habits: 'Grand boubou',
       total: 100000,
-      acompte: 50000,
-      statut: 'Prête'
+      avance: 50000,
+      reste: 50000,
+      statut: 'Prête',
+      dateLivraison: '12/08/2026'
     }
   ]);
 
-  // Form State
-  const [clientInput, setClientInput] = useState('');
-  const [modeleInput, setModeleInput] = useState('');
-  const [totalInput, setTotalInput] = useState('');
-  const [acompteInput, setAcompteInput] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [selectedCommande, setSelectedCommande] = useState<Commande | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!clientInput || !totalInput) return;
+  // Formulaire
+  const [client, setClient] = useState('');
+  const [telephone, setTelephone] = useState('');
+  const [habits, setHabits] = useState('');
+  const [total, setTotal] = useState('');
+  const [avance, setAvance] = useState('');
+  const [dateLivraison, setDateLivraison] = useState('');
 
-    const newCmd: Commande = {
-      id: `CMD-${Math.floor(100000 + Math.random() * 900000)}`,
-      client: clientInput,
-      modele: modeleInput || 'Modèle sur-mesure',
-      total: Number(totalInput),
-      acompte: Number(acompteInput) || 0,
-      statut: 'Reçue'
-    };
+  useEffect(() => {
+    const saved = localStorage.getItem('ousmane_commandes');
+    if (saved) {
+      try { setCommandes(JSON.parse(saved)); } catch (e) {}
+    } else {
+      localStorage.setItem('ousmane_commandes', JSON.stringify(commandes));
+    }
+  }, []);
 
-    setCommandes([newCmd, ...commandes]);
-    
-    // Reset Form & Close Modal
-    setClientInput('');
-    setModeleInput('');
-    setTotalInput('');
-    setAcompteInput('');
-    setShowModal(false);
+  const saveAndSetCommandes = (newCmds: Commande[]) => {
+    setCommandes(newCmds);
+    localStorage.setItem('ousmane_commandes', JSON.stringify(newCmds));
   };
 
   const handleStatutChange = (id: string, newStatut: Commande['statut']) => {
-    setCommandes(commandes.map(cmd => cmd.id === id ? { ...cmd, statut: newStatut } : cmd));
+    const updated = commandes.map(cmd => cmd.id === id ? { ...cmd, statut: newStatut } : cmd);
+    saveAndSetCommandes(updated);
   };
 
-  // Envoi d'alerte WhatsApp
-  const sendWhatsApp = (cmd: Commande) => {
-    const rawPhone = cmd.client.match(/\d+/g)?.join('') || '';
-    let phone = rawPhone;
-    if (phone.length === 9) {
-      phone = `221${phone}`;
-    }
+  const handleCreateCommande = (e: React.FormEvent) => {
+    e.preventDefault();
+    const totalNum = Number(total) || 0;
+    const avanceNum = Number(avance) || 0;
 
-    const reste = cmd.total - cmd.acompte;
-    const text = encodeURIComponent(
-      `Bonjour,\n\nVotre commande *${cmd.id}* (${cmd.modele}) est actuellement au statut : *${cmd.statut}* chez *Ousmane Design*.\n` +
-      `Total: ${cmd.total.toLocaleString()} FCFA | Reste à payer: ${reste.toLocaleString()} FCFA.\n\nMerci de votre confiance !`
-    );
+    const newCmd: Commande = {
+      id: `CMD-${Math.floor(100000 + Math.random() * 900000)}`,
+      client,
+      telephone,
+      habits,
+      total: totalNum,
+      avance: avanceNum,
+      reste: totalNum - avanceNum,
+      statut: 'Reçue',
+      dateLivraison: dateLivraison || 'A définir'
+    };
 
-    if (phone) {
-      window.open(`https://wa.me/${phone}?text=${text}`, '_blank');
-    } else {
-      alert("Numéro de téléphone introuvable dans le nom du client !");
-    }
+    saveAndSetCommandes([newCmd, ...commandes]);
+    setShowModal(false);
+    
+    // Reset
+    setClient('');
+    setTelephone('');
+    setHabits('');
+    setTotal('');
+    setAvance('');
+    setDateLivraison('');
   };
 
-  const renderCards = (statutTarget: Commande['statut']) => {
-    const filtered = commandes.filter(cmd => cmd.statut === statutTarget);
-    if (filtered.length === 0) {
-      return <p className="text-xs text-slate-400 text-center py-8">Aucune commande</p>;
-    }
-
-    return filtered.map(cmd => (
-      <div key={cmd.id} className="bg-white p-4 rounded-lg shadow-sm border border-slate-200 mb-3">
-        <div className="flex justify-between items-start mb-2">
-          <span className="font-bold text-slate-900 text-sm">{cmd.client}</span>
-          <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">{cmd.id}</span>
-        </div>
-        <p className="text-xs text-slate-600 mb-3">{cmd.modele}</p>
-        <div className="text-xs text-slate-500 flex justify-between mb-3">
-          <span>Total: <strong className="text-slate-800">{cmd.total.toLocaleString()} F</strong></span>
-          <span>Reste: <strong className="text-amber-700 font-bold">{(cmd.total - cmd.acompte).toLocaleString()} F</strong></span>
-        </div>
-        <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-          <select 
-            value={cmd.statut}
-            onChange={(e) => handleStatutChange(cmd.id, e.target.value as Commande['statut'])}
-            className="text-xs border border-slate-300 rounded px-2 py-1 bg-white text-slate-800"
-          >
-            <option value="Reçue">Reçue</option>
-            <option value="En Coupe">En Coupe</option>
-            <option value="Prête">Prête</option>
-            <option value="Livrée">Livrée</option>
-          </select>
-          <div className="flex gap-2">
-            <button className="text-slate-500 hover:text-slate-700" title="Imprimer"><Printer size={16} /></button>
-            <button 
-              onClick={() => sendWhatsApp(cmd)}
-              className="text-emerald-600 hover:text-emerald-700 p-1 rounded hover:bg-emerald-50 transition-colors" 
-              title="Alerter le client sur WhatsApp"
-            >
-              <MessageCircle size={16} />
-            </button>
-          </div>
-        </div>
-      </div>
-    ));
-  };
+  const statuts: Commande['statut'][] = ['Reçue', 'En Coupe', 'Prête', 'Livrée'];
 
   return (
     <div className="min-h-screen bg-slate-100 p-6 text-slate-800">
-      {/* Header */}
       <div className="max-w-7xl mx-auto mb-6 flex justify-between items-center">
         <div>
           <Link href="/" className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1 mb-2">
@@ -142,143 +113,116 @@ export default function CommandesPage() {
           <h1 className="text-2xl font-bold text-slate-900">Suivi d'Atelier & Commandes</h1>
           <p className="text-sm text-slate-500">Ousmane Design — Pilotage de la production</p>
         </div>
+
         <button
           onClick={() => setShowModal(true)}
-          className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-sm"
+          className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-colors"
         >
           <Plus size={18} /> Nouvelle Commande
         </button>
       </div>
 
-      {/* Kanban Board */}
+      {/* Colonnes Kanban */}
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-4">
-        {/* Colonne Reçue */}
-        <div className="bg-slate-200/60 p-4 rounded-xl border border-slate-300/60">
-          <div className="flex justify-between items-center mb-4">
-            <span className="font-semibold text-sm text-slate-700">Reçue</span>
-            <span className="bg-slate-300 text-slate-700 text-xs px-2 py-0.5 rounded-full font-bold">
-              {commandes.filter(c => c.statut === 'Reçue').length}
-            </span>
-          </div>
-          {renderCards('Reçue')}
-        </div>
+        {statuts.map((colStatut) => {
+          const list = commandes.filter(c => c.statut === colStatut);
+          return (
+            <div key={colStatut} className="bg-slate-200/60 rounded-xl p-3 border border-slate-200 min-h-[500px]">
+              <div className="flex justify-between items-center mb-3 px-1">
+                <h3 className="font-bold text-slate-800 text-sm">{colStatut}</h3>
+                <span className="bg-slate-300 text-slate-700 text-xs font-bold px-2 py-0.5 rounded-full">{list.length}</span>
+              </div>
 
-        {/* Colonne En Coupe */}
-        <div className="bg-slate-200/60 p-4 rounded-xl border border-slate-300/60">
-          <div className="flex justify-between items-center mb-4">
-            <span className="font-semibold text-sm text-indigo-700">En Coupe</span>
-            <span className="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full font-bold">
-              {commandes.filter(c => c.statut === 'En Coupe').length}
-            </span>
-          </div>
-          {renderCards('En Coupe')}
-        </div>
+              <div className="space-y-3">
+                {list.map((cmd) => (
+                  <div key={cmd.id} className="bg-white p-4 rounded-lg shadow-xs border border-slate-200 space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="font-bold text-slate-900 text-sm">{cmd.client}</h4>
+                        <p className="text-xs text-slate-500">({cmd.telephone})</p>
+                      </div>
+                      <span className="text-[10px] bg-slate-100 text-slate-600 font-mono px-1.5 py-0.5 rounded border">{cmd.id}</span>
+                    </div>
 
-        {/* Colonne Prête */}
-        <div className="bg-slate-200/60 p-4 rounded-xl border border-slate-300/60">
-          <div className="flex justify-between items-center mb-4">
-            <span className="font-semibold text-sm text-emerald-700">Prête</span>
-            <span className="bg-emerald-100 text-emerald-700 text-xs px-2 py-0.5 rounded-full font-bold">
-              {commandes.filter(c => c.statut === 'Prête').length}
-            </span>
-          </div>
-          {renderCards('Prête')}
-        </div>
+                    <p className="text-xs text-slate-700 capitalize font-medium">{cmd.habits}</p>
 
-        {/* Colonne Livrée */}
-        <div className="bg-slate-200/60 p-4 rounded-xl border border-slate-300/60">
-          <div className="flex justify-between items-center mb-4">
-            <span className="font-semibold text-sm text-amber-800">Livrée</span>
-            <span className="bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded-full font-bold">
-              {commandes.filter(c => c.statut === 'Livrée').length}
-            </span>
-          </div>
-          {renderCards('Livrée')}
-        </div>
+                    <div className="flex justify-between text-xs pt-1 border-t border-slate-100">
+                      <span className="text-slate-500">Total: <strong className="text-slate-900">{cmd.total.toLocaleString()} F</strong></span>
+                      <span className="text-slate-500">Reste: <strong className="text-amber-700">{cmd.reste.toLocaleString()} F</strong></span>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2">
+                      <select
+                        value={cmd.statut}
+                        onChange={(e) => handleStatutChange(cmd.id, e.target.value as Commande['statut'])}
+                        className="text-xs border border-slate-300 rounded px-2 py-1 bg-slate-50 text-slate-800 focus:outline-none"
+                      >
+                        {statuts.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => setSelectedCommande(cmd)} className="text-slate-400 hover:text-slate-600 p-1">
+                          <Printer size={15} />
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const msg = encodeURIComponent(`Bonjour ${cmd.client}, votre commande ${cmd.id} (${cmd.habits}) chez Ousmane Design est au statut: *${cmd.statut}*. Reste à payer: ${cmd.reste.toLocaleString()} FCFA.`);
+                            window.open(`https://wa.me/221${cmd.telephone}?text=${msg}`, '_blank');
+                          }}
+                          className="text-emerald-600 hover:text-emerald-700 p-1"
+                        >
+                          <MessageCircle size={15} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {list.length === 0 && (
+                  <p className="text-xs text-slate-400 text-center py-8 italic">Aucune commande</p>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      {/* Modal Commande */}
+      {/* Modal Nouvelle Commande */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
             <h2 className="text-lg font-bold text-slate-900 mb-4">Nouvelle Commande Sur-Mesure</h2>
-            
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleCreateCommande} className="space-y-3 text-xs">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Client (Nom & Téléphone) *</label>
-                <input 
-                  type="text"
-                  list="clients-list"
-                  placeholder="Saisir ou choisir un client"
-                  value={clientInput}
-                  onChange={(e) => setClientInput(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-amber-500 outline-none"
-                  required
-                />
-                <datalist id="clients-list">
-                  <option value="Mouhamed Faye (785112139)" />
-                  <option value="Ibrahima Diallo (771234567)" />
-                  <option value="Fatou Sow (769876543)" />
-                </datalist>
+                <label className="block font-semibold mb-1">Nom du Client *</label>
+                <input type="text" value={client} onChange={e => setClient(e.target.value)} required className="w-full border rounded-lg p-2.5 text-sm" />
               </div>
-
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Description du Modèle / Tissu</label>
-                <textarea 
-                  rows={3}
-                  placeholder="Ex: Boubou Getzner 3 pièces brodé or..."
-                  value={modeleInput}
-                  onChange={(e) => setModeleInput(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-amber-500 outline-none"
-                />
+                <label className="block font-semibold mb-1">Téléphone *</label>
+                <input type="text" value={telephone} onChange={e => setTelephone(e.target.value)} required className="w-full border rounded-lg p-2.5 text-sm" />
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-semibold mb-1">Habits / Modèle *</label>
+                <input type="text" value={habits} onChange={e => setHabits(e.target.value)} placeholder="Ex: Caftan 3 pièces" required className="w-full border rounded-lg p-2.5 text-sm" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Prix Total (FCFA) *</label>
-                  <input 
-                    type="number" 
-                    placeholder="Ex: 35000"
-                    value={totalInput}
-                    onChange={(e) => setTotalInput(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-amber-500 outline-none"
-                    required
-                  />
+                  <label className="block font-semibold mb-1">Total (FCFA) *</label>
+                  <input type="number" value={total} onChange={e => setTotal(e.target.value)} required className="w-full border rounded-lg p-2.5 text-sm" />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Acompte Versé (FCFA)</label>
-                  <input 
-                    type="number" 
-                    placeholder="Ex: 15000"
-                    value={acompteInput}
-                    onChange={(e) => setAcompteInput(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-amber-500 outline-none"
-                  />
+                  <label className="block font-semibold mb-1">Avance (FCFA)</label>
+                  <input type="number" value={avance} onChange={e => setAvance(e.target.value)} className="w-full border rounded-lg p-2.5 text-sm" />
                 </div>
               </div>
-
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Date de livraison souhaitée</label>
-                <input 
-                  type="date" 
-                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-amber-500 outline-none"
-                />
+                <label className="block font-semibold mb-1">Date de livraison prévue</label>
+                <input type="date" value={dateLivraison} onChange={e => setDateLivraison(e.target.value)} className="w-full border rounded-lg p-2.5 text-sm" />
               </div>
 
-              <div className="flex justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition-colors"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 rounded-lg text-sm font-semibold bg-amber-600 hover:bg-amber-700 text-white shadow-md transition-colors"
-                >
-                  Enregistrer Commande
-                </button>
+              <div className="flex justify-end gap-2 pt-4">
+                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200">Annuler</button>
+                <button type="submit" className="px-4 py-2 rounded-lg bg-amber-600 text-white font-bold hover:bg-amber-700">Créer la commande</button>
               </div>
             </form>
           </div>

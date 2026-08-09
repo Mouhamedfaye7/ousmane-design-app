@@ -8,10 +8,10 @@ import { Users, Clock, CheckCircle2, TrendingUp, ShoppingBag, Scissors, Layers, 
 export default function Home() {
   const pathname = usePathname();
   const [stats, setStats] = useState({
-    totalClients: 2,
-    enCours: 1,
+    totalClients: 0,
+    enCours: 0,
     pretes: 0,
-    chiffreAffaires: 50000,
+    chiffreAffaires: 0,
   });
 
   const updateStats = () => {
@@ -19,37 +19,53 @@ export default function Home() {
     const savedCommandes = localStorage.getItem('ousmane_commandes');
     const savedClients = localStorage.getItem('ousmane_clients');
 
-    let totalCA = 50000;
-    let clientCount = 2;
-    let countEnCours = 1;
+    let totalCA = 0;
+    let clientCount = 0;
+    let countEnCours = 0;
     let countPretes = 0;
 
+    // 1. Calcul Chiffre d'affaires
     if (savedVentes) {
       try {
         const ventes = JSON.parse(savedVentes);
-        if (ventes.length > 0) {
-          totalCA = ventes.reduce((sum: number, v: any) => sum + (Number(v.avance) || Number(v.total) || 0), 0);
-        }
+        totalCA = ventes.reduce((sum: number, v: any) => sum + (Number(v.avance) || Number(v.total) || 0), 0);
       } catch (e) {}
+    } else {
+      totalCA = 50000; // valeur par défaut si pas encore de ventes enregistrées
     }
 
+    // 2. Calcul Total Clients
     if (savedClients) {
       try {
         const clients = JSON.parse(savedClients);
-        if (clients.length > 0) {
-          clientCount = clients.length;
-        }
+        clientCount = clients.length;
       } catch (e) {}
+    } else {
+      clientCount = 2; // valeur de démo
     }
 
+    // 3. Calcul Commandes (En cours vs Prêtes)
     if (savedCommandes) {
       try {
         const commandes = JSON.parse(savedCommandes);
-        if (commandes.length > 0) {
-          countEnCours = commandes.filter((c: any) => c.statut === 'En cours').length;
-          countPretes = commandes.filter((c: any) => c.statut === 'Prête').length;
-        }
+        
+        // "En cours" regroupe Reçue, En Coupe, En Couture, En Finition
+        countEnCours = commandes.filter((c: any) => {
+          const s = (c.statut || '').toLowerCase();
+          return s === 'reçue' || s === 'recue' || s === 'en coupe' || s === 'en couture' || s === 'en cours';
+        }).length;
+
+        // "Prêtes" correspond au statut Prête
+        countPretes = commandes.filter((c: any) => {
+          const s = (c.statut || '').toLowerCase();
+          return s === 'prête' || s === 'prete';
+        }).length;
+
       } catch (e) {}
+    } else {
+      // Valeurs par défaut si initiales
+      countEnCours = 1;
+      countPretes = 1;
     }
 
     setStats({
@@ -63,7 +79,7 @@ export default function Home() {
   useEffect(() => {
     updateStats();
 
-    // Écoute des événements de visibilité, focus et stockage
+    // Écouteurs pour mettre à jour instantanément les chiffres
     window.addEventListener('focus', updateStats);
     window.addEventListener('storage', updateStats);
 
