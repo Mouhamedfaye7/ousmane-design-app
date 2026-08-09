@@ -6,18 +6,9 @@ import { ArrowLeft, UserPlus, Save, Search, Ruler, Phone, MapPin, X, Share2 } fr
 import { supabase } from '@/lib/supabase';
 
 interface Mesures {
-  cou: string;
-  epaule: string;
-  poitrine: string;
-  longueurBras: string;
-  tourBras: string;
-  poignet: string;
-  longueurHaut: string;
-  ceinture: string;
-  longueurPantalon: string;
-  tourCuisse: string;
-  tourCheville: string;
-  notes: string;
+  cou: string; epaule: string; poitrine: string; longueurBras: string;
+  tourBras: string; poignet: string; longueurHaut: string; ceinture: string;
+  longueurPantalon: string; tourCuisse: string; tourCheville: string; notes: string;
 }
 
 interface Client {
@@ -56,7 +47,7 @@ export default function ClientsPage() {
     } else if (data) {
       const formattedClients: Client[] = data.map((item: any) => ({
         id: item.id,
-        nom: item.nom || 'Sans nom',
+        nom: item.nom || item.nom_complet || 'Sans nom',
         telephone: item.telephone || 'Non renseigné',
         adresse: item.adresse || 'Dakar',
         mesures: item.mesures || defaultMesures
@@ -76,16 +67,10 @@ export default function ClientsPage() {
 
     const channel = supabase
       .channel('schema-db-changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'clients' },
-        () => fetchClients()
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, () => fetchClients())
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const handleSelectClient = (c: Client) => {
@@ -171,7 +156,6 @@ export default function ClientsPage() {
       }
 
       const fileName = `Mesures_${(selectedClient.nom || 'Client').replace(/\s+/g, '_')}.pdf`;
-      
       doc.save(fileName);
 
       let cleanPhone = (selectedClient.telephone || '').replace(/\s+/g, '').replace(/[^0-9]/g, '');
@@ -204,8 +188,8 @@ export default function ClientsPage() {
     if (!newNom) return;
 
     const newClientData = {
-      id: `CLI-${Date.now()}`,
       nom: newNom,
+      nom_complet: newNom,
       telephone: newTel || 'Non renseigné',
       adresse: newAdresse || 'Dakar',
       mesures: defaultMesures
