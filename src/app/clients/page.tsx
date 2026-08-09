@@ -56,9 +56,9 @@ export default function ClientsPage() {
     } else if (data) {
       const formattedClients: Client[] = data.map((item: any) => ({
         id: item.id,
-        nom: item.nom,
-        telephone: item.telephone,
-        adresse: item.adresse,
+        nom: item.nom || 'Sans nom',
+        telephone: item.telephone || 'Non renseigné',
+        adresse: item.adresse || 'Dakar',
         mesures: item.mesures || defaultMesures
       }));
       setClients(formattedClients);
@@ -123,7 +123,6 @@ export default function ClientsPage() {
 
       const doc = new jsPDF();
 
-      // En-tête
       doc.setFontSize(18);
       doc.setTextColor(217, 119, 6);
       doc.text("OUSMANE DESIGN", 14, 20);
@@ -171,13 +170,11 @@ export default function ClientsPage() {
         doc.text(currentMesures.notes, 14, finalY + 16, { maxWidth: 180 });
       }
 
-      const fileName = `Mesures_${selectedClient.nom.replace(/\s+/g, '_')}.pdf`;
+      const fileName = `Mesures_${(selectedClient.nom || 'Client').replace(/\s+/g, '_')}.pdf`;
       
-      // Téléchargement du PDF
       doc.save(fileName);
 
-      // Envoi du message WhatsApp
-      let cleanPhone = selectedClient.telephone.replace(/\s+/g, '').replace(/[^0-9]/g, '');
+      let cleanPhone = (selectedClient.telephone || '').replace(/\s+/g, '').replace(/[^0-9]/g, '');
       if (cleanPhone.length === 9) cleanPhone = '221' + cleanPhone;
 
       const messageText = `Bonjour ${selectedClient.nom},\n\nVoici vos mesures enregistrées chez *Ousmane Design* :\n` +
@@ -228,8 +225,8 @@ export default function ClientsPage() {
   };
 
   const filteredClients = clients.filter(c => 
-    c.nom.toLowerCase().includes(search.toLowerCase()) || 
-    c.telephone.includes(search)
+    (c.nom || '').toLowerCase().includes((search || '').toLowerCase()) || 
+    (c.telephone || '').includes(search || '')
   );
 
   return (
@@ -311,7 +308,6 @@ export default function ClientsPage() {
                 </div>
               </div>
 
-              {/* Boutons d'actions */}
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleShareWhatsApp}
@@ -330,7 +326,6 @@ export default function ClientsPage() {
               </div>
             </div>
 
-            {/* Formulaire des Mesures */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Cou (cm)</label>
