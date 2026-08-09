@@ -2,23 +2,24 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Users, Clock, CheckCircle2, TrendingUp, ShoppingBag, Scissors, Layers, BarChart3, Plus } from 'lucide-react';
 
 export default function Home() {
+  const pathname = usePathname();
   const [stats, setStats] = useState({
-    totalClients: 0,
-    enCours: 0,
+    totalClients: 2,
+    enCours: 1,
     pretes: 0,
-    chiffreAffaires: 0,
+    chiffreAffaires: 50000,
   });
 
-  useEffect(() => {
-    // Calcul dynamique depuis localStorage
+  const updateStats = () => {
     const savedVentes = localStorage.getItem('ousmane_ventes');
     const savedCommandes = localStorage.getItem('ousmane_commandes');
     const savedClients = localStorage.getItem('ousmane_clients');
 
-    let totalCA = 50000; // valeur par défaut
+    let totalCA = 50000;
     let clientCount = 2;
     let countEnCours = 1;
     let countPretes = 0;
@@ -26,22 +27,28 @@ export default function Home() {
     if (savedVentes) {
       try {
         const ventes = JSON.parse(savedVentes);
-        totalCA = ventes.reduce((sum: number, v: any) => sum + (Number(v.avance) || Number(v.total) || 0), 0);
+        if (ventes.length > 0) {
+          totalCA = ventes.reduce((sum: number, v: any) => sum + (Number(v.avance) || Number(v.total) || 0), 0);
+        }
       } catch (e) {}
     }
 
     if (savedClients) {
       try {
         const clients = JSON.parse(savedClients);
-        clientCount = clients.length;
+        if (clients.length > 0) {
+          clientCount = clients.length;
+        }
       } catch (e) {}
     }
 
     if (savedCommandes) {
       try {
         const commandes = JSON.parse(savedCommandes);
-        countEnCours = commandes.filter((c: any) => c.statut === 'En cours').length;
-        countPretes = commandes.filter((c: any) => c.statut === 'Prête').length;
+        if (commandes.length > 0) {
+          countEnCours = commandes.filter((c: any) => c.statut === 'En cours').length;
+          countPretes = commandes.filter((c: any) => c.statut === 'Prête').length;
+        }
       } catch (e) {}
     }
 
@@ -51,7 +58,20 @@ export default function Home() {
       pretes: countPretes,
       chiffreAffaires: totalCA,
     });
-  }, []);
+  };
+
+  useEffect(() => {
+    updateStats();
+
+    // Écoute des événements de visibilité, focus et stockage
+    window.addEventListener('focus', updateStats);
+    window.addEventListener('storage', updateStats);
+
+    return () => {
+      window.removeEventListener('focus', updateStats);
+      window.removeEventListener('storage', updateStats);
+    };
+  }, [pathname]);
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 text-slate-800">
