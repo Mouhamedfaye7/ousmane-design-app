@@ -360,7 +360,7 @@ export default function ClientsPage() {
             </>
           ) : (
             <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-              <Ruler className="w-12 h-12 mb-3 text-slate-300" />
+              <Ruler className="w-12 h-12 mb-3 text-gray-700" />
               <p className="text-sm font-medium">Sélectionnez un client à gauche pour voir ou saisir ses mesures.</p>
             </div>
           )}
