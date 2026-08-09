@@ -109,13 +109,17 @@ export default function ClientsPage() {
     }
   };
 
-  const handleSharePDF = async () => {
+  const handleShareWhatsApp = async () => {
     if (!selectedClient) return;
     setExporting(true);
 
     try {
-      const { jsPDF } = await import('jspdf');
-      const autoTable = (await import('jspdf-autotable')).default;
+      if (typeof window === 'undefined') return;
+
+      const jsPDFModule = await import('jspdf');
+      const autoTableModule = await import('jspdf-autotable');
+      const jsPDF = jsPDFModule.jsPDF || jsPDFModule.default;
+      const autoTable = autoTableModule.default || autoTableModule;
 
       const doc = new jsPDF();
 
@@ -135,7 +139,6 @@ export default function ClientsPage() {
       doc.text(`Adresse : ${selectedClient.adresse}`, 14, 50);
       doc.text(`Date : ${new Date().toLocaleDateString('fr-FR')}`, 14, 56);
 
-      // Tableau des mesures
       const tableData = [
         ['Cou (cm)', currentMesures.cou || '-'],
         ['Épaule (cm)', currentMesures.epaule || '-'],
@@ -159,7 +162,7 @@ export default function ClientsPage() {
       });
 
       if (currentMesures.notes) {
-        const finalY = (doc as any).lastAutoTable.finalY || 180;
+        const finalY = (doc as any).lastAutoTable?.finalY || 180;
         doc.setFontSize(10);
         doc.setTextColor(51, 65, 85);
         doc.text("Notes & Particularités :", 14, finalY + 10);
@@ -168,34 +171,32 @@ export default function ClientsPage() {
         doc.text(currentMesures.notes, 14, finalY + 16, { maxWidth: 180 });
       }
 
-      const fileName = `Fiche_Mesures_${selectedClient.nom.replace(/\s+/g, '_')}.pdf`;
-      const pdfBlob = doc.output('blob');
-      const file = new File([pdfBlob], fileName, { type: 'application/pdf' });
+      const fileName = `Mesures_${selectedClient.nom.replace(/\s+/g, '_')}.pdf`;
+      
+      // Téléchargement du PDF
+      doc.save(fileName);
 
-      // Partage direct via WebShare API si supporté (sur mobile)
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          title: `Fiche de Mesures - ${selectedClient.nom}`,
-          text: `Voici la fiche de mesures de ${selectedClient.nom} (Ousmane Design)`,
-          files: [file],
-        });
-      } else {
-        // Fallback ordinateur : Téléchargement du PDF + Ouverture de WhatsApp Web
-        doc.save(fileName);
+      // Envoi du message WhatsApp
+      let cleanPhone = selectedClient.telephone.replace(/\s+/g, '').replace(/[^0-9]/g, '');
+      if (cleanPhone.length === 9) cleanPhone = '221' + cleanPhone;
 
-        let cleanPhone = selectedClient.telephone.replace(/\s+/g, '').replace(/[^0-9]/g, '');
-        if (cleanPhone.length === 9) cleanPhone = '221' + cleanPhone;
+      const messageText = `Bonjour ${selectedClient.nom},\n\nVoici vos mesures enregistrées chez *Ousmane Design* :\n` +
+        `- Cou: ${currentMesures.cou || '-'} cm\n` +
+        `- Épaule: ${currentMesures.epaule || '-'} cm\n` +
+        `- Poitrine: ${currentMesures.poitrine || '-'} cm\n` +
+        `- Longueur Haut: ${currentMesures.longueurHaut || '-'} cm\n` +
+        `- Longueur Pantalon: ${currentMesures.longueurPantalon || '-'} cm\n\n` +
+        `Le fichier PDF complet de votre fiche a été téléchargé.`;
 
-        const message = encodeURIComponent(`Bonjour ${selectedClient.nom}, voici votre fiche de mesures (Ousmane Design). Le fichier PDF a été téléchargé sur mon appareil.`);
-        const waUrl = cleanPhone 
-          ? `https://wa.me/${cleanPhone}?text=${message}`
-          : `https://wa.me/?text=${message}`;
+      const waUrl = cleanPhone 
+        ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(messageText)}`
+        : `https://wa.me/?text=${encodeURIComponent(messageText)}`;
 
-        window.open(waUrl, '_blank');
-      }
+      window.open(waUrl, '_blank');
+
     } catch (err) {
-      console.error('Erreur PDF:', err);
-      alert('Erreur lors de la création du PDF.');
+      console.error('Erreur PDF/WhatsApp:', err);
+      alert('Erreur lors du partage. Veuillez réessayer.');
     } finally {
       setExporting(false);
     }
@@ -313,11 +314,11 @@ export default function ClientsPage() {
               {/* Boutons d'actions */}
               <div className="flex items-center gap-2">
                 <button
-                  onClick={handleSharePDF}
+                  onClick={handleShareWhatsApp}
                   disabled={exporting}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2.5 rounded-lg shadow-sm flex items-center gap-1.5 transition-colors disabled:opacity-50"
                 >
-                  <Share2 size={16} /> {exporting ? 'Génération...' : 'Partager PDF WhatsApp'}
+                  <Share2 size={16} /> {exporting ? 'Génération...' : 'Partager WhatsApp'}
                 </button>
 
                 <button
