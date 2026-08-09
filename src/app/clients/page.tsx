@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, UserPlus, Save, Search, Ruler, Phone, MapPin, Trash2, X } from 'lucide-react';
+import { ArrowLeft, UserPlus, Save, Search, Ruler, Phone, MapPin, X, Share2, Download } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 interface Mesures {
   cou: string;
@@ -28,116 +29,152 @@ interface Client {
 }
 
 const defaultMesures: Mesures = {
-  cou: '',
-  epaule: '',
-  poitrine: '',
-  longueurBras: '',
-  tourBras: '',
-  poignet: '',
-  longueurHaut: '',
-  ceinture: '',
-  longueurPantalon: '',
-  tourCuisse: '',
-  tourCheville: '',
-  notes: ''
+  cou: '', epaule: '', poitrine: '', longueurBras: '',
+  tourBras: '', poignet: '', longueurHaut: '', ceinture: '',
+  longueurPantalon: '', tourCuisse: '', tourCheville: '', notes: ''
 };
 
 export default function ClientsPage() {
-  const [clients, setClients] = useState<Client[]>([
-    {
-      id: 'CLI-1',
-      nom: 'Mouhamed Faye',
-      telephone: '785112139',
-      adresse: 'Keur Massar',
-      mesures: {
-        cou: '41',
-        epaule: '51',
-        poitrine: '102',
-        longueurBras: '64',
-        tourBras: '36',
-        poignet: '22',
-        longueurHaut: '95',
-        ceinture: '88',
-        longueurPantalon: '105',
-        tourCuisse: '58',
-        tourCheville: '38',
-        notes: 'Préfère les cols officiers, manches un peu plus larges.'
-      }
-    },
-    {
-      id: 'CLI-2',
-      nom: 'Ousmane Faye',
-      telephone: '77 646 21 02',
-      adresse: 'Hann Maristes',
-      mesures: {
-        cou: '42',
-        epaule: '50',
-        poitrine: '105',
-        longueurBras: '65',
-        tourBras: '38',
-        poignet: '23',
-        longueurHaut: '100',
-        ceinture: '90',
-        longueurPantalon: '108',
-        tourCuisse: '60',
-        tourCheville: '40',
-        notes: 'Couture classique, broderie discrète.'
-      }
-    }
-  ]);
-
+  const [clients, setClients] = useState<Client[]>([]);
   const [search, setSearch] = useState('');
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [currentMesures, setCurrentMesures] = useState<Mesures>(defaultMesures);
+  const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
 
-  // Modal Nouveau Client
   const [showAddModal, setShowAddModal] = useState(false);
   const [newNom, setNewNom] = useState('');
   const [newTel, setNewTel] = useState('');
   const [newAdresse, setNewAdresse] = useState('');
 
-  useEffect(() => {
-    const saved = localStorage.getItem('ousmane_clients');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.length > 0) {
-          setClients(parsed);
-          setSelectedClient(parsed[0]);
-          setCurrentMesures(parsed[0].mesures || defaultMesures);
-          return;
-        }
-      } catch (e) {}
-    }
-    // Par défaut
-    setSelectedClient(clients[0]);
-    setCurrentMesures(clients[0].mesures);
-    localStorage.setItem('ousmane_clients', JSON.stringify(clients));
-  }, []);
+  const fetchClients = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from('clients').select('*').order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Erreur Supabase:', error);
+    } else if (data) {
+      const formattedClients: Client[] = data.map((item: any) => ({
+        id: item.id,
+        nom: item.nom,
+        telephone: item.telephone,
+        adresse: item.adresse,
+        mesures: item.mesures || defaultMesures
+      }));
+      setClients(formattedClients);
 
-  const saveClients = (newClients: Client[]) => {
-    setClients(newClients);
-    localStorage.setItem('ousmane_clients', JSON.stringify(newClients));
+      if (formattedClients.length > 0 && !selectedClient) {
+        setSelectedClient(formattedClients[0]);
+        setCurrentMesures(formattedClients[0].mesures || defaultMesures);
+      }
+    }
+    setLoading(false);
   };
+
+  useEffect(() => {
+    fetchClients();
+
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'clients' },
+        () => fetchClients()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const handleSelectClient = (c: Client) => {
     setSelectedClient(c);
     setCurrentMesures(c.mesures || defaultMesures);
   };
 
-  const handleSaveMesures = () => {
+  const handleSaveMesures = async () => {
     if (!selectedClient) return;
-    const updated = clients.map(c => c.id === selectedClient.id ? { ...c, mesures: currentMesures } : c);
-    saveClients(updated);
-    setSelectedClient({ ...selectedClient, mesures: currentMesures });
-    alert('Mesures enregistrées avec succès !');
+
+    const { error } = await supabase
+      .from('clients')
+      .update({ mesures: currentMesures })
+      .eq('id', selectedClient.id);
+
+    if (error) {
+      alert("Erreur lors de la sauvegarde : " + error.message);
+    } else {
+      setSelectedClient({ ...selectedClient, mesures: currentMesures });
+      alert('Mesures enregistrées avec succès dans le Cloud !');
+    }
   };
 
-  const handleAddClient = (e: React.FormEvent) => {
+  const handleSharePDF = async () => {
+    if (!selectedClient) return;
+    setExporting(true);
+
+    // Import dynamique de html2pdf.js côté client uniquement
+    const html2pdf = (await import('html2pdf.js')).default;
+    const element = document.getElementById('fiche-mesures-print');
+
+    if (!element) {
+      setExporting(false);
+      return;
+    }
+
+    const fileName = `Fiche_Mesures_${selectedClient.nom.replace(/\s+/g, '_')}.pdf`;
+
+    const opt = {
+      margin:       10,
+      filename:     fileName,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2 },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    try {
+      // Génération du Blob PDF
+      const pdfWorker = html2pdf().set(opt).from(element);
+      const pdfBlob = await pdfWorker.output('blob');
+
+      const file = new File([pdfBlob], fileName, { type: 'application/pdf' });
+
+      // Vérifier si l'API Web Share est supportée (Smartphone / Tablettes / Navigateurs récents)
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          title: `Fiche de Mesures - ${selectedClient.nom}`,
+          text: `Voici la fiche de mesures de ${selectedClient.nom} — Ousmane Design`,
+          files: [file],
+        });
+      } else {
+        // Fallback si partage direct non géré par le navigateur : Téléchargement + Ouverture WhatsApp Web
+        html2pdf().set(opt).from(element).save();
+        
+        let cleanPhone = selectedClient.telephone.replace(/\s+/g, '').replace(/[^0-9]/g, '');
+        if (cleanPhone.length === 9) cleanPhone = '221' + cleanPhone;
+
+        const message = encodeURIComponent(`Bonjour ${selectedClient.nom}, voici votre fiche de mesures chez Ousmane Design (fichier PDF téléchargé).`);
+        const waUrl = cleanPhone 
+          ? `https://wa.me/${cleanPhone}?text=${message}`
+          : `https://wa.me/?text=${message}`;
+
+        setTimeout(() => {
+          window.open(waUrl, '_blank');
+        }, 1000);
+      }
+    } catch (err) {
+      console.error('Erreur lors du partage PDF:', err);
+      alert('Erreur lors de la création du fichier PDF.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleAddClient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newNom) return;
 
-    const newClient: Client = {
+    const newClientData = {
       id: `CLI-${Date.now()}`,
       nom: newNom,
       telephone: newTel || 'Non renseigné',
@@ -145,15 +182,17 @@ export default function ClientsPage() {
       mesures: defaultMesures
     };
 
-    const updated = [newClient, ...clients];
-    saveClients(updated);
-    setSelectedClient(newClient);
-    setCurrentMesures(defaultMesures);
+    const { error } = await supabase.from('clients').insert([newClientData]);
 
-    setNewNom('');
-    setNewTel('');
-    setNewAdresse('');
-    setShowAddModal(false);
+    if (error) {
+      alert("Erreur lors de l'ajout : " + error.message);
+    } else {
+      setNewNom('');
+      setNewTel('');
+      setNewAdresse('');
+      setShowAddModal(false);
+      fetchClients();
+    }
   };
 
   const filteredClients = clients.filter(c => 
@@ -163,6 +202,7 @@ export default function ClientsPage() {
 
   return (
     <div className="min-h-screen bg-slate-100 p-6 text-slate-800">
+      
       {/* Header */}
       <div className="max-w-7xl mx-auto mb-6 flex justify-between items-center">
         <div>
@@ -183,7 +223,7 @@ export default function ClientsPage() {
 
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Liste des Clients (Gauche) */}
+        {/* Liste des Clients */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
           <div className="relative">
             <Search className="absolute left-3 top-3 text-slate-400" size={16} />
@@ -197,7 +237,9 @@ export default function ClientsPage() {
           </div>
 
           <div className="space-y-2 max-h-[550px] overflow-y-auto pr-1">
-            {filteredClients.map((c) => (
+            {loading ? (
+              <p className="text-xs text-slate-400 text-center py-6">Chargement cloud...</p>
+            ) : filteredClients.map((c) => (
               <div 
                 key={c.id}
                 onClick={() => handleSelectClient(c)}
@@ -217,170 +259,122 @@ export default function ClientsPage() {
               </div>
             ))}
 
-            {filteredClients.length === 0 && (
+            {!loading && filteredClients.length === 0 && (
               <p className="text-xs text-slate-400 text-center py-6">Aucun client trouvé</p>
             )}
           </div>
         </div>
 
-        {/* Formulaire de Mesures (Droite) */}
+        {/* Fiche Mesures du Client */}
         {selectedClient ? (
           <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
-            <div className="flex justify-between items-start border-b border-slate-100 pb-4">
-              <div>
-                <h2 className="text-xl font-bold text-slate-900">{selectedClient.nom}</h2>
-                <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
-                  <span className="flex items-center gap-1"><Phone size={13} /> {selectedClient.telephone}</span>
-                  <span className="flex items-center gap-1"><MapPin size={13} /> {selectedClient.adresse}</span>
+            
+            {/* Zone qui sera convertie en PDF */}
+            <div id="fiche-mesures-print" className="p-2 bg-white rounded-xl">
+              <div className="flex justify-between items-start border-b border-slate-200 pb-4 mb-6">
+                <div>
+                  <span className="text-xs font-bold text-amber-600 tracking-wider uppercase">Ousmane Design</span>
+                  <h2 className="text-2xl font-bold text-slate-900 mt-1">{selectedClient.nom}</h2>
+                  <div className="flex items-center gap-4 text-xs text-slate-500 mt-1">
+                    <span className="flex items-center gap-1"><Phone size={13} /> {selectedClient.telephone}</span>
+                    <span className="flex items-center gap-1"><MapPin size={13} /> {selectedClient.adresse}</span>
+                  </div>
+                </div>
+
+                {/* Boutons d'actions */}
+                <div className="flex items-center gap-2 print:hidden">
+                  <button
+                    onClick={handleSharePDF}
+                    disabled={exporting}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2.5 rounded-lg shadow-sm flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                  >
+                    <Share2 size={16} /> {exporting ? 'Génération...' : 'Partager PDF WhatsApp'}
+                  </button>
+
+                  <button
+                    onClick={handleSaveMesures}
+                    className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-1.5 transition-colors"
+                  >
+                    <Save size={16} /> Enregistrer
+                  </button>
                 </div>
               </div>
 
-              <button
-                onClick={handleSaveMesures}
-                className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-1.5 transition-colors"
-              >
-                <Save size={16} /> Enregistrer
-              </button>
-            </div>
-
-            {/* Champs de Mesures */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Cou (cm)</label>
-                <input 
-                  type="text" 
-                  value={currentMesures.cou} 
-                  onChange={e => setCurrentMesures({ ...currentMesures, cou: e.target.value })} 
-                  className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
-                />
+              {/* Formulaire des Mesures */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Cou (cm)</label>
+                  <input type="text" value={currentMesures.cou} onChange={e => setCurrentMesures({ ...currentMesures, cou: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Épaule (cm)</label>
+                  <input type="text" value={currentMesures.epaule} onChange={e => setCurrentMesures({ ...currentMesures, epaule: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Poitrine (cm)</label>
+                  <input type="text" value={currentMesures.poitrine} onChange={e => setCurrentMesures({ ...currentMesures, poitrine: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Longueur Bras (cm)</label>
+                  <input type="text" value={currentMesures.longueurBras} onChange={e => setCurrentMesures({ ...currentMesures, longueurBras: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Tour de Bras (cm)</label>
+                  <input type="text" value={currentMesures.tourBras} onChange={e => setCurrentMesures({ ...currentMesures, tourBras: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Poignet (cm)</label>
+                  <input type="text" value={currentMesures.poignet} onChange={e => setCurrentMesures({ ...currentMesures, poignet: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Longueur Boubou/Haut (cm)</label>
+                  <input type="text" value={currentMesures.longueurHaut} onChange={e => setCurrentMesures({ ...currentMesures, longueurHaut: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Ceinture/Taille (cm)</label>
+                  <input type="text" value={currentMesures.ceinture} onChange={e => setCurrentMesures({ ...currentMesures, ceinture: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Longueur Pantalon (cm)</label>
+                  <input type="text" value={currentMesures.longueurPantalon} onChange={e => setCurrentMesures({ ...currentMesures, longueurPantalon: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Tour Cuisse (cm)</label>
+                  <input type="text" value={currentMesures.tourCuisse} onChange={e => setCurrentMesures({ ...currentMesures, tourCuisse: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Tour Cheville (cm)</label>
+                  <input type="text" value={currentMesures.tourCheville} onChange={e => setCurrentMesures({ ...currentMesures, tourCheville: e.target.value })} className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" />
+                </div>
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Épaule (cm)</label>
-                <input 
-                  type="text" 
-                  value={currentMesures.epaule} 
-                  onChange={e => setCurrentMesures({ ...currentMesures, epaule: e.target.value })} 
-                  className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Poitrine (cm)</label>
-                <input 
-                  type="text" 
-                  value={currentMesures.poitrine} 
-                  onChange={e => setCurrentMesures({ ...currentMesures, poitrine: e.target.value })} 
-                  className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Longueur Bras (cm)</label>
-                <input 
-                  type="text" 
-                  value={currentMesures.longueurBras} 
-                  onChange={e => setCurrentMesures({ ...currentMesures, longueurBras: e.target.value })} 
-                  className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Tour de Bras (cm)</label>
-                <input 
-                  type="text" 
-                  value={currentMesures.tourBras} 
-                  onChange={e => setCurrentMesures({ ...currentMesures, tourBras: e.target.value })} 
-                  className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Poignet (cm)</label>
-                <input 
-                  type="text" 
-                  value={currentMesures.poignet} 
-                  onChange={e => setCurrentMesures({ ...currentMesures, poignet: e.target.value })} 
-                  className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Longueur Boubou/Haut (cm)</label>
-                <input 
-                  type="text" 
-                  value={currentMesures.longueurHaut} 
-                  onChange={e => setCurrentMesures({ ...currentMesures, longueurHaut: e.target.value })} 
-                  className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Ceinture/Taille (cm)</label>
-                <input 
-                  type="text" 
-                  value={currentMesures.ceinture} 
-                  onChange={e => setCurrentMesures({ ...currentMesures, ceinture: e.target.value })} 
-                  className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Longueur Pantalon (cm)</label>
-                <input 
-                  type="text" 
-                  value={currentMesures.longueurPantalon} 
-                  onChange={e => setCurrentMesures({ ...currentMesures, longueurPantalon: e.target.value })} 
-                  className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Tour Cuisse (cm)</label>
-                <input 
-                  type="text" 
-                  value={currentMesures.tourCuisse} 
-                  onChange={e => setCurrentMesures({ ...currentMesures, tourCuisse: e.target.value })} 
-                  className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Tour Cheville (cm)</label>
-                <input 
-                  type="text" 
-                  value={currentMesures.tourCheville} 
-                  onChange={e => setCurrentMesures({ ...currentMesures, tourCheville: e.target.value })} 
-                  className="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
+              <div className="pt-4">
+                <label className="block font-semibold text-xs text-slate-700 mb-1">Notes & Particularités du Modèle</label>
+                <textarea 
+                  rows={3} 
+                  value={currentMesures.notes} 
+                  onChange={e => setCurrentMesures({ ...currentMesures, notes: e.target.value })} 
+                  placeholder="Ex: Épaule droite légèrement tombante, préfère les poches latérales..." 
+                  className="w-full border border-slate-200 rounded-lg p-3 text-xs bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
                 />
               </div>
             </div>
 
-            <div className="pt-2">
-              <label className="block font-semibold text-xs text-slate-700 mb-1">Notes & Particularités du Modèle</label>
-              <textarea 
-                rows={3} 
-                value={currentMesures.notes} 
-                onChange={e => setCurrentMesures({ ...currentMesures, notes: e.target.value })} 
-                placeholder="Ex: Épaule droite légèrement tombante, préfère les poches latérales..." 
-                className="w-full border border-slate-200 rounded-lg p-3 text-xs bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none" 
-              />
-            </div>
           </div>
         ) : (
           <div className="lg:col-span-2 bg-white p-12 rounded-xl border border-slate-200 text-center text-slate-400">
-            Sélectionnez un client à gauche ou cliquez sur "+ Nouveau Client"
+            Sélectionnez un client ou ajoutez-en un nouveau
           </div>
         )}
 
       </div>
 
-      {/* Modal Création Client */}
+      {/* Modal Nouveau Client */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-bold text-slate-900">Ajouter un Client</h2>
+              <h2 className="text-lg font-bold text-slate-900">Ajouter un Client (Cloud)</h2>
               <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600">
                 <X size={18} />
               </button>
@@ -433,7 +427,7 @@ export default function ClientsPage() {
                   type="submit" 
                   className="px-5 py-2.5 rounded-lg text-sm font-bold bg-amber-600 text-white hover:bg-amber-700 shadow-md"
                 >
-                  Créer le profil
+                  Créer et Synchroniser
                 </button>
               </div>
             </form>
