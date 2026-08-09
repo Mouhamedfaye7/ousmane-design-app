@@ -6,6 +6,7 @@ import { ArrowLeft, Plus, Printer, MessageCircle } from 'lucide-react';
 
 export default function CommandesPage() {
   const [showModal, setShowModal] = useState(false);
+  const [clientInput, setClientInput] = useState('');
 
   return (
     <div className="min-h-screen bg-slate-100 p-6 text-slate-800">
@@ -95,11 +96,21 @@ export default function CommandesPage() {
             
             <form onSubmit={(e) => { e.preventDefault(); setShowModal(false); }} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Client *</label>
-                <select className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none">
-                  <option value="">-- Sélectionner un client --</option>
-                  <option value="1">Mouhamed Faye (785112139)</option>
-                </select>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Client (Nom & Téléphone) *</label>
+                <input 
+                  type="text"
+                  list="clients-list"
+                  placeholder="Saisir ou choisir un client (ex: Modou Diop 77...)"
+                  value={clientInput}
+                  onChange={(e) => setClientInput(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-amber-500 outline-none"
+                  required
+                />
+                <datalist id="clients-list">
+                  <option value="Mouhamed Faye (785112139)" />
+                  <option value="Ibrahima Diallo (771234567)" />
+                  <option value="Fatou Sow (769876543)" />
+                </datalist>
               </div>
 
               <div>
@@ -118,6 +129,7 @@ export default function CommandesPage() {
                     type="number" 
                     placeholder="Ex: 35000"
                     className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-amber-500 outline-none"
+                    required
                   />
                 </div>
                 <div>
