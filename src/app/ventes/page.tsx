@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Printer, MessageCircle, X, ShoppingCart, Plus, Trash2, Eye } from 'lucide-react';
+import { ArrowLeft, Printer, MessageCircle, X, ShoppingCart, Plus, Trash2, Eye, Tag } from 'lucide-react';
 
 interface Article {
   id: string;
@@ -33,13 +33,19 @@ interface Vente {
 }
 
 export default function VentesPage() {
-  // Articles du catalogue rapide
-  const articles: Article[] = [
+  // Articles du catalogue rapide avec sauvegarde locale
+  const [articles, setArticles] = useState<Article[]>([
     { id: '1', nom: 'Diaspora', prix: 50000, categorie: 'Prêt-à-porter' },
     { id: '2', nom: 'Boubou VIP Getzner', prix: 85000, categorie: 'Sur-mesure' },
     { id: '3', nom: 'Caftan Royal', prix: 45000, categorie: 'Prêt-à-porter' },
     { id: '4', nom: 'Ensemble Tissu Brodé', prix: 35000, categorie: 'Prêt-à-porter' },
-  ];
+  ]);
+
+  // Modal Nouveau Article
+  const [showArticleModal, setShowArticleModal] = useState(false);
+  const [nomArticle, setNomArticle] = useState('');
+  const [prixArticle, setPrixArticle] = useState('');
+  const [catArticle, setCatArticle] = useState('Prêt-à-porter');
 
   // États Caisse & Ventes
   const [panier, setPanier] = useState<PanierItem[]>([]);
@@ -70,6 +76,42 @@ export default function VentesPage() {
 
   // Modal Facture
   const [selectedVente, setSelectedVente] = useState<Vente | null>(null);
+
+  // Charger le catalogue sauvegardé
+  useEffect(() => {
+    const saved = localStorage.getItem('ousmane_catalogue');
+    if (saved) {
+      try { setArticles(JSON.parse(saved)); } catch (e) {}
+    }
+  }, []);
+
+  // Sauvegarder le catalogue
+  const saveCatalogue = (newArticles: Article[]) => {
+    setArticles(newArticles);
+    localStorage.setItem('ousmane_catalogue', JSON.stringify(newArticles));
+  };
+
+  const handleAddArticle = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nomArticle || !prixArticle) return;
+
+    const newArt: Article = {
+      id: `ART-${Date.now()}`,
+      nom: nomArticle,
+      prix: Number(prixArticle),
+      categorie: catArticle
+    };
+
+    saveCatalogue([...articles, newArt]);
+    setNomArticle('');
+    setPrixArticle('');
+    setShowArticleModal(false);
+  };
+
+  const handleDeleteArticle = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    saveCatalogue(articles.filter(a => a.id !== id));
+  };
 
   const ajouterAuPanier = (art: Article) => {
     const existing = panier.find(item => item.article.id === art.id);
@@ -111,7 +153,6 @@ export default function VentesPage() {
     setVentes([nouvelleVente, ...ventes]);
     setSelectedVente(nouvelleVente);
 
-    // Reset Form
     setPanier([]);
     setClient('');
     setTelephone('');
@@ -153,21 +194,41 @@ export default function VentesPage() {
         
         {/* Colonne 1 : Catalogue d'Articles */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-          <h2 className="font-bold text-slate-900 text-sm uppercase tracking-wider">Catalogue Articles</h2>
-          <div className="grid grid-cols-1 gap-2">
+          <div className="flex justify-between items-center">
+            <h2 className="font-bold text-slate-900 text-sm uppercase tracking-wider flex items-center gap-1.5">
+              <Tag size={16} className="text-amber-600"/> Catalogue Articles
+            </h2>
+            <button
+              onClick={() => setShowArticleModal(true)}
+              className="bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs px-2.5 py-1 rounded-md font-bold flex items-center gap-1 transition-colors"
+            >
+              <Plus size={14}/> Nouveau
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2 max-h-[420px] overflow-y-auto pr-1">
             {articles.map((art) => (
               <div 
                 key={art.id} 
                 onClick={() => ajouterAuPanier(art)}
-                className="p-3 border border-slate-200 rounded-lg hover:border-amber-500 hover:bg-amber-50/50 cursor-pointer transition-all flex justify-between items-center"
+                className="group relative p-3 border border-slate-200 rounded-lg hover:border-amber-500 hover:bg-amber-50/50 cursor-pointer transition-all flex justify-between items-center"
               >
                 <div>
                   <p className="font-bold text-sm text-slate-900">{art.nom}</p>
                   <span className="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{art.categorie}</span>
                 </div>
-                <div className="text-right">
-                  <p className="font-bold text-amber-700 text-sm">{art.prix.toLocaleString()} F</p>
-                  <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-0.5 justify-end"><Plus size={12}/> Ajouter</span>
+                <div className="text-right flex items-center gap-2">
+                  <div>
+                    <p className="font-bold text-amber-700 text-sm">{art.prix.toLocaleString()} F</p>
+                    <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-0.5 justify-end"><Plus size={12}/> Ajouter</span>
+                  </div>
+                  <button
+                    onClick={(e) => handleDeleteArticle(art.id, e)}
+                    className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 p-1 transition-opacity"
+                    title="Supprimer du catalogue"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               </div>
             ))}
@@ -331,24 +392,85 @@ export default function VentesPage() {
         </div>
       </div>
 
+      {/* Modal Nouvel Article */}
+      {showArticleModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
+            <h2 className="text-lg font-bold text-slate-900 mb-4">Ajouter un Article au Catalogue</h2>
+            
+            <form onSubmit={handleAddArticle} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Nom du modèle / Tissu *</label>
+                <input 
+                  type="text"
+                  placeholder="Ex: Boubou Brodé 3 Pièces"
+                  value={nomArticle}
+                  onChange={(e) => setNomArticle(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Catégorie</label>
+                <select
+                  value={catArticle}
+                  onChange={(e) => setCatArticle(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none"
+                >
+                  <option value="Prêt-à-porter">Prêt-à-porter</option>
+                  <option value="Sur-mesure">Sur-mesure</option>
+                  <option value="Accessoire">Accessoire</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Prix de Vente (FCFA) *</label>
+                <input 
+                  type="number"
+                  placeholder="Ex: 60000"
+                  value={prixArticle}
+                  onChange={(e) => setPrixArticle(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none"
+                  required
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowArticleModal(false)}
+                  className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-lg text-sm font-semibold bg-amber-600 hover:bg-amber-700 text-white shadow-md transition-colors"
+                >
+                  Ajouter l'Article
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Modal Reçu / Facture Original Restauré */}
       {selectedVente && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
           <div className="bg-white rounded-xl max-w-2xl w-full p-8 relative shadow-2xl my-8 border border-amber-200">
             
-            {/* Boutons d'action */}
             <div className="absolute top-4 right-4 flex items-center gap-2 print:hidden">
               <button 
                 onClick={() => window.print()}
                 className="flex items-center gap-1.5 bg-amber-700 hover:bg-amber-800 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition-colors"
-                title="Imprimer"
               >
                 <Printer size={15} /> Imprimer
               </button>
               <button 
                 onClick={() => handleWhatsAppShare(selectedVente)}
                 className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition-colors shadow-sm"
-                title="Partager sur WhatsApp"
               >
                 <MessageCircle size={15} /> WhatsApp
               </button>
@@ -360,10 +482,7 @@ export default function VentesPage() {
               </button>
             </div>
 
-            {/* Facture à imprimer (Cadre Doré Chic) */}
             <div className="border-2 border-amber-600/80 p-6 rounded-lg bg-amber-50/10">
-              
-              {/* En-tête : Marque & Adresse */}
               <div className="flex justify-between items-start mb-6">
                 <div>
                   <h1 className="text-3xl font-serif font-bold text-amber-900 tracking-wide">
@@ -381,7 +500,6 @@ export default function VentesPage() {
                 </div>
               </div>
 
-              {/* Bloc Info Client */}
               <div className="border border-amber-600/70 rounded-xl p-4 grid grid-cols-2 gap-y-2 text-xs text-amber-950 mb-6 bg-white/60">
                 <div><strong>Nom du client :</strong> {selectedVente.client}</div>
                 <div><strong>Mode de commande :</strong> {selectedVente.modeCommande}</div>
@@ -390,7 +508,6 @@ export default function VentesPage() {
                 <div><strong>Date de commande :</strong> {selectedVente.date}</div>
               </div>
 
-              {/* Tableau Articles */}
               <div className="border border-amber-600/70 rounded-xl overflow-hidden mb-6">
                 <table className="w-full text-xs text-left">
                   <thead className="bg-amber-600 text-white uppercase text-[10px] tracking-wider">
@@ -412,7 +529,6 @@ export default function VentesPage() {
                 </table>
               </div>
 
-              {/* Observations & Totaux */}
               <div className="grid grid-cols-2 gap-4 mb-8">
                 <div className="border border-amber-600/70 rounded-xl p-3 bg-white/60">
                   <span className="text-[11px] font-bold text-amber-900 block mb-1 uppercase tracking-wider">Observations :</span>
@@ -435,7 +551,6 @@ export default function VentesPage() {
                 </div>
               </div>
 
-              {/* Signatures */}
               <div className="border-t border-amber-300 pt-6 grid grid-cols-2 text-center text-[11px] font-bold text-amber-900 mb-6">
                 <div>
                   <p className="uppercase tracking-wider">Signature du Client</p>
@@ -447,11 +562,9 @@ export default function VentesPage() {
                 </div>
               </div>
 
-              {/* Pied de page */}
               <p className="text-[10px] text-center italic text-amber-800/80 pt-2 border-t border-amber-200">
                 Merci pour votre confiance ! — L'élégance sur mesure, pensée pour vous.
               </p>
-
             </div>
           </div>
         </div>
