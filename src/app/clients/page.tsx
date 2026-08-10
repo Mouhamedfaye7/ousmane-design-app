@@ -10,17 +10,17 @@ interface Client {
   nom: string;
   telephone: string;
   adresse: string;
-  cou?: number;
-  epaule?: number;
-  poitrine?: number;
-  longueur_bras?: number;
-  tour_bras?: number;
-  poignet?: number;
-  longueur_haut?: number;
-  ceinture?: number;
-  longueur_pantalon?: number;
-  tour_cuisse?: number;
-  tour_cheville?: number;
+  cou?: number | string;
+  epaule?: number | string;
+  poitrine?: number | string;
+  longueur_bras?: number | string;
+  tour_bras?: number | string;
+  poignet?: number | string;
+  longueur_haut?: number | string;
+  ceinture?: number | string;
+  longueur_pantalon?: number | string;
+  tour_cuisse?: number | string;
+  tour_cheville?: number | string;
   notes?: string;
 }
 
@@ -36,28 +36,39 @@ export default function ClientsPage() {
 
   const fetchClients = async () => {
     setLoading(true);
-    const { data } = await supabase.from('clients').select('*').order('created_at', { ascending: false });
-    if (data && data.length > 0) {
-      setClients(data);
-      setSelectedClient(data[0]);
-    } else {
-      setClients([]);
-      setSelectedClient(null);
+    try {
+      const { data, error } = await supabase.from('clients').select('*').order('created_at', { ascending: false });
+      if (!error && data && data.length > 0) {
+        setClients(data);
+        setSelectedClient(data[0]);
+      } else {
+        setClients([]);
+        setSelectedClient(null);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleSave = async () => {
-    if (!selectedClient || !selectedClient.nom) return alert('Veuillez remplir le nom du client');
-
-    if (selectedClient.id) {
-      await supabase.from('clients').update(selectedClient).eq('id', selectedClient.id);
-    } else {
-      const { data } = await supabase.from('clients').insert([selectedClient]).select();
-      if (data && data[0]) setSelectedClient(data[0]);
+    if (!selectedClient || !selectedClient.nom) {
+      return alert('Veuillez au moins renseigner le nom du client.');
     }
-    alert('Fiche client mise à jour avec succès !');
-    fetchClients();
+
+    try {
+      if (selectedClient.id) {
+        await supabase.from('clients').update(selectedClient).eq('id', selectedClient.id);
+      } else {
+        const { data } = await supabase.from('clients').insert([selectedClient]).select();
+        if (data && data[0]) setSelectedClient(data[0]);
+      }
+      alert('Modifications enregistrées avec succès !');
+      fetchClients();
+    } catch (err: any) {
+      alert('Erreur lors de la sauvegarde : ' + err.message);
+    }
   };
 
   const handleDeleteClient = async () => {
@@ -75,7 +86,7 @@ export default function ClientsPage() {
     if (cleanPhone.length === 9) cleanPhone = '221' + cleanPhone;
 
     let msg = `*OUSMANE DESIGN — Carnet de Mesures*\n`;
-    msg += `Client: *${selectedClient.nom}*\n\n`;
+    msg += `Client: *${selectedClient.nom || ''}*\n\n`;
     if (selectedClient.cou) msg += `- Cou: ${selectedClient.cou} cm\n`;
     if (selectedClient.epaule) msg += `- Épaule: ${selectedClient.epaule} cm\n`;
     if (selectedClient.poitrine) msg += `- Poitrine: ${selectedClient.poitrine} cm\n`;
@@ -101,9 +112,23 @@ export default function ClientsPage() {
   };
 
   const filteredClients = clients.filter(c => 
-    c.nom.toLowerCase().includes(search.toLowerCase()) || 
-    c.telephone?.includes(search)
+    (c.nom || '').toLowerCase().includes(search.toLowerCase()) || 
+    (c.telephone || '').includes(search)
   );
+
+  const mesureFields: Array<{ label: string; key: keyof Client }> = [
+    { label: 'Cou (cm)', key: 'cou' },
+    { label: 'Épaule (cm)', key: 'epaule' },
+    { label: 'Poitrine (cm)', key: 'poitrine' },
+    { label: 'Longueur Bras (cm)', key: 'longueur_bras' },
+    { label: 'Tour de Bras (cm)', key: 'tour_bras' },
+    { label: 'Poignet (cm)', key: 'poignet' },
+    { label: 'Longueur Boubou/Haut (cm)', key: 'longueur_haut' },
+    { label: 'Ceinture/Taille (cm)', key: 'ceinture' },
+    { label: 'Longueur Pantalon (cm)', key: 'longueur_pantalon' },
+    { label: 'Tour Cuisse (cm)', key: 'tour_cuisse' },
+    { label: 'Tour Cheville (cm)', key: 'tour_cheville' },
+  ];
 
   return (
     <div className="min-h-screen bg-slate-100 p-6 text-slate-800">
@@ -138,25 +163,31 @@ export default function ClientsPage() {
           </div>
 
           <div className="space-y-2 max-h-[600px] overflow-y-auto">
-            {filteredClients.map((c) => (
-              <div
-                key={c.id || c.nom}
-                onClick={() => setSelectedClient(c)}
-                className={`p-4 rounded-xl border cursor-pointer transition-all bg-white ${
-                  selectedClient?.id === c.id 
-                    ? 'border-amber-500 ring-2 ring-amber-500/20' 
-                    : 'border-slate-200 hover:border-slate-300'
-                }`}
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-bold text-slate-900 text-sm">{c.nom || 'Sans nom'}</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">{c.telephone || 'Sans téléphone'}</p>
+            {loading ? (
+              <p className="text-sm text-slate-400 p-2">Chargement des clients...</p>
+            ) : filteredClients.length === 0 ? (
+              <p className="text-sm text-slate-400 p-2">Aucun client trouvé.</p>
+            ) : (
+              filteredClients.map((c) => (
+                <div
+                  key={c.id || c.nom}
+                  onClick={() => setSelectedClient(c)}
+                  className={`p-4 rounded-xl border cursor-pointer transition-all bg-white ${
+                    selectedClient?.id === c.id 
+                      ? 'border-amber-500 ring-2 ring-amber-500/20' 
+                      : 'border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="font-bold text-slate-900 text-sm">{c.nom || 'Sans nom'}</h3>
+                      <p className="text-xs text-slate-500 mt-0.5">{c.telephone || 'Sans téléphone'}</p>
+                    </div>
+                    <Ruler size={16} className="text-amber-600" />
                   </div>
-                  <Ruler size={16} className="text-amber-600" />
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -167,7 +198,7 @@ export default function ClientsPage() {
               <div>
                 <input
                   type="text"
-                  value={selectedClient.nom}
+                  value={selectedClient.nom || ''}
                   onChange={(e) => setSelectedClient({...selectedClient, nom: e.target.value})}
                   placeholder="Nom complet du client"
                   className="text-2xl font-bold text-slate-900 border-b border-dashed border-slate-300 focus:border-amber-500 outline-none pb-1"
@@ -175,14 +206,14 @@ export default function ClientsPage() {
                 <div className="flex items-center gap-4 mt-2">
                   <input
                     type="text"
-                    value={selectedClient.telephone}
+                    value={selectedClient.telephone || ''}
                     onChange={(e) => setSelectedClient({...selectedClient, telephone: e.target.value})}
                     placeholder="Numéro Téléphone"
                     className="text-xs text-slate-500 border-b border-slate-200 outline-none"
                   />
                   <input
                     type="text"
-                    value={selectedClient.adresse}
+                    value={selectedClient.adresse || ''}
                     onChange={(e) => setSelectedClient({...selectedClient, adresse: e.target.value})}
                     placeholder="Adresse / Quartier"
                     className="text-xs text-slate-500 border-b border-slate-200 outline-none"
@@ -219,25 +250,16 @@ export default function ClientsPage() {
 
             {/* GRILLE DES MESURES */}
             <div className="grid grid-cols-3 gap-4">
-              {[
-                { label: 'Cou (cm)', key: 'cou' },
-                { label: 'Épaule (cm)', key: 'epaule' },
-                { label: 'Poitrine (cm)', key: 'poitrine' },
-                { label: 'Longueur Bras (cm)', key: 'longueur_bras' },
-                { label: 'Tour de Bras (cm)', key: 'tour_bras' },
-                { label: 'Poignet (cm)', key: 'poignet' },
-                { label: 'Longueur Boubou/Haut (cm)', key: 'longueur_haut' },
-                { label: 'Ceinture/Taille (cm)', key: 'ceinture' },
-                { label: 'Longueur Pantalon (cm)', key: 'longueur_pantalon' },
-                { label: 'Tour Cuisse (cm)', key: 'tour_cuisse' },
-                { label: 'Tour Cheville (cm)', key: 'tour_cheville' },
-              ].map((m) => (
+              {mesureFields.map((m) => (
                 <div key={m.key}>
                   <label className="text-[11px] font-bold text-slate-700 block mb-1">{m.label}</label>
                   <input
                     type="number"
-                    value={(selectedClient as any)[m.key] || ''}
-                    onChange={(e) => setSelectedClient({...selectedClient, [m.key]: e.target.value ? Number(e.target.value) : ''})}
+                    value={selectedClient[m.key] ?? ''}
+                    onChange={(e) => setSelectedClient({
+                      ...selectedClient, 
+                      [m.key]: e.target.value ? Number(e.target.value) : ''
+                    })}
                     className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold outline-none focus:bg-white focus:border-amber-500"
                   />
                 </div>
