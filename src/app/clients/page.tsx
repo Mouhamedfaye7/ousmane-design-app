@@ -39,9 +39,14 @@ export default function ClientsPage() {
     try {
       const { data, error } = await supabase.from('clients').select('*').order('created_at', { ascending: false });
       if (!error && data) {
-        setClients(data);
-        if (data.length > 0) {
-          setSelectedClient(data[0]);
+        // Uniformiser nom / nom_complet au cas où
+        const formattedData = data.map((c: any) => ({
+          ...c,
+          nom: c.nom || c.nom_complet || ''
+        }));
+        setClients(formattedData);
+        if (formattedData.length > 0) {
+          setSelectedClient(formattedData[0]);
         } else {
           setSelectedClient(null);
         }
@@ -53,7 +58,6 @@ export default function ClientsPage() {
     }
   };
 
-  // Fonction pour nettoyer l'objet avant envoi à Supabase
   const sanitizeClientPayload = (client: Client) => {
     const payload: any = {
       nom: client.nom || 'Sans nom',
