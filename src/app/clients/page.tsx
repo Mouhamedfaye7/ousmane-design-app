@@ -38,12 +38,13 @@ export default function ClientsPage() {
     setLoading(true);
     try {
       const { data, error } = await supabase.from('clients').select('*').order('created_at', { ascending: false });
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         setClients(data);
-        setSelectedClient(data[0]);
-      } else {
-        setClients([]);
-        setSelectedClient(null);
+        if (data.length > 0) {
+          setSelectedClient(data[0]);
+        } else {
+          setSelectedClient(null);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -53,30 +54,70 @@ export default function ClientsPage() {
   };
 
   const handleSave = async () => {
-    if (!selectedClient || !selectedClient.nom) {
-      return alert('Veuillez au moins renseigner le nom du client.');
+    if (!selectedClient) return;
+
+    if (!selectedClient.nom && !selectedClient.telephone) {
+      return alert('Veuillez renseigner au moins un Nom ou un Numéro de téléphone.');
     }
 
     try {
       if (selectedClient.id) {
-        await supabase.from('clients').update(selectedClient).eq('id', selectedClient.id);
+        const { error } = await supabase.from('clients').update(selectedClient).eq('id', selectedClient.id);
+        if (error) throw error;
       } else {
-        const { data } = await supabase.from('clients').insert([selectedClient]).select();
+        const { data, error } = await supabase.from('clients').insert([selectedClient]).select();
+        if (error) throw error;
         if (data && data[0]) setSelectedClient(data[0]);
       }
-      alert('Modifications enregistrées avec succès !');
-      fetchClients();
+      alert('Fiche client enregistrée avec succès !');
+      await fetchClients();
     } catch (err: any) {
       alert('Erreur lors de la sauvegarde : ' + err.message);
     }
   };
 
   const handleDeleteClient = async () => {
-    if (!selectedClient || !selectedClient.id) return;
-    if (confirm(`Voulez-vous vraiment supprimer la fiche de ${selectedClient.nom} ?`)) {
-      await supabase.from('clients').delete().eq('id', selectedClient.id);
-      alert('Client supprimé.');
+    if (!selectedClient) return;
+
+    const nomAffiche = selectedClient.nom || selectedClient.telephone || 'ce client';
+
+    if (!confirm(`Voulez-vous vraiment supprimer définitivement ${nomAffiche} ?`)) {
+      return;
+    }
+
+    try {
+      // 1. Si le client existe en base de données par son ID
+      if (selectedClient.id) {
+        const { error } = await supabase.from('clients').delete().eq('id', selectedClient.id);
+        if (error) {
+          // Tentative de suppression par téléphone au cas où
+          if (selectedClient.telephone) {
+            await supabase.from('clients').delete().eq('telephone', selectedClient.telephone);
+          } else {
+            throw error;
+          }
+        }
+      } else if (selectedClient.telephone) {
+        // Fallback suppression par téléphone si l'ID manque
+        await supabase.from('clients').delete().eq('telephone', selectedClient.telephone);
+      }
+
+      // 2. Mettre à jour l'état local immédiatement
+      const listFiltree = clients.filter(c => {
+        if (selectedClient.id && c.id) return c.id !== selectedClient.id;
+        if (selectedClient.telephone && c.telephone) return c.telephone !== selectedClient.telephone;
+        return true;
+      });
+
+      setClients(listFiltree);
+      setSelectedClient(listFiltree.length > 0 ? listFiltree[0] : null);
+
+      alert('Client supprimé avec succès.');
+      
+      // Recharger depuis Supabase
       fetchClients();
+    } catch (err: any) {
+      alert('Erreur lors de la suppression : ' + (err.message || 'Impossible de supprimer. Vérifiez la RLS Supabase.'));
     }
   };
 
@@ -86,7 +127,7 @@ export default function ClientsPage() {
     if (cleanPhone.length === 9) cleanPhone = '221' + cleanPhone;
 
     let msg = `*OUSMANE DESIGN — Carnet de Mesures*\n`;
-    msg += `Client: *${selectedClient.nom || ''}*\n\n`;
+    msg += `Client: *${selectedClient.nom || 'Sans nom'}*\n\n`;
     if (selectedClient.cou) msg += `- Cou: ${selectedClient.cou} cm\n`;
     if (selectedClient.epaule) msg += `- Épaule: ${selectedClient.epaule} cm\n`;
     if (selectedClient.poitrine) msg += `- Poitrine: ${selectedClient.poitrine} cm\n`;
@@ -170,10 +211,11 @@ export default function ClientsPage() {
             ) : (
               filteredClients.map((c) => (
                 <div
-                  key={c.id || c.nom}
+                  key={c.id || c.telephone || c.nom}
                   onClick={() => setSelectedClient(c)}
                   className={`p-4 rounded-xl border cursor-pointer transition-all bg-white ${
-                    selectedClient?.id === c.id 
+                    (selectedClient?.id && selectedClient.id === c.id) ||
+                    (!selectedClient?.id && selectedClient?.telephone === c.telephone)
                       ? 'border-amber-500 ring-2 ring-amber-500/20' 
                       : 'border-slate-200 hover:border-slate-300'
                   }`}
@@ -229,15 +271,13 @@ export default function ClientsPage() {
                   <Send size={14} /> Partager WhatsApp
                 </button>
 
-                {selectedClient.id && (
-                  <button
-                    onClick={handleDeleteClient}
-                    className="bg-red-50 hover:bg-red-100 text-red-600 p-2 rounded-lg flex items-center justify-center transition-colors cursor-pointer"
-                    title="Supprimer ce client"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                )}
+                <button
+                  onClick={handleDeleteClient}
+                  className="bg-red-50 hover:bg-red-100 text-red-600 p-2.5 rounded-lg flex items-center justify-center transition-colors cursor-pointer"
+                  title="Supprimer définitivement ce client"
+                >
+                  <Trash2 size={18} />
+                </button>
 
                 <button
                   onClick={handleSave}
