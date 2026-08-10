@@ -47,32 +47,67 @@ export default function ClientsPage() {
         }
       }
     } catch (err) {
-      console.error(err);
+      console.error('Erreur chargement clients:', err);
     } finally {
       setLoading(false);
     }
   };
 
+  // Fonction pour nettoyer l'objet avant envoi à Supabase
+  const sanitizeClientPayload = (client: Client) => {
+    const payload: any = {
+      nom: client.nom || 'Sans nom',
+      telephone: client.telephone || '',
+      adresse: client.adresse || '',
+      notes: client.notes || ''
+    };
+
+    const numericFields: (keyof Client)[] = [
+      'cou', 'epaule', 'poitrine', 'longueur_bras', 'tour_bras',
+      'poignet', 'longueur_haut', 'ceinture', 'longueur_pantalon',
+      'tour_cuisse', 'tour_cheville'
+    ];
+
+    numericFields.forEach((field) => {
+      const val = client[field];
+      if (val !== undefined && val !== '' && val !== null && !isNaN(Number(val))) {
+        payload[field] = Number(val);
+      } else {
+        payload[field] = null;
+      }
+    });
+
+    return payload;
+  };
+
   const handleSave = async () => {
     if (!selectedClient) return;
 
-    if (!selectedClient.nom && !selectedClient.telephone) {
-      return alert('Veuillez renseigner au moins un Nom ou un Numéro de téléphone.');
-    }
+    const payload = sanitizeClientPayload(selectedClient);
 
     try {
       if (selectedClient.id) {
-        const { error } = await supabase.from('clients').update(selectedClient).eq('id', selectedClient.id);
+        const { error } = await supabase
+          .from('clients')
+          .update(payload)
+          .eq('id', selectedClient.id);
+
         if (error) throw error;
       } else {
-        const { data, error } = await supabase.from('clients').insert([selectedClient]).select();
+        const { data, error } = await supabase
+          .from('clients')
+          .insert([payload])
+          .select();
+
         if (error) throw error;
         if (data && data[0]) setSelectedClient(data[0]);
       }
+
       alert('Fiche client enregistrée avec succès !');
       await fetchClients();
     } catch (err: any) {
-      alert('Erreur lors de la sauvegarde : ' + err.message);
+      console.error('Erreur enregistrement:', err);
+      alert('Erreur lors de la sauvegarde : ' + (err.message || 'Problème de connexion Supabase'));
     }
   };
 
@@ -86,23 +121,15 @@ export default function ClientsPage() {
     }
 
     try {
-      // 1. Si le client existe en base de données par son ID
       if (selectedClient.id) {
         const { error } = await supabase.from('clients').delete().eq('id', selectedClient.id);
-        if (error) {
-          // Tentative de suppression par téléphone au cas où
-          if (selectedClient.telephone) {
-            await supabase.from('clients').delete().eq('telephone', selectedClient.telephone);
-          } else {
-            throw error;
-          }
+        if (error && selectedClient.telephone) {
+          await supabase.from('clients').delete().eq('telephone', selectedClient.telephone);
         }
       } else if (selectedClient.telephone) {
-        // Fallback suppression par téléphone si l'ID manque
         await supabase.from('clients').delete().eq('telephone', selectedClient.telephone);
       }
 
-      // 2. Mettre à jour l'état local immédiatement
       const listFiltree = clients.filter(c => {
         if (selectedClient.id && c.id) return c.id !== selectedClient.id;
         if (selectedClient.telephone && c.telephone) return c.telephone !== selectedClient.telephone;
@@ -113,11 +140,9 @@ export default function ClientsPage() {
       setSelectedClient(listFiltree.length > 0 ? listFiltree[0] : null);
 
       alert('Client supprimé avec succès.');
-      
-      // Recharger depuis Supabase
       fetchClients();
     } catch (err: any) {
-      alert('Erreur lors de la suppression : ' + (err.message || 'Impossible de supprimer. Vérifiez la RLS Supabase.'));
+      alert('Erreur lors de la suppression : ' + (err.message || 'Impossible de supprimer.'));
     }
   };
 
