@@ -32,7 +32,7 @@ export default function VentesPage() {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
-  // Formulaire nouvelle vente avec chaines vides pour éviter le "0" fixe
+  // Valeurs initiales avec des chaînes vides
   const [formData, setFormData] = useState({
     client_nom: '',
     client_tel: '',
@@ -41,9 +41,7 @@ export default function VentesPage() {
     designation: '',
     quantite: '1',
     prix_unitaire: '',
-    montant_total: 0,
     avance: '',
-    reste: 0,
     observations: ''
   });
 
@@ -60,20 +58,12 @@ export default function VentesPage() {
     fetchVentes();
   }, []);
 
-  // Calcul automatique dynamique
-  const handleFormChange = (field: string, value: any) => {
-    const updated = { ...formData, [field]: value };
-    
-    const qty = Number(updated.quantite) || 0;
-    const pu = Number(updated.prix_unitaire) || 0;
-    const total = qty * pu;
-    const av = Number(updated.avance) || 0;
-    
-    updated.montant_total = total;
-    updated.reste = total - av;
-
-    setFormData(updated);
-  };
+  // Calculs dynamiques pour l'affichage
+  const qtyNum = Number(formData.quantite) || 0;
+  const puNum = Number(formData.prix_unitaire) || 0;
+  const montantTotalCalcul = qtyNum * puNum;
+  const avanceNum = Number(formData.avance) || 0;
+  const resteCalcul = montantTotalCalcul - avanceNum;
 
   const handleCreateVente = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,64 +72,53 @@ export default function VentesPage() {
       return;
     }
 
-    const totalNum = Number(formData.montant_total) || 0;
-    const avanceNum = Number(formData.avance) || 0;
-    const resteNum = totalNum - avanceNum;
-    const qtyNum = Number(formData.quantite) || 1;
-    const puNum = Number(formData.prix_unitaire) || 0;
-
-    // Tentative 1 : insertion complète
-    const fullPayload: Record<string, any> = {
+    const payload = {
       client_nom: formData.client_nom,
       client_tel: formData.client_tel,
       mode_commande: formData.mode_commande,
       mode_paiement: formData.mode_paiement,
-      quantite: qtyNum,
+      designation: formData.designation,
+      quantite: qtyNum || 1,
       prix_unitaire: puNum,
-      montant_total: totalNum,
+      montant_total: montantTotalCalcul,
       avance: avanceNum,
-      reste: resteNum,
-      observations: formData.observations,
-      designation: formData.designation
+      reste: resteCalcul,
+      observations: formData.observations
     };
 
-    let { error } = await supabase.from('ventes').insert([fullPayload]);
+    const { error } = await supabase.from('ventes').insert([payload]);
 
-    // Tentative 2 : Si échec de schéma (colonne manquante comme 'reste' ou 'designation')
     if (error) {
-      console.warn('Erreur de schéma Supabase, tentative avec colonnes minimales...', error.message);
-      
-      const minimalPayload = {
+      console.error('Erreur Supabase:', error);
+      // Fallback si des colonnes manquent dans la base
+      const fallbackPayload = {
         client_nom: formData.client_nom,
         client_tel: formData.client_tel,
-        montant_total: totalNum,
+        montant_total: montantTotalCalcul,
         avance: avanceNum,
-        observations: `[${formData.designation}] - Qté: ${qtyNum} x ${puNum} FCFA - Reste: ${resteNum} FCFA | ${formData.observations}`
+        observations: `[${formData.designation}] Qté: ${qtyNum} x ${puNum} FCFA - Reste: ${resteCalcul} FCFA | ${formData.observations}`.trim()
       };
-
-      const minimalRes = await supabase.from('ventes').insert([minimalPayload]);
-      error = minimalRes.error;
+      
+      const { error: fallbackError } = await supabase.from('ventes').insert([fallbackPayload]);
+      if (fallbackError) {
+        alert('Erreur enregistrement : ' + fallbackError.message);
+        return;
+      }
     }
 
-    if (error) {
-      alert('Erreur lors de l\'enregistrement de la vente : ' + error.message);
-    } else {
-      setShowAddModal(false);
-      setFormData({
-        client_nom: '',
-        client_tel: '',
-        mode_commande: 'Prêt-à-porter',
-        mode_paiement: 'Espèces',
-        designation: '',
-        quantite: '1',
-        prix_unitaire: '',
-        montant_total: 0,
-        avance: '',
-        reste: 0,
-        observations: ''
-      });
-      fetchVentes();
-    }
+    setShowAddModal(false);
+    setFormData({
+      client_nom: '',
+      client_tel: '',
+      mode_commande: 'Prêt-à-porter',
+      mode_paiement: 'Espèces',
+      designation: '',
+      quantite: '1',
+      prix_unitaire: '',
+      avance: '',
+      observations: ''
+    });
+    fetchVentes();
   };
 
   const formatAmount = (val: number | undefined | null) => {
@@ -150,7 +129,6 @@ export default function VentesPage() {
     return v.designation || v.article || v.description || v.modele || 'Article sur mesure';
   };
 
-  // Génération PDF
   const handleSharePDFWhatsApp = async () => {
     if (!selectedVente) return;
     setExporting(true);
@@ -164,7 +142,6 @@ export default function VentesPage() {
 
         const doc = new jsPDF();
 
-        // En-tête Ousmane Design
         doc.setFontSize(22);
         doc.setTextColor(180, 83, 9);
         doc.text('Ousmane Design', 14, 20);
@@ -173,7 +150,6 @@ export default function VentesPage() {
         doc.setTextColor(100);
         doc.text('CREATION & COUTURE CONTEMPORAINE', 14, 25);
 
-        // Coordonnées
         doc.setFontSize(9);
         doc.setTextColor(50);
         doc.text('Hann Maristes, Dakar, Senegal', 130, 18);
@@ -216,10 +192,8 @@ export default function VentesPage() {
           theme: 'striped',
         });
 
-        // @ts-ignore
         const finalY = (doc as any).lastAutoTable?.finalY || 100;
 
-        // Récapitulatif Financier
         doc.setFontSize(10);
         doc.text(`Montant Total : ${formatAmount(mTotal)} FCFA`, 120, finalY + 10);
         doc.text(`Avance Versee : ${formatAmount(mAvance)} FCFA`, 120, finalY + 16);
@@ -227,12 +201,10 @@ export default function VentesPage() {
         doc.setTextColor(217, 119, 6);
         doc.text(`Reste a payer : ${formatAmount(mReste)} FCFA`, 120, finalY + 23);
 
-        // Observations
         doc.setFontSize(9);
         doc.setTextColor(100);
         doc.text(`Observations : ${selectedVente.observations || 'Articles livres en parfait etat.'}`, 14, finalY + 10);
 
-        // Signatures
         doc.setTextColor(0);
         doc.setFontSize(9);
         doc.text('Signature Client :', 25, finalY + 45);
@@ -254,7 +226,7 @@ export default function VentesPage() {
         `- Total : ${formatAmount(mTotal)} FCFA\n` +
         `- Avance : ${formatAmount(mAvance)} FCFA\n` +
         `- Reste : ${formatAmount(mReste)} FCFA\n\n` +
-        `Le fichier PDF de votre facture a ete telecharge. Merci pour votre confiance !`;
+        `Le fichier PDF a ete telecharge. Merci pour votre confiance !`;
 
       const waUrl = cleanPhone 
         ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(textMsg)}`
@@ -264,14 +236,10 @@ export default function VentesPage() {
 
     } catch (err: any) {
       console.error('Erreur génération PDF:', err);
-      alert('Erreur lors de la génération du PDF : ' + err.message);
-    } fontinally {
+      alert('Erreur génération PDF : ' + err.message);
+    } finally {
       setExporting(false);
     }
-  };
-
-  const handlePrint = () => {
-    window.print();
   };
 
   const filteredVentes = ventes.filter(v =>
@@ -283,31 +251,29 @@ export default function VentesPage() {
   return (
     <div className="min-h-screen bg-slate-100 p-6 text-slate-800">
       
-      {/* En-tête */}
       <div className="max-w-7xl mx-auto mb-6 flex flex-col md:flex-row justify-between md:items-center gap-4">
         <div>
           <Link href="/" className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1 mb-2">
             <ArrowLeft size={16} /> Retour au tableau de bord
           </Link>
           <h1 className="text-2xl font-bold text-slate-900">Gestion des Ventes & Factures</h1>
-          <p className="text-sm text-slate-500">Ousmane Design — Historique et enregistrement</p>
+          <p className="text-sm text-slate-500">Ousmane Design — Enregistrement et suivi</p>
         </div>
 
         <button
           onClick={() => setShowAddModal(true)}
           className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-sm transition-colors self-start md:self-auto cursor-pointer"
         >
-          <Plus size={18} /> Enregistrer une vente / Article
+          <Plus size={18} /> Enregistrer une vente
         </button>
       </div>
 
-      {/* Tableau des ventes */}
       <div className="max-w-7xl mx-auto bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-3 text-slate-400" size={16} />
           <input
             type="text"
-            placeholder="Rechercher par client, téléphone, article..."
+            placeholder="Rechercher..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-amber-500"
@@ -317,7 +283,7 @@ export default function VentesPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase">
                 <th className="p-3">Client</th>
                 <th className="p-3">Téléphone</th>
                 <th className="p-3">Désignation</th>
@@ -329,9 +295,9 @@ export default function VentesPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr><td colSpan={7} className="text-center py-6 text-slate-400">Chargement des ventes...</td></tr>
+                <tr><td colSpan={7} className="text-center py-6 text-slate-400">Chargement...</td></tr>
               ) : filteredVentes.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-6 text-slate-400">Aucune vente trouvée.</td></tr>
+                <tr><td colSpan={7} className="text-center py-6 text-slate-400">Aucune vente enregistrée.</td></tr>
               ) : filteredVentes.map((v) => {
                 const total = v.montant_total || 0;
                 const avance = v.avance || 0;
@@ -360,7 +326,7 @@ export default function VentesPage() {
         </div>
       </div>
 
-      {/* MODAL NOUVELLE VENTE */}
+      {/* MODAL AJOUT */}
       {showAddModal && (
         <div 
           onClick={() => setShowAddModal(false)}
@@ -371,7 +337,7 @@ export default function VentesPage() {
             className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl relative border border-slate-200"
           >
             <div className="flex justify-between items-center mb-4 border-b pb-3">
-              <h2 className="text-lg font-bold text-slate-900">Nouvelle Vente / Article</h2>
+              <h2 className="text-lg font-bold text-slate-900">Nouvelle Vente</h2>
               <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
                 <X size={20} />
               </button>
@@ -385,7 +351,7 @@ export default function VentesPage() {
                     type="text"
                     required
                     value={formData.client_nom}
-                    onChange={(e) => handleFormChange('client_nom', e.target.value)}
+                    onChange={(e) => setFormData({ ...formData, client_nom: e.target.value })}
                     className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
                   />
                 </div>
@@ -394,7 +360,7 @@ export default function VentesPage() {
                   <input
                     type="text"
                     value={formData.client_tel}
-                    onChange={(e) => handleFormChange('client_tel', e.target.value)}
+                    onChange={(e) => setFormData({ ...formData, client_tel: e.target.value })}
                     className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
                   />
                 </div>
@@ -405,9 +371,9 @@ export default function VentesPage() {
                 <input
                   type="text"
                   required
-                  placeholder="Ex: Diaspora, Boubou VIP..."
+                  placeholder="Ex: Tissu Bazin, Boubou VIP..."
                   value={formData.designation}
-                  onChange={(e) => handleFormChange('designation', e.target.value)}
+                  onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
                   className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
                 />
               </div>
@@ -419,7 +385,7 @@ export default function VentesPage() {
                     type="number"
                     min="1"
                     value={formData.quantite}
-                    onChange={(e) => handleFormChange('quantite', e.target.value)}
+                    onChange={(e) => setFormData({ ...formData, quantite: e.target.value })}
                     className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
                   />
                 </div>
@@ -428,19 +394,19 @@ export default function VentesPage() {
                   <input
                     type="number"
                     min="0"
-                    placeholder="ex: 50000"
+                    placeholder="Ex: 25000"
                     value={formData.prix_unitaire}
-                    onChange={(e) => handleFormChange('prix_unitaire', e.target.value)}
+                    onChange={(e) => setFormData({ ...formData, prix_unitaire: e.target.value })}
                     className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
                   />
                 </div>
                 <div>
                   <label className="block font-semibold mb-1">Montant Total</label>
                   <input
-                    type="number"
+                    type="text"
                     readOnly
-                    value={formData.montant_total}
-                    className="w-full p-2 border border-slate-200 rounded-md bg-slate-100 font-bold"
+                    value={`${formatAmount(montantTotalCalcul)} FCFA`}
+                    className="w-full p-2 border border-slate-200 rounded-md bg-slate-100 font-bold text-slate-800"
                   />
                 </div>
               </div>
@@ -451,18 +417,18 @@ export default function VentesPage() {
                   <input
                     type="number"
                     min="0"
-                    placeholder="ex: 20000"
+                    placeholder="Ex: 10000"
                     value={formData.avance}
-                    onChange={(e) => handleFormChange('avance', e.target.value)}
+                    onChange={(e) => setFormData({ ...formData, avance: e.target.value })}
                     className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none text-emerald-600 font-bold"
                   />
                 </div>
                 <div>
                   <label className="block font-semibold mb-1">Reste à payer</label>
                   <input
-                    type="number"
+                    type="text"
                     readOnly
-                    value={formData.reste}
+                    value={`${formatAmount(resteCalcul)} FCFA`}
                     className="w-full p-2 border border-slate-200 rounded-md bg-amber-50 text-amber-700 font-bold"
                   />
                 </div>
@@ -473,8 +439,8 @@ export default function VentesPage() {
                 <textarea
                   rows={2}
                   value={formData.observations}
-                  onChange={(e) => handleFormChange('observations', e.target.value)}
-                  placeholder="Notes sur la livraison ou commande..."
+                  onChange={(e) => setFormData({ ...formData, observations: e.target.value })}
+                  placeholder="Notes..."
                   className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
                 ></textarea>
               </div>
@@ -509,11 +475,10 @@ export default function VentesPage() {
             onClick={(e) => e.stopPropagation()}
             className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative border border-slate-200 my-8"
           >
-            {/* Barre d'action */}
             <div className="flex justify-between items-center mb-6 border-b pb-4">
               <div className="flex items-center gap-2">
                 <button
-                  onClick={handlePrint}
+                  onClick={() => window.print()}
                   className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                 >
                   <Printer size={15} /> Imprimer
@@ -529,15 +494,13 @@ export default function VentesPage() {
 
               <button
                 onClick={() => setSelectedVente(null)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 cursor-pointer"
               >
                 <X size={20} />
               </button>
             </div>
 
-            {/* Facture visuelle */}
             <div className="p-6 border-2 border-amber-600/80 rounded-xl bg-white space-y-6">
-              
               <div className="flex justify-between items-start">
                 <div>
                   <h2 className="text-2xl font-serif font-bold text-amber-900 tracking-wide">Ousmane Design</h2>
@@ -566,7 +529,7 @@ export default function VentesPage() {
                 <div className="space-y-1">
                   <p><strong className="text-slate-800">Nom du client :</strong> {selectedVente.client_nom}</p>
                   <p><strong className="text-slate-800">Téléphone :</strong> <span className="text-amber-700 font-medium">{selectedVente.client_tel || '-'}</span></p>
-                  <p><strong className="text-slate-800">Date de commande :</strong> {selectedVente.created_at ? new Date(selectedVente.created_at).toLocaleDateString('fr-FR') : new Date().toLocaleDateString('fr-FR')}</p>
+                  <p><strong className="text-slate-800">Date :</strong> {selectedVente.created_at ? new Date(selectedVente.created_at).toLocaleDateString('fr-FR') : new Date().toLocaleDateString('fr-FR')}</p>
                 </div>
                 <div className="space-y-1">
                   <p><strong className="text-slate-800">Mode de commande :</strong> {selectedVente.mode_commande || 'Prêt-à-porter'}</p>
@@ -576,7 +539,7 @@ export default function VentesPage() {
 
               <table className="w-full text-xs text-left border-collapse">
                 <thead>
-                  <tr className="bg-amber-600 text-white font-bold uppercase tracking-wider">
+                  <tr className="bg-amber-600 text-white font-bold uppercase">
                     <th className="p-2.5 rounded-tl-lg">Désignation</th>
                     <th className="p-2.5 text-center">Quantité</th>
                     <th className="p-2.5 text-right">Prix Unitaire</th>
@@ -625,11 +588,6 @@ export default function VentesPage() {
                   <div className="mt-8 border-b border-dashed border-slate-300"></div>
                 </div>
               </div>
-
-              <p className="text-[10px] text-center text-slate-400 italic pt-2 border-t border-amber-100">
-                Merci pour votre confiance ! — L'élégance sur mesure, pensée pour vous.
-              </p>
-
             </div>
           </div>
         </div>
