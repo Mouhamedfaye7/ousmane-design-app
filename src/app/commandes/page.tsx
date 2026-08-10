@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Search, Share2, X, Send } from 'lucide-react';
+import { ArrowLeft, Plus, Search, Send, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 interface Commande {
@@ -118,7 +118,6 @@ export default function CommandesPage() {
   };
 
   const handleAlertWhatsApp = (c: Commande) => {
-    // Nettoyage du numéro de téléphone
     let cleanPhone = (c.client_tel || '').trim().replace(/[^0-9]/g, '');
     if (cleanPhone.length === 9) {
       cleanPhone = '221' + cleanPhone;
@@ -131,7 +130,6 @@ export default function CommandesPage() {
     const statut = c.statut || 'Reçue';
     const code = c.code_commande || '';
 
-    // Message personnalisé en fonction de l'évolution de la commande
     let messageIntro = '';
     if (statut === 'Reçue') {
       messageIntro = `Votre commande *${code}* (${getItemName(c)}) a bien été enregistrée à l'atelier.`;
