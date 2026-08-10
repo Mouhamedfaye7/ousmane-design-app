@@ -9,7 +9,7 @@ interface Vente {
   id?: string;
   client_nom: string;
   client_tel: string;
-  date_commande?: string;
+  created_at?: string;
   mode_commande?: string;
   mode_paiement?: string;
   designation: string;
@@ -57,7 +57,7 @@ export default function VentesPage() {
     fetchVentes();
   }, []);
 
-  // Calcul automatique du total et reste
+  // Calcul automatique
   const handleFormChange = (field: keyof Vente, value: any) => {
     const updated = { ...formData, [field]: value };
     const qty = Number(updated.quantite) || 1;
@@ -78,12 +78,10 @@ export default function VentesPage() {
       return;
     }
 
-    const newVente = {
-      ...formData,
-      date_commande: new Date().toLocaleDateString('fr-FR')
-    };
+    // Retrait explicite de date_commande qui n'existe pas dans la table Supabase
+    const { date_commande, ...payload } = formData as any;
 
-    const { error } = await supabase.from('ventes').insert([newVente]);
+    const { error } = await supabase.from('ventes').insert([payload]);
     if (error) {
       alert('Erreur lors de l\'enregistrement de la vente : ' + error.message);
     } else {
@@ -105,7 +103,12 @@ export default function VentesPage() {
     }
   };
 
-  // Génération PDF propre et directe via jsPDF
+  // Helper de formatage sécurisé contre les undefined / null
+  const formatAmount = (val: number | undefined | null) => {
+    return (Number(val) || 0).toLocaleString('fr-FR');
+  };
+
+  // Génération PDF sécurisée
   const handleSharePDFWhatsApp = async () => {
     if (!selectedVente) return;
     setExporting(true);
@@ -121,14 +124,14 @@ export default function VentesPage() {
 
         // En-tête Ousmane Design
         doc.setFontSize(22);
-        doc.setTextColor(180, 83, 9); // Amber-700
+        doc.setTextColor(180, 83, 9);
         doc.text('Ousmane Design', 14, 20);
 
         doc.setFontSize(9);
         doc.setTextColor(100);
         doc.text('CREATION & COUTURE CONTEMPORAINE', 14, 25);
 
-        // Bloc Coordonnées (Haut Droite)
+        // Coordonnées
         doc.setFontSize(9);
         doc.setTextColor(50);
         doc.text('Hann Maristes, Dakar, Senegal', 130, 18);
@@ -140,25 +143,29 @@ export default function VentesPage() {
         doc.line(14, 33, 196, 33);
 
         // Infos Client & Commande
+        const formattedDate = selectedVente.created_at 
+          ? new Date(selectedVente.created_at).toLocaleDateString('fr-FR')
+          : new Date().toLocaleDateString('fr-FR');
+
         doc.setFontSize(10);
         doc.setTextColor(0);
-        doc.text(`Client : ${selectedVente.client_nom}`, 14, 43);
+        doc.text(`Client : ${selectedVente.client_nom || 'Client'}`, 14, 43);
         doc.text(`Telephone : ${selectedVente.client_tel || 'N/A'}`, 14, 49);
-        doc.text(`Date : ${selectedVente.date_commande || new Date().toLocaleDateString('fr-FR')}`, 14, 55);
+        doc.text(`Date : ${formattedDate}`, 14, 55);
 
         doc.text(`Mode de commande : ${selectedVente.mode_commande || 'Pret-a-porter'}`, 120, 43);
         doc.text(`Mode de paiement : ${selectedVente.mode_paiement || 'Especes'}`, 120, 49);
 
-        // Tableau des articles
+        // Tableau sécurisé
         autoTable(doc, {
           startY: 63,
           head: [['Designation', 'Quantite', 'Prix Unitaire', 'Total']],
           body: [
             [
-              selectedVente.designation,
+              selectedVente.designation || 'Article',
               selectedVente.quantite || 1,
-              `${(selectedVente.prix_unitaire || selectedVente.montant_total).toLocaleString()} FCFA`,
-              `${selectedVente.montant_total.toLocaleString()} FCFA`
+              `${formatAmount(selectedVente.prix_unitaire || selectedVente.montant_total)} FCFA`,
+              `${formatAmount(selectedVente.montant_total)} FCFA`
             ]
           ],
           headStyles: { fillColor: [217, 119, 6], textColor: [255, 255, 255], fontStyle: 'bold' },
@@ -166,41 +173,41 @@ export default function VentesPage() {
         });
 
         // @ts-ignore
-        const finalY = doc.lastAutoTable.finalY + 10;
+        const finalY = (doc as any).lastAutoTable?.finalY || 100;
 
-        // Récapitulatif Financier
+        // Récapitulatif Financier sécurisé
         doc.setFontSize(10);
-        doc.text(`Montant Total : ${selectedVente.montant_total.toLocaleString()} FCFA`, 120, finalY);
-        doc.text(`Avance Versee : ${selectedVente.avance.toLocaleString()} FCFA`, 120, finalY + 6);
+        doc.text(`Montant Total : ${formatAmount(selectedVente.montant_total)} FCFA`, 120, finalY + 10);
+        doc.text(`Avance Versee : ${formatAmount(selectedVente.avance)} FCFA`, 120, finalY + 16);
         doc.setFontSize(11);
         doc.setTextColor(217, 119, 6);
-        doc.text(`Reste a payer : ${selectedVente.reste.toLocaleString()} FCFA`, 120, finalY + 13);
+        doc.text(`Reste a payer : ${formatAmount(selectedVente.reste)} FCFA`, 120, finalY + 23);
 
         // Observations
         doc.setFontSize(9);
         doc.setTextColor(100);
-        doc.text(`Observations : ${selectedVente.observations || 'Articles livres en parfait etat.'}`, 14, finalY);
+        doc.text(`Observations : ${selectedVente.observations || 'Articles livres en parfait etat.'}`, 14, finalY + 10);
 
         // Signatures
         doc.setTextColor(0);
         doc.setFontSize(9);
-        doc.text('Signature Client :', 25, finalY + 35);
-        doc.text('Ousmane Design (Signature & Cachet) :', 110, finalY + 35);
+        doc.text('Signature Client :', 25, finalY + 45);
+        doc.text('Ousmane Design (Signature & Cachet) :', 110, finalY + 45);
 
-        const fileName = `Facture_${selectedVente.client_nom.replace(/\s+/g, '_')}.pdf`;
-        doc.save(fileName);
+        const safeName = (selectedVente.client_nom || 'Client').replace(/\s+/g, '_');
+        doc.save(`Facture_${safeName}.pdf`);
       }
 
       // Préparation du message WhatsApp
-      let cleanPhone = selectedVente.client_tel.replace(/\s+/g, '').replace(/[^0-9]/g, '');
+      let cleanPhone = (selectedVente.client_tel || '').replace(/\s+/g, '').replace(/[^0-9]/g, '');
       if (cleanPhone.length === 9) cleanPhone = '221' + cleanPhone;
 
       const textMsg = `Bonjour ${selectedVente.client_nom},\n\nVoici votre facture de chez *Ousmane Design* :\n` +
         `- Article : ${selectedVente.designation}\n` +
-        `- Total : ${selectedVente.montant_total.toLocaleString()} FCFA\n` +
-        `- Avance : ${selectedVente.avance.toLocaleString()} FCFA\n` +
-        `- Reste : ${selectedVente.reste.toLocaleString()} FCFA\n\n` +
-        `Le fichier PDF de votre facture a ete telecharge sur votre appareil. Merci pour votre confiance !`;
+        `- Total : ${formatAmount(selectedVente.montant_total)} FCFA\n` +
+        `- Avance : ${formatAmount(selectedVente.avance)} FCFA\n` +
+        `- Reste : ${formatAmount(selectedVente.reste)} FCFA\n\n` +
+        `Le fichier PDF de votre facture a ete telecharge. Merci pour votre confiance !`;
 
       const waUrl = cleanPhone 
         ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(textMsg)}`
@@ -208,9 +215,9 @@ export default function VentesPage() {
 
       window.open(waUrl, '_blank');
 
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erreur génération PDF:', err);
-      alert('Erreur lors de la génération du PDF. ' + err);
+      alert('Erreur lors de la génération du PDF : ' + err.message);
     } finally {
       setExporting(false);
     }
@@ -221,15 +228,15 @@ export default function VentesPage() {
   };
 
   const filteredVentes = ventes.filter(v =>
-    v.client_nom.toLowerCase().includes(search.toLowerCase()) ||
-    v.client_tel.includes(search) ||
-    v.designation.toLowerCase().includes(search.toLowerCase())
+    (v.client_nom || '').toLowerCase().includes(search.toLowerCase()) ||
+    (v.client_tel || '').includes(search) ||
+    (v.designation || '').toLowerCase().includes(search.toLowerCase())
   );
 
   return (
     <div className="min-h-screen bg-slate-100 p-6 text-slate-800">
       
-      {/* En-tête + BOUTON ENREGISTRER UNE VENTE */}
+      {/* En-tête */}
       <div className="max-w-7xl mx-auto mb-6 flex flex-col md:flex-row justify-between md:items-center gap-4">
         <div>
           <Link href="/" className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1 mb-2">
@@ -283,9 +290,9 @@ export default function VentesPage() {
                   <td className="p-3 font-semibold text-slate-900">{v.client_nom}</td>
                   <td className="p-3 text-slate-500">{v.client_tel || '-'}</td>
                   <td className="p-3 text-slate-700">{v.designation}</td>
-                  <td className="p-3 font-bold text-slate-900">{v.montant_total?.toLocaleString()} FCFA</td>
-                  <td className="p-3 text-emerald-600 font-semibold">{v.avance?.toLocaleString()} FCFA</td>
-                  <td className="p-3 font-bold text-amber-600">{v.reste?.toLocaleString()} FCFA</td>
+                  <td className="p-3 font-bold text-slate-900">{formatAmount(v.montant_total)} FCFA</td>
+                  <td className="p-3 text-emerald-600 font-semibold">{formatAmount(v.avance)} FCFA</td>
+                  <td className="p-3 font-bold text-amber-600">{formatAmount(v.reste)} FCFA</td>
                   <td className="p-3 text-center">
                     <button
                       onClick={() => setSelectedVente(v)}
@@ -474,7 +481,7 @@ export default function VentesPage() {
               </button>
             </div>
 
-            {/* Facture à l'écran */}
+            {/* Facture affichée à l'écran */}
             <div className="p-6 border-2 border-amber-600/80 rounded-xl bg-white space-y-6">
               
               <div className="flex justify-between items-start">
@@ -505,7 +512,7 @@ export default function VentesPage() {
                 <div className="space-y-1">
                   <p><strong className="text-slate-800">Nom du client :</strong> {selectedVente.client_nom}</p>
                   <p><strong className="text-slate-800">Téléphone :</strong> <span className="text-amber-700 font-medium">{selectedVente.client_tel || '-'}</span></p>
-                  <p><strong className="text-slate-800">Date de commande :</strong> {selectedVente.date_commande || new Date().toLocaleDateString('fr-FR')}</p>
+                  <p><strong className="text-slate-800">Date de commande :</strong> {selectedVente.created_at ? new Date(selectedVente.created_at).toLocaleDateString('fr-FR') : new Date().toLocaleDateString('fr-FR')}</p>
                 </div>
                 <div className="space-y-1">
                   <p><strong className="text-slate-800">Mode de commande :</strong> {selectedVente.mode_commande || 'Prêt-à-porter'}</p>
@@ -526,8 +533,8 @@ export default function VentesPage() {
                   <tr>
                     <td className="p-2.5 font-medium text-slate-800">{selectedVente.designation}</td>
                     <td className="p-2.5 text-center">{selectedVente.quantite || 1}</td>
-                    <td className="p-2.5 text-right">{(selectedVente.prix_unitaire || selectedVente.montant_total)?.toLocaleString()} FCFA</td>
-                    <td className="p-2.5 text-right font-bold text-slate-900">{selectedVente.montant_total?.toLocaleString()} FCFA</td>
+                    <td className="p-2.5 text-right">{formatAmount(selectedVente.prix_unitaire || selectedVente.montant_total)} FCFA</td>
+                    <td className="p-2.5 text-right font-bold text-slate-900">{formatAmount(selectedVente.montant_total)} FCFA</td>
                   </tr>
                 </tbody>
               </table>
@@ -541,15 +548,15 @@ export default function VentesPage() {
                 <div className="space-y-1.5 text-right">
                   <div className="flex justify-between py-1 px-2 border-b border-slate-100">
                     <span className="text-slate-600 font-semibold">MONTANT TOTAL :</span>
-                    <span className="font-bold text-slate-900">{selectedVente.montant_total?.toLocaleString()} FCFA</span>
+                    <span className="font-bold text-slate-900">{formatAmount(selectedVente.montant_total)} FCFA</span>
                   </div>
                   <div className="flex justify-between py-1 px-2 border-b border-slate-100">
                     <span className="text-slate-600 font-semibold">AVANCE VERSÉE :</span>
-                    <span className="font-bold text-emerald-600">{selectedVente.avance?.toLocaleString()} FCFA</span>
+                    <span className="font-bold text-emerald-600">{formatAmount(selectedVente.avance)} FCFA</span>
                   </div>
                   <div className="flex justify-between py-1.5 px-2 bg-amber-600 text-white font-bold rounded-md">
                     <span>RESTE À PAYER :</span>
-                    <span>{selectedVente.reste?.toLocaleString()} FCFA</span>
+                    <span>{formatAmount(selectedVente.reste)} FCFA</span>
                   </div>
                 </div>
               </div>
