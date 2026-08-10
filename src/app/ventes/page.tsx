@@ -2,182 +2,102 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Printer, MessageCircle, X, ShoppingCart, Plus, Trash2, Eye, Tag } from 'lucide-react';
-
-interface Article {
-  id: string;
-  nom: string;
-  prix: number;
-  categorie: string;
-}
-
-interface PanierItem {
-  article: Article;
-  quantite: number;
-}
+import { ArrowLeft, Plus, Search, Printer, Share2, MapPin, Phone, Mail, X } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 interface Vente {
   id: string;
-  client: string;
-  telephone: string;
-  date: string;
-  modeCommande: string;
-  modePaiement: string;
+  client_nom: string;
+  client_tel: string;
+  date_commande: string;
+  mode_commande: string;
+  mode_paiement: string;
   designation: string;
   quantite: number;
-  prixUnitaire: number;
-  total: number;
+  prix_unitaire: number;
+  montant_total: number;
   avance: number;
   reste: number;
-  observations: string;
+  observations?: string;
 }
 
 export default function VentesPage() {
-  const [articles, setArticles] = useState<Article[]>([
-    { id: '1', nom: 'Diaspora', prix: 50000, categorie: 'Prêt-à-porter' },
-    { id: '2', nom: 'Boubou VIP Getzner', prix: 85000, categorie: 'Sur-mesure' },
-    { id: '3', nom: 'Caftan Royal', prix: 45000, categorie: 'Prêt-à-porter' },
-    { id: '4', nom: 'Ensemble Tissu Brodé', prix: 35000, categorie: 'Prêt-à-porter' },
-  ]);
-
-  const [showArticleModal, setShowArticleModal] = useState(false);
-  const [nomArticle, setNomArticle] = useState('');
-  const [prixArticle, setPrixArticle] = useState('');
-  const [catArticle, setCatArticle] = useState('Prêt-à-porter');
-
-  const [panier, setPanier] = useState<PanierItem[]>([]);
-  const [client, setClient] = useState('');
-  const [telephone, setTelephone] = useState('');
-  const [modePaiement, setModePaiement] = useState('Espèces');
-  const [avance, setAvance] = useState<number | ''>('');
-  const [observations, setObservations] = useState('');
-
-  const [ventes, setVentes] = useState<Vente[]>([
-    {
-      id: 'FAC-80392',
-      client: 'Ousmane Faye',
-      telephone: '+221776462102',
-      date: '08/08/2026',
-      modeCommande: 'Prêt-à-porter',
-      modePaiement: 'Espèces',
-      designation: 'Diaspora',
-      quantite: 1,
-      prixUnitaire: 50000,
-      total: 50000,
-      avance: 50000,
-      reste: 0,
-      observations: 'Articles prêts-à-porter livrés en parfait état.'
-    }
-  ]);
-
+  const [ventes, setVentes] = useState<Vente[]>([]);
+  const [search, setSearch] = useState('');
   const [selectedVente, setSelectedVente] = useState<Vente | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+
+  const fetchVentes = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from('ventes').select('*').order('created_at', { ascending: false });
+    if (!error && data) {
+      setVentes(data);
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
-    const savedCat = localStorage.getItem('ousmane_catalogue');
-    if (savedCat) {
-      try { setArticles(JSON.parse(savedCat)); } catch (e) {}
-    }
-    const savedVentes = localStorage.getItem('ousmane_ventes');
-    if (savedVentes) {
-      try { setVentes(JSON.parse(savedVentes)); } catch (e) {}
-    }
+    fetchVentes();
   }, []);
 
-  const saveVentes = (newVentes: Vente[]) => {
-    setVentes(newVentes);
-    localStorage.setItem('ousmane_ventes', JSON.stringify(newVentes));
-  };
+  const handleSharePDFWhatsApp = async () => {
+    if (!selectedVente) return;
+    setExporting(true);
 
-  const saveCatalogue = (newArticles: Article[]) => {
-    setArticles(newArticles);
-    localStorage.setItem('ousmane_catalogue', JSON.stringify(newArticles));
-  };
+    try {
+      if (typeof window !== 'undefined') {
+        const html2canvas = (await import('html2canvas')).default;
+        const jsPDFModule = await import('jspdf');
+        const jsPDF = jsPDFModule.jsPDF || jsPDFModule.default;
 
-  const handleAddArticle = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!nomArticle || !prixArticle) return;
+        const invoiceElement = document.getElementById('facture-modal-content');
+        if (invoiceElement) {
+          const canvas = await html2canvas(invoiceElement, { scale: 2 });
+          const imgData = canvas.toDataURL('image/png');
+          const pdf = new jsPDF('p', 'mm', 'a4');
+          const imgWidth = 210;
+          const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-    const newArt: Article = {
-      id: `ART-${Date.now()}`,
-      nom: nomArticle,
-      prix: Number(prixArticle),
-      categorie: catArticle
-    };
+          pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+          const fileName = `Facture_${selectedVente.client_nom.replace(/\s+/g, '_')}.pdf`;
+          pdf.save(fileName);
+        }
+      }
 
-    saveCatalogue([...articles, newArt]);
-    setNomArticle('');
-    setPrixArticle('');
-    setShowArticleModal(false);
-  };
+      let cleanPhone = selectedVente.client_tel.replace(/\s+/g, '').replace(/[^0-9]/g, '');
+      if (cleanPhone.length === 9) cleanPhone = '221' + cleanPhone;
 
-  const handleDeleteArticle = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    saveCatalogue(articles.filter(a => a.id !== id));
-  };
+      const textMsg = `Bonjour ${selectedVente.client_nom},\n\nVoici votre facture de chez *Ousmane Design* :\n` +
+        `- Article : ${selectedVente.designation}\n` +
+        `- Total : ${selectedVente.montant_total.toLocaleString()} FCFA\n` +
+        `- Avance : ${selectedVente.avance.toLocaleString()} FCFA\n` +
+        `- Reste : ${selectedVente.reste.toLocaleString()} FCFA\n\n` +
+        `Le fichier PDF de votre facture a été téléchargé. Merci pour votre confiance !`;
 
-  const ajouterAuPanier = (art: Article) => {
-    const existing = panier.find(item => item.article.id === art.id);
-    if (existing) {
-      setPanier(panier.map(item => item.article.id === art.id ? { ...item, quantite: item.quantite + 1 } : item));
-    } else {
-      setPanier([...panier, { article: art, quantite: 1 }]);
+      const waUrl = cleanPhone 
+        ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(textMsg)}`
+        : `https://wa.me/?text=${encodeURIComponent(textMsg)}`;
+
+      window.open(waUrl, '_blank');
+
+    } catch (err) {
+      console.error('Erreur génération PDF:', err);
+      alert('Erreur lors de la génération du PDF.');
+    } finally {
+      setExporting(false);
     }
   };
 
-  const supprimerDuPanier = (id: string) => {
-    setPanier(panier.filter(item => item.article.id !== id));
+  const handlePrint = () => {
+    window.print();
   };
 
-  const totalPanier = panier.reduce((acc, item) => acc + (item.article.prix * item.quantite), 0);
-  const avanceNum = Number(avance) || totalPanier;
-  const resteAPayer = totalPanier - avanceNum;
-
-  const validerVente = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (panier.length === 0 || !client) return;
-
-    const nouvelleVente: Vente = {
-      id: `FAC-${Math.floor(10000 + Math.random() * 90000)}`,
-      client: client,
-      telephone: telephone || '+221770000000',
-      date: new Date().toLocaleDateString('fr-FR'),
-      modeCommande: panier[0]?.article.categorie || 'Prêt-à-porter',
-      modePaiement: modePaiement,
-      designation: panier.map(i => `${i.article.nom} (x${i.quantite})`).join(', '),
-      quantite: panier.reduce((acc, i) => acc + i.quantite, 0),
-      prixUnitaire: panier[0]?.article.prix || totalPanier,
-      total: totalPanier,
-      avance: avanceNum,
-      reste: resteAPayer < 0 ? 0 : resteAPayer,
-      observations: observations || 'Articles livrés en parfait état.'
-    };
-
-    saveVentes([nouvelleVente, ...ventes]);
-    setSelectedVente(nouvelleVente);
-
-    setPanier([]);
-    setClient('');
-    setTelephone('');
-    setAvance('');
-    setObservations('');
-  };
-
-  const handleWhatsAppShare = (v: Vente) => {
-    const rawPhone = v.telephone.match(/\d+/g)?.join('') || '';
-    let phone = rawPhone.length === 9 ? `221${rawPhone}` : rawPhone;
-
-    const message = encodeURIComponent(
-      `*OUSMANE DESIGN*\n_Création & Couture Contemporaine_\n\n` +
-      `Bonjour *${v.client}*,\nVoici le récapitulatif de votre facture (${v.id}) :\n` +
-      `- Article(s) : ${v.designation}\n` +
-      `- Total : ${v.total.toLocaleString()} FCFA\n` +
-      `- Avance : ${v.avance.toLocaleString()} FCFA\n` +
-      `- Reste à payer : ${v.reste.toLocaleString()} FCFA\n\n` +
-      `Merci pour votre confiance ! — L'élégance sur mesure, pensée pour vous.`
-    );
-
-    window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
-  };
+  const filteredVentes = ventes.filter(v =>
+    v.client_nom.toLowerCase().includes(search.toLowerCase()) ||
+    v.client_tel.includes(search) ||
+    v.designation.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <div className="min-h-screen bg-slate-100 p-6 text-slate-800">
@@ -186,197 +106,53 @@ export default function VentesPage() {
           <Link href="/" className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1 mb-2">
             <ArrowLeft size={16} /> Retour au tableau de bord
           </Link>
-          <h1 className="text-2xl font-bold text-slate-900">Ventes & Caisse Directe</h1>
-          <p className="text-sm text-slate-500">Ousmane Design — Comptoir de vente et facturation</p>
+          <h1 className="text-2xl font-bold text-slate-900">Gestion des Ventes & Factures</h1>
+          <p className="text-sm text-slate-500">Ousmane Design — Historique et impression</p>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="font-bold text-slate-900 text-sm uppercase tracking-wider flex items-center gap-1.5">
-              <Tag size={16} className="text-amber-600"/> Catalogue Articles
-            </h2>
-            <button
-              onClick={() => setShowArticleModal(true)}
-              className="bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs px-2.5 py-1 rounded-md font-bold flex items-center gap-1 transition-colors"
-            >
-              <Plus size={14}/> Nouveau
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 gap-2 max-h-[420px] overflow-y-auto pr-1">
-            {articles.map((art) => (
-              <div 
-                key={art.id} 
-                onClick={() => ajouterAuPanier(art)}
-                className="group relative p-3 border border-slate-200 rounded-lg hover:border-amber-500 hover:bg-amber-50/50 cursor-pointer transition-all flex justify-between items-center"
-              >
-                <div>
-                  <p className="font-bold text-sm text-slate-900">{art.nom}</p>
-                  <span className="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{art.categorie}</span>
-                </div>
-                <div className="text-right flex items-center gap-2">
-                  <div>
-                    <p className="font-bold text-amber-700 text-sm">{art.prix.toLocaleString()} F</p>
-                    <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-0.5 justify-end"><Plus size={12}/> Ajouter</span>
-                  </div>
-                  <button
-                    onClick={(e) => handleDeleteArticle(art.id, e)}
-                    className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 p-1 transition-opacity"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+      <div className="max-w-7xl mx-auto bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-3 text-slate-400" size={16} />
+          <input
+            type="text"
+            placeholder="Rechercher par client, téléphone, article..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-amber-500"
+          />
         </div>
 
-        <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
-          <h2 className="font-bold text-slate-900 text-sm uppercase tracking-wider flex items-center gap-2">
-            <ShoppingCart size={18} className="text-amber-600"/> Nouvelle Vente / Caisse
-          </h2>
-
-          <form onSubmit={validerVente} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Nom du Client *</label>
-                <input 
-                  type="text"
-                  placeholder="Ex: Ousmane Faye"
-                  value={client}
-                  onChange={(e) => setClient(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Téléphone</label>
-                <input 
-                  type="text"
-                  placeholder="Ex: 776462102"
-                  value={telephone}
-                  onChange={(e) => setTelephone(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 text-slate-600 uppercase border-b border-slate-200">
-                  <tr>
-                    <th className="p-2.5">Article</th>
-                    <th className="p-2.5 text-center">Qté</th>
-                    <th className="p-2.5 text-right">Prix</th>
-                    <th className="p-2.5 text-right">Total</th>
-                    <th className="p-2.5 text-center"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {panier.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="p-4 text-center text-slate-400 italic">Panier vide. Cliquez sur un article à gauche.</td>
-                    </tr>
-                  ) : (
-                    panier.map((item) => (
-                      <tr key={item.article.id}>
-                        <td className="p-2.5 font-medium text-slate-900">{item.article.nom}</td>
-                        <td className="p-2.5 text-center">{item.quantite}</td>
-                        <td className="p-2.5 text-right">{item.article.prix.toLocaleString()} F</td>
-                        <td className="p-2.5 text-right font-bold text-slate-900">{(item.article.prix * item.quantite).toLocaleString()} F</td>
-                        <td className="p-2.5 text-center">
-                          <button type="button" onClick={() => supprimerDuPanier(item.article.id)} className="text-red-500 hover:text-red-700">
-                            <Trash2 size={14} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Mode de Paiement</label>
-                <select 
-                  value={modePaiement}
-                  onChange={(e) => setModePaiement(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none"
-                >
-                  <option value="Espèces">Espèces</option>
-                  <option value="Wave / Orange Money">Wave / Orange Money</option>
-                  <option value="Chèque / Virement">Chèque / Virement</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Avance Versée (FCFA)</label>
-                <input 
-                  type="number"
-                  placeholder={totalPanier ? `${totalPanier}` : "Ex: 50000"}
-                  value={avance}
-                  onChange={(e) => setAvance(e.target.value ? Number(e.target.value) : '')}
-                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none"
-                />
-              </div>
-
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex flex-col justify-center items-end">
-                <span className="text-xs text-amber-800 font-semibold">TOTAL A PAYER</span>
-                <span className="text-xl font-bold text-amber-900">{totalPanier.toLocaleString()} FCFA</span>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={panier.length === 0 || !client}
-              className="w-full bg-amber-600 hover:bg-amber-700 disabled:bg-slate-300 text-white font-bold py-3 rounded-lg shadow-md transition-colors"
-            >
-              Encaisser & Générer Facture
-            </button>
-          </form>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-        <h2 className="font-bold text-slate-900 text-sm uppercase tracking-wider mb-4">Historique des Ventes</h2>
         <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left">
-            <thead className="bg-slate-50 text-slate-600 uppercase border-b border-slate-200">
-              <tr>
-                <th className="p-3">ID Facture</th>
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider">
                 <th className="p-3">Client</th>
-                <th className="p-3">Date</th>
+                <th className="p-3">Téléphone</th>
                 <th className="p-3">Désignation</th>
-                <th className="p-3 text-right">Total</th>
-                <th className="p-3 text-right">Reste</th>
-                <th className="p-3 text-center">Actions</th>
+                <th className="p-3">Total</th>
+                <th className="p-3">Avance</th>
+                <th className="p-3">Reste</th>
+                <th className="p-3 text-center">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {ventes.map((v) => (
-                <tr key={v.id} className="hover:bg-slate-50">
-                  <td className="p-3 font-bold text-amber-800">{v.id}</td>
-                  <td className="p-3 font-semibold text-slate-900">{v.client}</td>
-                  <td className="p-3 text-slate-500">{v.date}</td>
+              {loading ? (
+                <tr><td colSpan={7} className="text-center py-6 text-slate-400">Chargement des ventes...</td></tr>
+              ) : filteredVentes.map((v) => (
+                <tr key={v.id} className="hover:bg-amber-50/30 transition-colors">
+                  <td className="p-3 font-semibold text-slate-900">{v.client_nom}</td>
+                  <td className="p-3 text-slate-500">{v.client_tel}</td>
                   <td className="p-3 text-slate-700">{v.designation}</td>
-                  <td className="p-3 text-right font-bold text-slate-900">{v.total.toLocaleString()} F</td>
-                  <td className="p-3 text-right font-bold text-amber-700">{v.reste.toLocaleString()} F</td>
-                  <td className="p-3 text-center flex justify-center gap-2">
-                    <button 
-                      onClick={() => setSelectedVente(v)} 
-                      className="flex items-center gap-1 bg-amber-100 text-amber-800 hover:bg-amber-200 px-2.5 py-1 rounded font-medium"
+                  <td className="p-3 font-bold text-slate-900">{v.montant_total?.toLocaleString()} FCFA</td>
+                  <td className="p-3 text-emerald-600 font-semibold">{v.avance?.toLocaleString()} FCFA</td>
+                  <td className="p-3 font-bold text-amber-600">{v.reste?.toLocaleString()} FCFA</td>
+                  <td className="p-3 text-center">
+                    <button
+                      onClick={() => setSelectedVente(v)}
+                      className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-1.5 rounded-md shadow-xs transition-colors"
                     >
-                      <Eye size={13}/> Voir Facture
-                    </button>
-                    <button 
-                      onClick={() => handleWhatsAppShare(v)} 
-                      className="flex items-center gap-1 bg-emerald-100 text-emerald-800 hover:bg-emerald-200 px-2.5 py-1 rounded font-medium"
-                    >
-                      <MessageCircle size={13}/> WhatsApp
+                      Facture
                     </button>
                   </td>
                 </tr>
@@ -386,171 +162,143 @@ export default function VentesPage() {
         </div>
       </div>
 
-      {showArticleModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
-            <h2 className="text-lg font-bold text-slate-900 mb-4">Ajouter un Article au Catalogue</h2>
-            <form onSubmit={handleAddArticle} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Nom du modèle / Tissu *</label>
-                <input 
-                  type="text"
-                  placeholder="Ex: Boubou Brodé 3 Pièces"
-                  value={nomArticle}
-                  onChange={(e) => setNomArticle(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Catégorie</label>
-                <select
-                  value={catArticle}
-                  onChange={(e) => setCatArticle(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none"
-                >
-                  <option value="Prêt-à-porter">Prêt-à-porter</option>
-                  <option value="Sur-mesure">Sur-mesure</option>
-                  <option value="Accessoire">Accessoire</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Prix de Vente (FCFA) *</label>
-                <input 
-                  type="number"
-                  placeholder="Ex: 60000"
-                  value={prixArticle}
-                  onChange={(e) => setPrixArticle(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none"
-                  required
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowArticleModal(false)}
-                  className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 rounded-lg text-sm font-semibold bg-amber-600 hover:bg-amber-700 text-white shadow-md transition-colors"
-                >
-                  Ajouter l'Article
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
+      {/* Modal Facture avec fermeture au clic extérieur */}
       {selectedVente && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-xl max-w-2xl w-full p-8 relative shadow-2xl my-8 border border-amber-200">
-            <div className="absolute top-4 right-4 flex items-center gap-2 print:hidden">
-              <button 
-                onClick={() => window.print()}
-                className="flex items-center gap-1.5 bg-amber-700 hover:bg-amber-800 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition-colors"
-              >
-                <Printer size={15} /> Imprimer
-              </button>
-              <button 
-                onClick={() => handleWhatsAppShare(selectedVente)}
-                className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition-colors shadow-sm"
-              >
-                <MessageCircle size={15} /> WhatsApp
-              </button>
-              <button 
+        <div 
+          onClick={() => setSelectedVente(null)}
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative border border-slate-200 my-8"
+          >
+            {/* Barre de boutons supérieure */}
+            <div className="flex justify-between items-center mb-6 border-b pb-4">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handlePrint}
+                  className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors"
+                >
+                  <Printer size={15} /> Imprimer
+                </button>
+                <button
+                  onClick={handleSharePDFWhatsApp}
+                  disabled={exporting}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors disabled:opacity-50"
+                >
+                  <Share2 size={15} /> {exporting ? 'Génération...' : 'WhatsApp (PDF)'}
+                </button>
+              </div>
+
+              <button
                 onClick={() => setSelectedVente(null)}
-                className="text-slate-400 hover:text-slate-600 p-1"
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 transition-colors"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <div className="border-2 border-amber-600/80 p-6 rounded-lg bg-amber-50/10">
-              <div className="flex justify-between items-start mb-6">
+            {/* Contenu imprimable de la facture */}
+            <div id="facture-modal-content" className="p-6 border-2 border-amber-600/80 rounded-xl bg-white space-y-6">
+              
+              {/* En-tête de la facture avec ICÔNES LUCIDE */}
+              <div className="flex justify-between items-start">
                 <div>
-                  <h1 className="text-3xl font-serif font-bold text-amber-900 tracking-wide">Ousmane Design</h1>
-                  <p className="text-xs font-serif italic text-amber-800 tracking-widest uppercase mt-0.5">Création & Couture Contemporaine</p>
+                  <h2 className="text-2xl font-serif font-bold text-amber-900 tracking-wide">Ousmane Design</h2>
+                  <p className="text-[10px] uppercase font-bold text-amber-700 tracking-widest mt-0.5">
+                    Création & Couture Contemporaine
+                  </p>
                 </div>
 
-                <div className="border border-amber-500/60 rounded-xl p-3 text-[11px] text-amber-900 space-y-1 bg-white/80 shadow-xs">
-                  <p className="flex items-center gap-1">📍 Hann Maristes, Dakar, Sénégal</p>
-                  <p className="flex items-center gap-1">📞 77 646 21 02 / 70 348 26 82</p>
-                  <p className="flex items-center gap-1">📧 @ousmanedesign.sn</p>
-                </div>
-              </div>
-
-              <div className="border border-amber-600/70 rounded-xl p-4 grid grid-cols-2 gap-y-2 text-xs text-amber-950 mb-6 bg-white/60">
-                <div><strong>Nom du client :</strong> {selectedVente.client}</div>
-                <div><strong>Mode de commande :</strong> {selectedVente.modeCommande}</div>
-                <div><strong>Téléphone :</strong> <span className="text-amber-800">{selectedVente.telephone}</span></div>
-                <div><strong>Mode de paiement :</strong> {selectedVente.modePaiement}</div>
-                <div><strong>Date de commande :</strong> {selectedVente.date}</div>
-              </div>
-
-              <div className="border border-amber-600/70 rounded-xl overflow-hidden mb-6">
-                <table className="w-full text-xs text-left">
-                  <thead className="bg-amber-600 text-white uppercase text-[10px] tracking-wider">
-                    <tr>
-                      <th className="p-2.5">Désignation</th>
-                      <th className="p-2.5 text-center">Quantité</th>
-                      <th className="p-2.5 text-right">Prix Unitaire</th>
-                      <th className="p-2.5 text-right">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-amber-200/60 bg-white">
-                    <tr>
-                      <td className="p-3 font-semibold text-amber-950">{selectedVente.designation}</td>
-                      <td className="p-3 text-center text-amber-900">{selectedVente.quantite}</td>
-                      <td className="p-3 text-right text-amber-900">{selectedVente.prixUnitaire.toLocaleString()} FCFA</td>
-                      <td className="p-3 text-right font-bold text-amber-950">{selectedVente.total.toLocaleString()} FCFA</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 mb-8">
-                <div className="border border-amber-600/70 rounded-xl p-3 bg-white/60">
-                  <span className="text-[11px] font-bold text-amber-900 block mb-1 uppercase tracking-wider">Observations :</span>
-                  <p className="text-xs italic text-amber-800">{selectedVente.observations}</p>
-                </div>
-
-                <div className="border border-amber-600/70 rounded-xl overflow-hidden bg-white">
-                  <div className="p-2 text-xs flex justify-between border-b border-amber-100 text-amber-900">
-                    <span>MONTANT TOTAL :</span>
-                    <strong className="text-amber-950">{selectedVente.total.toLocaleString()} FCFA</strong>
+                <div className="border border-amber-200/80 bg-amber-50/30 p-2.5 rounded-lg text-[11px] text-slate-700 space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <MapPin size={13} className="text-amber-700 shrink-0" />
+                    <span>Hann Maristes, Dakar, Sénégal</span>
                   </div>
-                  <div className="p-2 text-xs flex justify-between border-b border-amber-100 text-amber-900">
-                    <span>AVANCE VERSÉE :</span>
-                    <strong className="text-amber-950">{selectedVente.avance.toLocaleString()} FCFA</strong>
+                  <div className="flex items-center gap-1.5">
+                    <Phone size={13} className="text-amber-700 shrink-0" />
+                    <span>77 646 21 02 / 70 348 26 82</span>
                   </div>
-                  <div className="p-2.5 bg-amber-600 text-white text-xs flex justify-between font-bold">
+                  <div className="flex items-center gap-1.5">
+                    <Mail size={13} className="text-amber-700 shrink-0" />
+                    <span>@ousmanedesign.sn</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Infos Client et Commande */}
+              <div className="grid grid-cols-2 gap-4 border border-amber-200 rounded-lg p-3 bg-amber-50/20 text-xs">
+                <div className="space-y-1">
+                  <p><strong className="text-slate-800">Nom du client :</strong> {selectedVente.client_nom}</p>
+                  <p><strong className="text-slate-800">Téléphone :</strong> <span className="text-amber-700 font-medium">{selectedVente.client_tel}</span></p>
+                  <p><strong className="text-slate-800">Date de commande :</strong> {selectedVente.date_commande || new Date().toLocaleDateString('fr-FR')}</p>
+                </div>
+                <div className="space-y-1">
+                  <p><strong className="text-slate-800">Mode de commande :</strong> {selectedVente.mode_commande || 'Sur mesure'}</p>
+                  <p><strong className="text-slate-800">Mode de paiement :</strong> {selectedVente.mode_paiement || 'Espèces'}</p>
+                </div>
+              </div>
+
+              {/* Tableau Désignation */}
+              <table className="w-full text-xs text-left border-collapse">
+                <thead>
+                  <tr className="bg-amber-600 text-white font-bold uppercase tracking-wider">
+                    <th className="p-2.5 rounded-tl-lg">Désignation</th>
+                    <th className="p-2.5 text-center">Quantité</th>
+                    <th className="p-2.5 text-right">Prix Unitaire</th>
+                    <th className="p-2.5 text-right rounded-tr-lg">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-amber-100 border-b border-amber-200">
+                  <tr>
+                    <td className="p-2.5 font-medium text-slate-800">{selectedVente.designation}</td>
+                    <td className="p-2.5 text-center">{selectedVente.quantite || 1}</td>
+                    <td className="p-2.5 text-right">{selectedVente.prix_unitaire?.toLocaleString() || selectedVente.montant_total?.toLocaleString()} FCFA</td>
+                    <td className="p-2.5 text-right font-bold text-slate-900">{selectedVente.montant_total?.toLocaleString()} FCFA</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {/* Observations & Récapitulatif Montants */}
+              <div className="grid grid-cols-2 gap-4 text-xs">
+                <div className="border border-slate-200 rounded-lg p-3 bg-slate-50/50">
+                  <p className="font-bold text-slate-700 mb-1">OBSERVATIONS :</p>
+                  <p className="text-slate-500 italic">{selectedVente.observations || 'Articles livrés en parfait état.'}</p>
+                </div>
+
+                <div className="space-y-1.5 text-right">
+                  <div className="flex justify-between py-1 px-2 border-b border-slate-100">
+                    <span className="text-slate-600 font-semibold">MONTANT TOTAL :</span>
+                    <span className="font-bold text-slate-900">{selectedVente.montant_total?.toLocaleString()} FCFA</span>
+                  </div>
+                  <div className="flex justify-between py-1 px-2 border-b border-slate-100">
+                    <span className="text-slate-600 font-semibold">AVANCE VERSÉE :</span>
+                    <span className="font-bold text-emerald-600">{selectedVente.avance?.toLocaleString()} FCFA</span>
+                  </div>
+                  <div className="flex justify-between py-1.5 px-2 bg-amber-600 text-white font-bold rounded-md">
                     <span>RESTE À PAYER :</span>
-                    <span>{selectedVente.reste.toLocaleString()} FCFA</span>
+                    <span>{selectedVente.reste?.toLocaleString()} FCFA</span>
                   </div>
                 </div>
               </div>
 
-              <div className="border-t border-amber-300 pt-6 grid grid-cols-2 text-center text-[11px] font-bold text-amber-900 mb-6">
+              {/* Signatures */}
+              <div className="pt-6 grid grid-cols-2 gap-8 text-[11px] text-center font-bold text-slate-700">
                 <div>
                   <p className="uppercase tracking-wider">Signature du Client</p>
-                  <div className="border-b border-dotted border-amber-500 mt-8 w-3/4 mx-auto"></div>
+                  <div className="mt-8 border-b border-dashed border-slate-300"></div>
                 </div>
                 <div>
                   <p className="uppercase tracking-wider">Ousmane Design (Signature & Cachet)</p>
-                  <div className="border-b border-dotted border-amber-500 mt-8 w-3/4 mx-auto"></div>
+                  <div className="mt-8 border-b border-dashed border-slate-300"></div>
                 </div>
               </div>
 
-              <p className="text-[10px] text-center italic text-amber-800/80 pt-2 border-t border-amber-200">
+              {/* Bas de page */}
+              <p className="text-[10px] text-center text-slate-400 italic pt-2 border-t border-amber-100">
                 Merci pour votre confiance ! — L'élégance sur mesure, pensée pour vous.
               </p>
+
             </div>
           </div>
         </div>
