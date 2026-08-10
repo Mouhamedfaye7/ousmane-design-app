@@ -162,35 +162,50 @@ export default function VentesPage() {
         doc.setTextColor(217, 119, 6);
         doc.text('CREATION & COUTURE CONTEMPORAINE', 16, 30);
 
-        // 3. Bloc Coordonnées (En haut à droite avec icônes visuelles)
+        // 3. Bloc Coordonnées (En haut à droite)
         doc.setDrawColor(254, 215, 170);
         doc.setFillColor(255, 251, 235);
         doc.roundedRect(118, 15, 77, 24, 2, 2, 'FD');
 
-        // Dessin des icônes de contact
-        // Icône Adresse (Pin/Cercle)
-        doc.setFillColor(217, 119, 6);
-        doc.circle(123, 21, 1.8, 'F');
+        // Icônes de contact vectorielles (Style Lucide Orange)
+        doc.setLineWidth(0.35);
+        doc.setDrawColor(217, 119, 6);
+
+        // Icône Localisation (Map Pin)
+        doc.circle(123, 19.8, 1.2, 'S');
+        doc.circle(123, 19.8, 0.4, 'S');
+        doc.line(121.9, 20.2, 123, 22.2);
+        doc.line(124.1, 20.2, 123, 22.2);
+
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(8);
         doc.setTextColor(30, 41, 59);
-        doc.text('Hann Maristes, Dakar, Senegal', 127, 22);
+        doc.text('Hann Maristes, Dakar, Senegal', 127, 21.5);
 
         // Icône Téléphone
-        doc.setFillColor(217, 119, 6);
-        doc.circle(123, 27, 1.8, 'F');
+        doc.line(121.7, 25.7, 122.3, 25.1);
+        doc.line(122.3, 25.1, 122.8, 25.6);
+        doc.line(122.8, 25.6, 123.9, 26.7);
+        doc.line(123.9, 26.7, 124.4, 27.2);
+        doc.line(124.4, 27.2, 123.8, 27.8);
+        doc.line(123.8, 27.8, 123.3, 27.3);
+        doc.line(123.3, 27.3, 122.2, 26.2);
+        doc.line(122.2, 26.2, 121.7, 25.7);
+
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(30, 41, 59);
-        doc.text('Tel: 77 646 21 02 / 70 348 26 82', 127, 28);
+        doc.text('77 646 21 02 / 70 348 26 82', 127, 27.5);
 
         // Icône Email
-        doc.setFillColor(217, 119, 6);
-        doc.circle(123, 33, 1.8, 'F');
+        doc.roundedRect(121.2, 31.2, 3.6, 2.6, 0.3, 0.3, 'S');
+        doc.line(121.2, 31.2, 123, 32.6);
+        doc.line(124.8, 31.2, 123, 32.6);
+
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(30, 41, 59);
-        doc.text('Email: @ousmanedesign.sn', 127, 34);
+        doc.text('@ousmanedesign.sn', 127, 33.5);
 
-        // 4. Bloc Infos Client (Fond ultra clair, haute lisibilité)
+        // 4. Bloc Infos Client
         doc.setDrawColor(254, 215, 170);
         doc.setFillColor(255, 251, 235);
         doc.roundedRect(16, 45, 179, 25, 2, 2, 'FD');
@@ -286,7 +301,7 @@ export default function VentesPage() {
         const obsText = selectedVente.observations || 'Articles livres en parfait etat.';
         doc.text(doc.splitTextToSize(obsText, 77), 20, finalY + 22);
 
-        // 7. Totaux Financiers (Texte en gras)
+        // 7. Totaux Financiers
         const totalX = 110;
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
@@ -308,7 +323,7 @@ export default function VentesPage() {
 
         doc.line(totalX, finalY + 26, 190, finalY + 26);
 
-        // Encadré Reste à Payer (Orange vif)
+        // Encadré Reste à Payer
         doc.setFillColor(217, 119, 6);
         doc.roundedRect(totalX - 2, finalY + 29, 83, 10, 1.5, 1.5, 'F');
         doc.setFont('helvetica', 'bold');
