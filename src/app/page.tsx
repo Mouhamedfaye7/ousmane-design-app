@@ -30,19 +30,33 @@ export default function Dashboard() {
       const { data: commandes, error } = await supabase.from('commandes').select('*');
 
       if (!error && commandes) {
-        const clientsUniques = new Set(
-          commandes.map(c => (c.client_nom || '').trim().toLowerCase()).filter(Boolean)
-        );
-        setTotalClients(clientsUniques.size);
+        // Déduplication robuste par téléphone OU par nom
+        const uniqueClientsSet = new Set<string>();
 
+        commandes.forEach(c => {
+          const telClean = (c.client_tel || '').trim().replace(/[^0-9]/g, '');
+          const nomClean = (c.client_nom || '').trim().toLowerCase();
+
+          if (telClean.length >= 6) {
+            uniqueClientsSet.add(`tel:${telClean}`);
+          } else if (nomClean.length > 0) {
+            uniqueClientsSet.add(`nom:${nomClean}`);
+          }
+        });
+
+        setTotalClients(uniqueClientsSet.size);
+
+        // Commandes en cours atelier (Reçue / En Coupe)
         const enCours = commandes.filter(
           c => !c.statut || c.statut === 'Reçue' || c.statut === 'En Coupe'
         ).length;
         setEnCoursCount(enCours);
 
+        // Commandes prêtes
         const pretes = commandes.filter(c => c.statut === 'Prête').length;
         setPretesCount(pretes);
 
+        // Chiffre d'affaires cumulé
         const totalCA = commandes.reduce((acc, c) => acc + (Number(c.montant_total) || 0), 0);
         setChiffreAffaires(totalCA);
       }
@@ -154,7 +168,6 @@ export default function Dashboard() {
               </div>
             </Link>
 
-            {/* ROUTE CORRIGÉE VERS /clients */}
             <Link href="/clients" className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all group flex items-start gap-4">
               <div className="p-3 bg-blue-50 text-blue-600 rounded-xl group-hover:scale-105 transition-transform shrink-0">
                 <Users size={24} />
