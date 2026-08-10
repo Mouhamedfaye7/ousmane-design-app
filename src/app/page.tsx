@@ -27,36 +27,25 @@ export default function Dashboard() {
     async function loadDashboardStats() {
       setLoading(true);
 
-      const { data: commandes, error } = await supabase.from('commandes').select('*');
+      // Fetch depuis la table 'clients'
+      const { data: clientsData, count: clientsCount } = await supabase
+        .from('clients')
+        .select('*', { count: 'exact' });
 
-      if (!error && commandes) {
-        // Déduplication robuste par téléphone OU par nom
-        const uniqueClientsSet = new Set<string>();
+      // Fetch depuis la table 'commandes'
+      const { data: commandes } = await supabase.from('commandes').select('*');
 
-        commandes.forEach(c => {
-          const telClean = (c.client_tel || '').trim().replace(/[^0-9]/g, '');
-          const nomClean = (c.client_nom || '').trim().toLowerCase();
+      setTotalClients(clientsCount || (clientsData ? clientsData.length : 0));
 
-          if (telClean.length >= 6) {
-            uniqueClientsSet.add(`tel:${telClean}`);
-          } else if (nomClean.length > 0) {
-            uniqueClientsSet.add(`nom:${nomClean}`);
-          }
-        });
-
-        setTotalClients(uniqueClientsSet.size);
-
-        // Commandes en cours atelier (Reçue / En Coupe)
+      if (commandes) {
         const enCours = commandes.filter(
           c => !c.statut || c.statut === 'Reçue' || c.statut === 'En Coupe'
         ).length;
         setEnCoursCount(enCours);
 
-        // Commandes prêtes
         const pretes = commandes.filter(c => c.statut === 'Prête').length;
         setPretesCount(pretes);
 
-        // Chiffre d'affaires cumulé
         const totalCA = commandes.reduce((acc, c) => acc + (Number(c.montant_total) || 0), 0);
         setChiffreAffaires(totalCA);
       }
@@ -87,13 +76,13 @@ export default function Dashboard() {
           <div className="flex items-center gap-3">
             <Link
               href="/commandes"
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-xs transition-colors cursor-pointer text-sm"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-xs transition-colors text-sm"
             >
               <Plus size={18} /> Nouvelle Vente
             </Link>
             <Link
               href="/commandes"
-              className="bg-amber-700 hover:bg-amber-800 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-xs transition-colors cursor-pointer text-sm"
+              className="bg-amber-700 hover:bg-amber-800 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-xs transition-colors text-sm"
             >
               <Plus size={18} /> Nouvelle Commande
             </Link>

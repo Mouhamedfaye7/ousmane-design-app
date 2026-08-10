@@ -2,179 +2,59 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Search, Send, X } from 'lucide-react';
+import { ArrowLeft, Search, Plus, Trash2, Send } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 interface Commande {
-  id?: string;
-  code_commande?: string;
+  id: string;
+  code_commande: string;
   client_nom: string;
   client_tel: string;
-  statut?: string;
-  designation?: string;
-  article?: string;
-  description?: string;
-  modele?: string;
-  quantite?: number;
-  prix_unitaire?: number;
-  montant_total?: number;
-  avance?: number;
-  reste?: number;
-  observations?: string;
-  created_at?: string;
+  description: string;
+  montant_total: number;
+  acompte: number;
+  statut: string;
 }
 
 export default function CommandesPage() {
   const [commandes, setCommandes] = useState<Commande[]>([]);
   const [search, setSearch] = useState('');
-  const [showAddModal, setShowAddModal] = useState(false);
   const [loading, setLoading] = useState(true);
-
-  const [formData, setFormData] = useState({
-    client_nom: '',
-    client_tel: '',
-    designation: '',
-    quantite: '1',
-    prix_unitaire: '',
-    avance: '',
-    observations: ''
-  });
-
-  const fetchCommandes = async () => {
-    setLoading(true);
-    const { data, error } = await supabase.from('commandes').select('*').order('created_at', { ascending: false });
-    if (!error && data) {
-      setCommandes(data);
-    }
-    setLoading(false);
-  };
 
   useEffect(() => {
     fetchCommandes();
   }, []);
 
-  const qtyNum = Number(formData.quantite) || 1;
-  const puNum = Number(formData.prix_unitaire) || 0;
-  const montantTotalCalcul = qtyNum * puNum;
-  const avanceNum = Number(formData.avance) || 0;
-  const resteCalcul = montantTotalCalcul - avanceNum;
-
-  const handleCreateCommande = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.client_nom || !formData.designation) {
-      alert('Veuillez remplir le nom du client et l\'article/désignation.');
-      return;
-    }
-
-    const randomCode = 'CMD-' + Math.floor(100000 + Math.random() * 900000);
-
-    const payload = {
-      code_commande: randomCode,
-      client_nom: formData.client_nom,
-      client_tel: formData.client_tel,
-      statut: 'Reçue',
-      designation: formData.designation,
-      quantite: qtyNum,
-      prix_unitaire: puNum,
-      montant_total: montantTotalCalcul,
-      avance: avanceNum,
-      reste: resteCalcul,
-      observations: formData.observations
-    };
-
-    const { error } = await supabase.from('commandes').insert([payload]);
-
-    if (error) {
-      alert('Erreur lors de la création : ' + error.message);
-      return;
-    }
-
-    setShowAddModal(false);
-    setFormData({
-      client_nom: '',
-      client_tel: '',
-      designation: '',
-      quantite: '1',
-      prix_unitaire: '',
-      avance: '',
-      observations: ''
-    });
-    fetchCommandes();
+  const fetchCommandes = async () => {
+    setLoading(true);
+    const { data } = await supabase.from('commandes').select('*').order('created_at', { ascending: false });
+    if (data) setCommandes(data);
+    setLoading(false);
   };
 
   const handleUpdateStatut = async (id: string, newStatut: string) => {
-    const { error } = await supabase.from('commandes').update({ statut: newStatut }).eq('id', id);
-    if (!error) {
-      setCommandes(prev => prev.map(c => c.id === id ? { ...c, statut: newStatut } : c));
-    }
+    await supabase.from('commandes').update({ statut: newStatut }).eq('id', id);
+    fetchCommandes();
   };
 
-  const formatAmount = (val: number | undefined | null) => {
-    return (Number(val) || 0).toLocaleString('fr-FR').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ');
-  };
-
-  const getItemName = (c: Commande) => {
-    return c.designation || c.article || c.description || c.modele || 'Commande sur mesure';
-  };
-
-  const handleAlertWhatsApp = (c: Commande) => {
-    let cleanPhone = (c.client_tel || '').trim().replace(/[^0-9]/g, '');
-    if (cleanPhone.length === 9) {
-      cleanPhone = '221' + cleanPhone;
+  const handleDeleteCommande = async (id: string, clientNom: string) => {
+    if (confirm(`Voulez-vous supprimer la commande de ${clientNom || 'ce client'} ?`)) {
+      await supabase.from('commandes').delete().eq('id', id);
+      fetchCommandes();
     }
-
-    const total = c.montant_total || 0;
-    const avance = c.avance || 0;
-    const reste = c.reste !== undefined ? c.reste : (total - avance);
-    const clientName = (c.client_nom || 'Client').trim();
-    const statut = c.statut || 'Reçue';
-    const code = c.code_commande || '';
-
-    let messageIntro = '';
-    if (statut === 'Reçue') {
-      messageIntro = `Votre commande *${code}* (${getItemName(c)}) a bien été enregistrée à l'atelier.`;
-    } else if (statut === 'En Coupe') {
-      messageIntro = `Votre commande *${code}* (${getItemName(c)}) est actuellement en cours de coupe et de confection à l'atelier.`;
-    } else if (statut === 'Prête') {
-      messageIntro = `Bonne nouvelle ! Votre commande *${code}* (${getItemName(c)}) est *PRÊTE* ! Vous pouvez passer la récupérer à l'atelier.`;
-    } else if (statut === 'Livrée') {
-      messageIntro = `Votre commande *${code}* (${getItemName(c)}) vous a été livrée. Merci de votre confiance !`;
-    } else {
-      messageIntro = `Statut de votre commande *${code}* (${getItemName(c)}) : *${statut}*.`;
-    }
-
-    const textMsg = `Bonjour ${clientName},\n\n${messageIntro}\n\n` +
-      `📌 *Récapitulatif financier* :\n` +
-      `- Total : ${formatAmount(total)} FCFA\n` +
-      `- Avance : ${formatAmount(avance)} FCFA\n` +
-      `- Reste à payer : *${formatAmount(reste)} FCFA*\n\n` +
-      `Merci d'avoir choisi *Ousmane Design* !`;
-
-    const encodedText = encodeURIComponent(textMsg);
-    const waUrl = cleanPhone 
-      ? `https://wa.me/${cleanPhone}?text=${encodedText}`
-      : `https://wa.me/?text=${encodedText}`;
-
-    window.open(waUrl, '_blank');
   };
 
   const filteredCommandes = commandes.filter(c =>
     (c.client_nom || '').toLowerCase().includes(search.toLowerCase()) ||
     (c.client_tel || '').includes(search) ||
-    (c.code_commande || '').toLowerCase().includes(search.toLowerCase()) ||
-    getItemName(c).toLowerCase().includes(search.toLowerCase())
+    (c.code_commande || '').toLowerCase().includes(search.toLowerCase())
   );
 
-  const columns = [
-    { title: 'Reçue', key: 'Reçue' },
-    { title: 'En Coupe', key: 'En Coupe' },
-    { title: 'Prête', key: 'Prête' },
-    { title: 'Livrée', key: 'Livrée' }
-  ];
+  const columns = ['Reçue', 'En Coupe', 'Prête', 'Livrée'];
 
   return (
     <div className="min-h-screen bg-slate-100 p-6 text-slate-800">
-      <div className="max-w-7xl mx-auto mb-6 flex flex-col md:flex-row justify-between md:items-center gap-4">
+      <div className="max-w-7xl mx-auto mb-6 flex justify-between items-center">
         <div>
           <Link href="/" className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1 mb-2">
             <ArrowLeft size={16} /> Retour au tableau de bord
@@ -182,13 +62,6 @@ export default function CommandesPage() {
           <h1 className="text-2xl font-bold text-slate-900">Suivi d'Atelier & Commandes</h1>
           <p className="text-sm text-slate-500">Ousmane Design — Pilotage de la production</p>
         </div>
-
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-sm transition-colors cursor-pointer self-start md:self-auto"
-        >
-          <Plus size={18} /> Nouvelle Commande
-        </button>
       </div>
 
       <div className="max-w-7xl mx-auto mb-6">
@@ -205,217 +78,67 @@ export default function CommandesPage() {
       </div>
 
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-4">
-        {columns.map(col => {
-          const items = filteredCommandes.filter(c => (c.statut || 'Reçue') === col.key);
+        {columns.map((colStatut) => {
+          const list = filteredCommandes.filter(c => (c.statut || 'Reçue') === colStatut);
           return (
-            <div key={col.key} className="bg-slate-200/60 p-4 rounded-xl border border-slate-300/60 flex flex-col">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="font-bold text-slate-800 text-sm">{col.title}</h2>
-                <span className="bg-slate-300 text-slate-700 text-xs font-bold px-2 py-0.5 rounded-full">
-                  {items.length}
+            <div key={colStatut} className="bg-slate-200/60 p-3 rounded-xl min-h-[500px]">
+              <div className="flex justify-between items-center mb-3 px-1">
+                <h2 className="font-bold text-sm text-slate-700">{colStatut}</h2>
+                <span className="bg-slate-300 text-slate-700 text-xs px-2 py-0.5 rounded-full font-bold">
+                  {list.length}
                 </span>
               </div>
 
-              <div className="space-y-3 flex-1">
-                {loading ? (
-                  <p className="text-xs text-slate-400 text-center py-6">Chargement...</p>
-                ) : items.length === 0 ? (
-                  <p className="text-xs text-slate-400 italic text-center py-8">Aucune commande</p>
-                ) : (
-                  items.map(c => {
-                    const total = c.montant_total || 0;
-                    const avance = c.avance || 0;
-                    const reste = c.reste !== undefined ? c.reste : (total - avance);
-                    return (
-                      <div key={c.id} className="bg-white p-4 rounded-lg border border-slate-200 shadow-xs space-y-3">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h3 className="font-bold text-slate-900 text-sm">{c.client_nom || 'Client sans nom'}</h3>
-                            <p className="text-xs text-slate-500">({c.client_tel || '-'})</p>
-                          </div>
-                          {c.code_commande && (
-                            <span className="text-[10px] bg-slate-100 border border-slate-300 font-mono font-semibold px-1.5 py-0.5 rounded text-slate-600">
-                              {c.code_commande}
-                            </span>
-                          )}
+              <div className="space-y-3">
+                {list.map((cmd) => {
+                  const reste = (cmd.montant_total || 0) - (cmd.acompte || 0);
+                  return (
+                    <div key={cmd.id} className="bg-white p-4 rounded-xl shadow-2xs border border-slate-200 space-y-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="font-bold text-slate-900 text-sm">{cmd.client_nom || 'Client sans nom'}</h3>
+                          <p className="text-xs text-slate-400">{cmd.client_tel || '(-)'}</p>
                         </div>
-
-                        <p className="text-xs text-slate-700 font-medium">{getItemName(c)}</p>
-
-                        <div className="flex justify-between items-center text-xs pt-2 border-t border-slate-100">
-                          <span className="text-slate-500">Total: <strong className="text-slate-800">{formatAmount(total)} F</strong></span>
-                          <span className="text-amber-600 font-bold">Reste: {formatAmount(reste)} F</span>
-                        </div>
-
-                        <div className="flex justify-between items-center pt-2 border-t border-slate-100 gap-2">
-                          <select
-                            value={c.statut || 'Reçue'}
-                            onChange={(e) => c.id && handleUpdateStatut(c.id, e.target.value)}
-                            className="text-xs p-1.5 border border-slate-200 rounded-md bg-slate-50 font-medium text-slate-700 outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer flex-1"
-                          >
-                            <option value="Reçue">Reçue</option>
-                            <option value="En Coupe">En Coupe</option>
-                            <option value="Prête">Prête</option>
-                            <option value="Livrée">Livrée</option>
-                          </select>
-
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                            {cmd.code_commande || 'CMD'}
+                          </span>
                           <button
-                            onClick={() => handleAlertWhatsApp(c)}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-2.5 py-1.5 rounded-md flex items-center gap-1 shadow-2xs transition-colors cursor-pointer shrink-0"
-                            title="Alerter le client sur WhatsApp"
+                            onClick={() => handleDeleteCommande(cmd.id, cmd.client_nom)}
+                            className="text-slate-300 hover:text-red-500 p-1 transition-colors"
+                            title="Supprimer la commande"
                           >
-                            <Send size={13} />
-                            <span>Alerter</span>
+                            <Trash2 size={14} />
                           </button>
                         </div>
                       </div>
-                    );
-                  })
-                )}
+
+                      <p className="text-xs text-slate-600">{cmd.description || 'Commande sur mesure'}</p>
+
+                      <div className="flex justify-between text-xs pt-2 border-t border-slate-100 font-medium">
+                        <span>Total: <strong className="text-slate-800">{cmd.montant_total || 0} F</strong></span>
+                        <span className="text-amber-800">Reste: <strong>{reste} F</strong></span>
+                      </div>
+
+                      <div className="pt-1">
+                        <select
+                          value={cmd.statut || 'Reçue'}
+                          onChange={(e) => handleUpdateStatut(cmd.id, e.target.value)}
+                          className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-1.5 outline-none font-semibold"
+                        >
+                          {columns.map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           );
         })}
       </div>
-
-      {/* MODAL NOUVELLE COMMANDE */}
-      {showAddModal && (
-        <div 
-          onClick={() => setShowAddModal(false)}
-          className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto"
-        >
-          <div 
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl relative border border-slate-200"
-          >
-            <div className="flex justify-between items-center mb-4 border-b pb-3">
-              <h2 className="text-lg font-bold text-slate-900">Nouvelle Commande</h2>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateCommande} className="space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold mb-1">Nom du client *</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.client_nom}
-                    onChange={(e) => setFormData({ ...formData, client_nom: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold mb-1">Téléphone</label>
-                  <input
-                    type="text"
-                    value={formData.client_tel}
-                    onChange={(e) => setFormData({ ...formData, client_tel: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-semibold mb-1">Désignation / Article *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: Boubou Bazin VIP, Caftan, costume..."
-                  value={formData.designation}
-                  onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
-                  className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block font-semibold mb-1">Quantité</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={formData.quantite}
-                    onChange={(e) => setFormData({ ...formData, quantite: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold mb-1">Prix Unitaire (FCFA)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="Ex: 50000"
-                    value={formData.prix_unitaire}
-                    onChange={(e) => setFormData({ ...formData, prix_unitaire: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold mb-1">Montant Total</label>
-                  <input
-                    type="text"
-                    readOnly
-                    value={`${formatAmount(montantTotalCalcul)} FCFA`}
-                    className="w-full p-2 border border-slate-200 rounded-md bg-slate-100 font-bold text-slate-800"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold mb-1">Avance versée (FCFA)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="Ex: 25000"
-                    value={formData.avance}
-                    onChange={(e) => setFormData({ ...formData, avance: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none text-emerald-600 font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold mb-1">Reste à payer</label>
-                  <input
-                    type="text"
-                    readOnly
-                    value={`${formatAmount(resteCalcul)} FCFA`}
-                    className="w-full p-2 border border-slate-200 rounded-md bg-amber-50 text-amber-700 font-bold"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-semibold mb-1">Observations / Mesures</label>
-                <textarea
-                  rows={2}
-                  value={formData.observations}
-                  onChange={(e) => setFormData({ ...formData, observations: e.target.value })}
-                  placeholder="Notes, détails du tissu ou mesures..."
-                  className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
-                ></textarea>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-200 text-slate-700 font-semibold cursor-pointer"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold cursor-pointer"
-                >
-                  Créer la commande
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
