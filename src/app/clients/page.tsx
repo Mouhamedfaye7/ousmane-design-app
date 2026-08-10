@@ -48,7 +48,7 @@ export default function ClientsPage() {
   };
 
   const handleSave = async () => {
-    if (!selectedClient || !selectedClient.nom) return alert('Veuillez remplir le nom');
+    if (!selectedClient || !selectedClient.nom) return alert('Veuillez remplir le nom du client');
 
     if (selectedClient.id) {
       await supabase.from('clients').update(selectedClient).eq('id', selectedClient.id);
@@ -56,17 +56,38 @@ export default function ClientsPage() {
       const { data } = await supabase.from('clients').insert([selectedClient]).select();
       if (data && data[0]) setSelectedClient(data[0]);
     }
-    alert('Client enregistré avec succès !');
+    alert('Fiche client mise à jour avec succès !');
     fetchClients();
   };
 
   const handleDeleteClient = async () => {
     if (!selectedClient || !selectedClient.id) return;
-    if (confirm(`Voulez-vous vraiment supprimer le client ${selectedClient.nom} ?`)) {
+    if (confirm(`Voulez-vous vraiment supprimer la fiche de ${selectedClient.nom} ?`)) {
       await supabase.from('clients').delete().eq('id', selectedClient.id);
       alert('Client supprimé.');
       fetchClients();
     }
+  };
+
+  const handleShareWhatsApp = () => {
+    if (!selectedClient) return;
+    let cleanPhone = (selectedClient.telephone || '').replace(/[^0-9]/g, '');
+    if (cleanPhone.length === 9) cleanPhone = '221' + cleanPhone;
+
+    let msg = `*OUSMANE DESIGN — Carnet de Mesures*\n`;
+    msg += `Client: *${selectedClient.nom}*\n\n`;
+    if (selectedClient.cou) msg += `- Cou: ${selectedClient.cou} cm\n`;
+    if (selectedClient.epaule) msg += `- Épaule: ${selectedClient.epaule} cm\n`;
+    if (selectedClient.poitrine) msg += `- Poitrine: ${selectedClient.poitrine} cm\n`;
+    if (selectedClient.longueur_bras) msg += `- Long. Bras: ${selectedClient.longueur_bras} cm\n`;
+    if (selectedClient.longueur_haut) msg += `- Long. Haut: ${selectedClient.longueur_haut} cm\n`;
+    if (selectedClient.ceinture) msg += `- Ceinture/Taille: ${selectedClient.ceinture} cm\n`;
+    if (selectedClient.longueur_pantalon) msg += `- Long. Pantalon: ${selectedClient.longueur_pantalon} cm\n`;
+
+    const url = cleanPhone 
+      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`
+      : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
   };
 
   const handleNewClient = () => {
@@ -96,7 +117,7 @@ export default function ClientsPage() {
         </div>
         <button 
           onClick={handleNewClient}
-          className="bg-amber-700 hover:bg-amber-800 text-white font-semibold px-4 py-2 rounded-lg flex items-center gap-2 shadow-xs"
+          className="bg-amber-700 hover:bg-amber-800 text-white font-semibold px-4 py-2 rounded-lg flex items-center gap-2 shadow-xs cursor-pointer"
         >
           <Plus size={18} /> Nouveau Client
         </button>
@@ -119,7 +140,7 @@ export default function ClientsPage() {
           <div className="space-y-2 max-h-[600px] overflow-y-auto">
             {filteredClients.map((c) => (
               <div
-                key={c.id}
+                key={c.id || c.nom}
                 onClick={() => setSelectedClient(c)}
                 className={`p-4 rounded-xl border cursor-pointer transition-all bg-white ${
                   selectedClient?.id === c.id 
@@ -170,20 +191,28 @@ export default function ClientsPage() {
               </div>
 
               <div className="flex items-center gap-2">
+                <button
+                  onClick={handleShareWhatsApp}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 text-xs cursor-pointer shadow-xs"
+                >
+                  <Send size={14} /> Partager WhatsApp
+                </button>
+
                 {selectedClient.id && (
                   <button
                     onClick={handleDeleteClient}
-                    className="bg-red-50 hover:bg-red-100 text-red-600 p-2.5 rounded-lg flex items-center justify-center transition-colors"
+                    className="bg-red-50 hover:bg-red-100 text-red-600 p-2 rounded-lg flex items-center justify-center transition-colors cursor-pointer"
                     title="Supprimer ce client"
                   >
-                    <Trash2 size={18} />
+                    <Trash2 size={16} />
                   </button>
                 )}
+
                 <button
                   onClick={handleSave}
-                  className="bg-amber-700 hover:bg-amber-800 text-white font-semibold px-4 py-2 rounded-lg flex items-center gap-2 text-sm shadow-xs"
+                  className="bg-amber-700 hover:bg-amber-800 text-white font-semibold px-4 py-2 rounded-lg flex items-center gap-1.5 text-xs cursor-pointer shadow-xs"
                 >
-                  <Save size={16} /> Enregistrer
+                  <Save size={14} /> Enregistrer
                 </button>
               </div>
             </div>
@@ -216,7 +245,7 @@ export default function ClientsPage() {
             </div>
 
             <div>
-              <label className="text-[11px] font-bold text-slate-700 block mb-1">Notes & Particularités</label>
+              <label className="text-[11px] font-bold text-slate-700 block mb-1">Notes & Particularités du Modèle</label>
               <textarea
                 value={selectedClient.notes || ''}
                 onChange={(e) => setSelectedClient({...selectedClient, notes: e.target.value})}
