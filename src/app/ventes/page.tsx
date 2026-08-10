@@ -18,9 +18,9 @@ interface Vente {
   modele?: string;
   quantite?: number;
   prix_unitaire?: number;
-  montant_total: number;
-  avance: number;
-  reste: number;
+  montant_total?: number;
+  avance?: number;
+  reste?: number;
   observations?: string;
 }
 
@@ -32,17 +32,17 @@ export default function VentesPage() {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
-  // Formulaire nouvelle vente
+  // Formulaire nouvelle vente avec chaines vides pour éviter le "0" fixe
   const [formData, setFormData] = useState({
     client_nom: '',
     client_tel: '',
     mode_commande: 'Prêt-à-porter',
     mode_paiement: 'Espèces',
     designation: '',
-    quantite: 1,
-    prix_unitaire: 0,
+    quantite: '1',
+    prix_unitaire: '',
     montant_total: 0,
-    avance: 0,
+    avance: '',
     reste: 0,
     observations: ''
   });
@@ -60,10 +60,11 @@ export default function VentesPage() {
     fetchVentes();
   }, []);
 
-  // Calcul automatique du total et reste
+  // Calcul automatique dynamique
   const handleFormChange = (field: string, value: any) => {
     const updated = { ...formData, [field]: value };
-    const qty = Number(updated.quantite) || 1;
+    
+    const qty = Number(updated.quantite) || 0;
     const pu = Number(updated.prix_unitaire) || 0;
     const total = qty * pu;
     const av = Number(updated.avance) || 0;
@@ -81,42 +82,43 @@ export default function VentesPage() {
       return;
     }
 
-    // Construction d'un objet incluant les variantes courantes de colonnes pour 'designation'
-    const payload: Record<string, any> = {
+    const totalNum = Number(formData.montant_total) || 0;
+    const avanceNum = Number(formData.avance) || 0;
+    const resteNum = totalNum - avanceNum;
+    const qtyNum = Number(formData.quantite) || 1;
+    const puNum = Number(formData.prix_unitaire) || 0;
+
+    // Tentative 1 : insertion complète
+    const fullPayload: Record<string, any> = {
       client_nom: formData.client_nom,
       client_tel: formData.client_tel,
       mode_commande: formData.mode_commande,
       mode_paiement: formData.mode_paiement,
-      quantite: formData.quantite,
-      prix_unitaire: formData.prix_unitaire,
-      montant_total: formData.montant_total,
-      avance: formData.avance,
-      reste: formData.reste,
+      quantite: qtyNum,
+      prix_unitaire: puNum,
+      montant_total: totalNum,
+      avance: avanceNum,
+      reste: resteNum,
       observations: formData.observations,
-      // On envoie designation, article, description et modele pour être sûr de matcher la colonne Supabase
-      designation: formData.designation,
-      article: formData.designation,
-      description: formData.designation,
-      modele: formData.designation
+      designation: formData.designation
     };
 
-    let { error } = await supabase.from('ventes').insert([payload]);
+    let { error } = await supabase.from('ventes').insert([fullPayload]);
 
-    // Si Supabase rejette en raison de colonnes inconnues, tentative avec payload restreint
+    // Tentative 2 : Si échec de schéma (colonne manquante comme 'reste' ou 'designation')
     if (error) {
-      console.warn('Tentative d insertion alternative sans colonnes optionnelles...', error.message);
+      console.warn('Erreur de schéma Supabase, tentative avec colonnes minimales...', error.message);
       
-      const fallbackPayload = {
+      const minimalPayload = {
         client_nom: formData.client_nom,
         client_tel: formData.client_tel,
-        montant_total: formData.montant_total,
-        avance: formData.avance,
-        reste: formData.reste,
-        observations: `${formData.designation} (${formData.quantite}x) - ${formData.observations}`
+        montant_total: totalNum,
+        avance: avanceNum,
+        observations: `[${formData.designation}] - Qté: ${qtyNum} x ${puNum} FCFA - Reste: ${resteNum} FCFA | ${formData.observations}`
       };
 
-      const fallbackRes = await supabase.from('ventes').insert([fallbackPayload]);
-      error = fallbackRes.error;
+      const minimalRes = await supabase.from('ventes').insert([minimalPayload]);
+      error = minimalRes.error;
     }
 
     if (error) {
@@ -129,10 +131,10 @@ export default function VentesPage() {
         mode_commande: 'Prêt-à-porter',
         mode_paiement: 'Espèces',
         designation: '',
-        quantite: 1,
-        prix_unitaire: 0,
+        quantite: '1',
+        prix_unitaire: '',
         montant_total: 0,
-        avance: 0,
+        avance: '',
         reste: 0,
         observations: ''
       });
@@ -195,7 +197,10 @@ export default function VentesPage() {
         doc.text(`Mode de commande : ${selectedVente.mode_commande || 'Pret-a-porter'}`, 120, 43);
         doc.text(`Mode de paiement : ${selectedVente.mode_paiement || 'Especes'}`, 120, 49);
 
-        // Tableau
+        const mTotal = selectedVente.montant_total || 0;
+        const mAvance = selectedVente.avance || 0;
+        const mReste = selectedVente.reste !== undefined ? selectedVente.reste : (mTotal - mAvance);
+
         autoTable(doc, {
           startY: 63,
           head: [['Designation', 'Quantite', 'Prix Unitaire', 'Total']],
@@ -203,8 +208,8 @@ export default function VentesPage() {
             [
               getItemName(selectedVente),
               selectedVente.quantite || 1,
-              `${formatAmount(selectedVente.prix_unitaire || selectedVente.montant_total)} FCFA`,
-              `${formatAmount(selectedVente.montant_total)} FCFA`
+              `${formatAmount(selectedVente.prix_unitaire || mTotal)} FCFA`,
+              `${formatAmount(mTotal)} FCFA`
             ]
           ],
           headStyles: { fillColor: [217, 119, 6], textColor: [255, 255, 255], fontStyle: 'bold' },
@@ -216,11 +221,11 @@ export default function VentesPage() {
 
         // Récapitulatif Financier
         doc.setFontSize(10);
-        doc.text(`Montant Total : ${formatAmount(selectedVente.montant_total)} FCFA`, 120, finalY + 10);
-        doc.text(`Avance Versee : ${formatAmount(selectedVente.avance)} FCFA`, 120, finalY + 16);
+        doc.text(`Montant Total : ${formatAmount(mTotal)} FCFA`, 120, finalY + 10);
+        doc.text(`Avance Versee : ${formatAmount(mAvance)} FCFA`, 120, finalY + 16);
         doc.setFontSize(11);
         doc.setTextColor(217, 119, 6);
-        doc.text(`Reste a payer : ${formatAmount(selectedVente.reste)} FCFA`, 120, finalY + 23);
+        doc.text(`Reste a payer : ${formatAmount(mReste)} FCFA`, 120, finalY + 23);
 
         // Observations
         doc.setFontSize(9);
@@ -240,11 +245,15 @@ export default function VentesPage() {
       let cleanPhone = (selectedVente.client_tel || '').replace(/\s+/g, '').replace(/[^0-9]/g, '');
       if (cleanPhone.length === 9) cleanPhone = '221' + cleanPhone;
 
+      const mTotal = selectedVente.montant_total || 0;
+      const mAvance = selectedVente.avance || 0;
+      const mReste = selectedVente.reste !== undefined ? selectedVente.reste : (mTotal - mAvance);
+
       const textMsg = `Bonjour ${selectedVente.client_nom},\n\nVoici votre facture de chez *Ousmane Design* :\n` +
         `- Article : ${getItemName(selectedVente)}\n` +
-        `- Total : ${formatAmount(selectedVente.montant_total)} FCFA\n` +
-        `- Avance : ${formatAmount(selectedVente.avance)} FCFA\n` +
-        `- Reste : ${formatAmount(selectedVente.reste)} FCFA\n\n` +
+        `- Total : ${formatAmount(mTotal)} FCFA\n` +
+        `- Avance : ${formatAmount(mAvance)} FCFA\n` +
+        `- Reste : ${formatAmount(mReste)} FCFA\n\n` +
         `Le fichier PDF de votre facture a ete telecharge. Merci pour votre confiance !`;
 
       const waUrl = cleanPhone 
@@ -256,7 +265,7 @@ export default function VentesPage() {
     } catch (err: any) {
       console.error('Erreur génération PDF:', err);
       alert('Erreur lors de la génération du PDF : ' + err.message);
-    } finally {
+    } fontinally {
       setExporting(false);
     }
   };
@@ -286,7 +295,7 @@ export default function VentesPage() {
 
         <button
           onClick={() => setShowAddModal(true)}
-          className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-sm transition-colors self-start md:self-auto"
+          className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-sm transition-colors self-start md:self-auto cursor-pointer"
         >
           <Plus size={18} /> Enregistrer une vente / Article
         </button>
@@ -323,30 +332,35 @@ export default function VentesPage() {
                 <tr><td colSpan={7} className="text-center py-6 text-slate-400">Chargement des ventes...</td></tr>
               ) : filteredVentes.length === 0 ? (
                 <tr><td colSpan={7} className="text-center py-6 text-slate-400">Aucune vente trouvée.</td></tr>
-              ) : filteredVentes.map((v) => (
-                <tr key={v.id} className="hover:bg-amber-50/30 transition-colors">
-                  <td className="p-3 font-semibold text-slate-900">{v.client_nom}</td>
-                  <td className="p-3 text-slate-500">{v.client_tel || '-'}</td>
-                  <td className="p-3 text-slate-700">{getItemName(v)}</td>
-                  <td className="p-3 font-bold text-slate-900">{formatAmount(v.montant_total)} FCFA</td>
-                  <td className="p-3 text-emerald-600 font-semibold">{formatAmount(v.avance)} FCFA</td>
-                  <td className="p-3 font-bold text-amber-600">{formatAmount(v.reste)} FCFA</td>
-                  <td className="p-3 text-center">
-                    <button
-                      onClick={() => setSelectedVente(v)}
-                      className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-1.5 rounded-md shadow-xs transition-colors"
-                    >
-                      Facture
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              ) : filteredVentes.map((v) => {
+                const total = v.montant_total || 0;
+                const avance = v.avance || 0;
+                const reste = v.reste !== undefined ? v.reste : (total - avance);
+                return (
+                  <tr key={v.id} className="hover:bg-amber-50/30 transition-colors">
+                    <td className="p-3 font-semibold text-slate-900">{v.client_nom}</td>
+                    <td className="p-3 text-slate-500">{v.client_tel || '-'}</td>
+                    <td className="p-3 text-slate-700">{getItemName(v)}</td>
+                    <td className="p-3 font-bold text-slate-900">{formatAmount(total)} FCFA</td>
+                    <td className="p-3 text-emerald-600 font-semibold">{formatAmount(avance)} FCFA</td>
+                    <td className="p-3 font-bold text-amber-600">{formatAmount(reste)} FCFA</td>
+                    <td className="p-3 text-center">
+                      <button
+                        onClick={() => setSelectedVente(v)}
+                        className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-1.5 rounded-md shadow-xs transition-colors cursor-pointer"
+                      >
+                        Facture
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* MODAL NOUVELLE VENTE / ARTICLE */}
+      {/* MODAL NOUVELLE VENTE */}
       {showAddModal && (
         <div 
           onClick={() => setShowAddModal(false)}
@@ -358,7 +372,7 @@ export default function VentesPage() {
           >
             <div className="flex justify-between items-center mb-4 border-b pb-3">
               <h2 className="text-lg font-bold text-slate-900">Nouvelle Vente / Article</h2>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
                 <X size={20} />
               </button>
             </div>
@@ -372,7 +386,7 @@ export default function VentesPage() {
                     required
                     value={formData.client_nom}
                     onChange={(e) => handleFormChange('client_nom', e.target.value)}
-                    className="w-full p-2 border rounded-md bg-slate-50"
+                    className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
                   />
                 </div>
                 <div>
@@ -381,7 +395,7 @@ export default function VentesPage() {
                     type="text"
                     value={formData.client_tel}
                     onChange={(e) => handleFormChange('client_tel', e.target.value)}
-                    className="w-full p-2 border rounded-md bg-slate-50"
+                    className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
                   />
                 </div>
               </div>
@@ -391,10 +405,10 @@ export default function VentesPage() {
                 <input
                   type="text"
                   required
-                  placeholder="Ex: Diaspora (x2), Boubou VIP..."
+                  placeholder="Ex: Diaspora, Boubou VIP..."
                   value={formData.designation}
                   onChange={(e) => handleFormChange('designation', e.target.value)}
-                  className="w-full p-2 border rounded-md bg-slate-50"
+                  className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
                 />
               </div>
 
@@ -406,7 +420,7 @@ export default function VentesPage() {
                     min="1"
                     value={formData.quantite}
                     onChange={(e) => handleFormChange('quantite', e.target.value)}
-                    className="w-full p-2 border rounded-md bg-slate-50"
+                    className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
                   />
                 </div>
                 <div>
@@ -414,9 +428,10 @@ export default function VentesPage() {
                   <input
                     type="number"
                     min="0"
+                    placeholder="ex: 50000"
                     value={formData.prix_unitaire}
                     onChange={(e) => handleFormChange('prix_unitaire', e.target.value)}
-                    className="w-full p-2 border rounded-md bg-slate-50"
+                    className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
                   />
                 </div>
                 <div>
@@ -425,7 +440,7 @@ export default function VentesPage() {
                     type="number"
                     readOnly
                     value={formData.montant_total}
-                    className="w-full p-2 border rounded-md bg-slate-100 font-bold"
+                    className="w-full p-2 border border-slate-200 rounded-md bg-slate-100 font-bold"
                   />
                 </div>
               </div>
@@ -436,9 +451,10 @@ export default function VentesPage() {
                   <input
                     type="number"
                     min="0"
+                    placeholder="ex: 20000"
                     value={formData.avance}
                     onChange={(e) => handleFormChange('avance', e.target.value)}
-                    className="w-full p-2 border rounded-md bg-slate-50 text-emerald-600 font-bold"
+                    className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none text-emerald-600 font-bold"
                   />
                 </div>
                 <div>
@@ -447,7 +463,7 @@ export default function VentesPage() {
                     type="number"
                     readOnly
                     value={formData.reste}
-                    className="w-full p-2 border rounded-md bg-amber-50 text-amber-700 font-bold"
+                    className="w-full p-2 border border-slate-200 rounded-md bg-amber-50 text-amber-700 font-bold"
                   />
                 </div>
               </div>
@@ -459,7 +475,7 @@ export default function VentesPage() {
                   value={formData.observations}
                   onChange={(e) => handleFormChange('observations', e.target.value)}
                   placeholder="Notes sur la livraison ou commande..."
-                  className="w-full p-2 border rounded-md bg-slate-50"
+                  className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
                 ></textarea>
               </div>
 
@@ -467,13 +483,13 @@ export default function VentesPage() {
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-200 text-slate-700 font-semibold"
+                  className="px-4 py-2 rounded-lg bg-slate-200 text-slate-700 font-semibold cursor-pointer"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold"
+                  className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold cursor-pointer"
                 >
                   Enregistrer
                 </button>
@@ -493,19 +509,19 @@ export default function VentesPage() {
             onClick={(e) => e.stopPropagation()}
             className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative border border-slate-200 my-8"
           >
-            {/* Barre d'action sup */}
+            {/* Barre d'action */}
             <div className="flex justify-between items-center mb-6 border-b pb-4">
               <div className="flex items-center gap-2">
                 <button
                   onClick={handlePrint}
-                  className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors"
+                  className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                 >
                   <Printer size={15} /> Imprimer
                 </button>
                 <button
                   onClick={handleSharePDFWhatsApp}
                   disabled={exporting}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors disabled:opacity-50"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   <Share2 size={15} /> {exporting ? 'Génération...' : 'WhatsApp (PDF)'}
                 </button>
@@ -513,13 +529,13 @@ export default function VentesPage() {
 
               <button
                 onClick={() => setSelectedVente(null)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 transition-colors"
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 <X size={20} />
               </button>
             </div>
 
-            {/* Facture à l'écran */}
+            {/* Facture visuelle */}
             <div className="p-6 border-2 border-amber-600/80 rounded-xl bg-white space-y-6">
               
               <div className="flex justify-between items-start">
@@ -594,7 +610,7 @@ export default function VentesPage() {
                   </div>
                   <div className="flex justify-between py-1.5 px-2 bg-amber-600 text-white font-bold rounded-md">
                     <span>RESTE À PAYER :</span>
-                    <span>{formatAmount(selectedVente.reste)} FCFA</span>
+                    <span>{formatAmount(selectedVente.reste !== undefined ? selectedVente.reste : ((selectedVente.montant_total || 0) - (selectedVente.avance || 0)))} FCFA</span>
                   </div>
                 </div>
               </div>
