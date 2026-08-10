@@ -32,7 +32,6 @@ export default function VentesPage() {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
-  // Valeurs initiales avec des chaînes vides
   const [formData, setFormData] = useState({
     client_nom: '',
     client_tel: '',
@@ -58,7 +57,6 @@ export default function VentesPage() {
     fetchVentes();
   }, []);
 
-  // Calculs dynamiques pour l'affichage
   const qtyNum = Number(formData.quantite) || 0;
   const puNum = Number(formData.prix_unitaire) || 0;
   const montantTotalCalcul = qtyNum * puNum;
@@ -90,7 +88,6 @@ export default function VentesPage() {
 
     if (error) {
       console.error('Erreur Supabase:', error);
-      // Fallback si des colonnes manquent dans la base
       const fallbackPayload = {
         client_nom: formData.client_nom,
         client_tel: formData.client_tel,
@@ -121,14 +118,16 @@ export default function VentesPage() {
     fetchVentes();
   };
 
+  // Formate les montants et remplace les caractères insécables générés par toLocaleString
   const formatAmount = (val: number | undefined | null) => {
-    return (Number(val) || 0).toLocaleString('fr-FR');
+    return (Number(val) || 0).toLocaleString('fr-FR').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ');
   };
 
   const getItemName = (v: Vente) => {
     return v.designation || v.article || v.description || v.modele || 'Article sur mesure';
   };
 
+  // Génération du PDF strictement identique au rendu Web
   const handleSharePDFWhatsApp = async () => {
     if (!selectedVente) return;
     setExporting(true);
@@ -140,46 +139,79 @@ export default function VentesPage() {
         const jsPDF = jsPDFModule.jsPDF || jsPDFModule.default;
         const autoTable = autoTableModule.default || autoTableModule;
 
-        const doc = new jsPDF();
-
-        doc.setFontSize(22);
-        doc.setTextColor(180, 83, 9);
-        doc.text('Ousmane Design', 14, 20);
-
-        doc.setFontSize(9);
-        doc.setTextColor(100);
-        doc.text('CREATION & COUTURE CONTEMPORAINE', 14, 25);
-
-        doc.setFontSize(9);
-        doc.setTextColor(50);
-        doc.text('Hann Maristes, Dakar, Senegal', 130, 18);
-        doc.text('Tel: 77 646 21 02 / 70 348 26 82', 130, 23);
-        doc.text('Email: @ousmanedesign.sn', 130, 28);
-
-        doc.setLineWidth(0.5);
-        doc.setDrawColor(217, 119, 6);
-        doc.line(14, 33, 196, 33);
-
-        const formattedDate = selectedVente.created_at 
-          ? new Date(selectedVente.created_at).toLocaleDateString('fr-FR')
-          : new Date().toLocaleDateString('fr-FR');
-
-        doc.setFontSize(10);
-        doc.setTextColor(0);
-        doc.text(`Client : ${selectedVente.client_nom || 'Client'}`, 14, 43);
-        doc.text(`Telephone : ${selectedVente.client_tel || 'N/A'}`, 14, 49);
-        doc.text(`Date : ${formattedDate}`, 14, 55);
-
-        doc.text(`Mode de commande : ${selectedVente.mode_commande || 'Pret-a-porter'}`, 120, 43);
-        doc.text(`Mode de paiement : ${selectedVente.mode_paiement || 'Especes'}`, 120, 49);
+        const doc = new jsPDF({ unit: 'mm', format: 'a4' });
 
         const mTotal = selectedVente.montant_total || 0;
         const mAvance = selectedVente.avance || 0;
         const mReste = selectedVente.reste !== undefined ? selectedVente.reste : (mTotal - mAvance);
+        const formattedDate = selectedVente.created_at 
+          ? new Date(selectedVente.created_at).toLocaleDateString('fr-FR')
+          : new Date().toLocaleDateString('fr-FR');
 
+        // Cadre extérieur orange autour de la facture
+        doc.setLineWidth(0.6);
+        doc.setDrawColor(217, 119, 6);
+        doc.roundedRect(10, 10, 190, 277, 3, 3, 'S');
+
+        // En-tête : Ousmane Design
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(22);
+        doc.setTextColor(120, 53, 15);
+        doc.text('Ousmane Design', 16, 25);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(217, 119, 6);
+        doc.text('CREATION & COUTURE CONTEMPORAINE', 16, 30);
+
+        // Bloc Coordonnées (à droite)
+        doc.setDrawColor(254, 215, 170);
+        doc.setFillColor(255, 251, 235);
+        doc.roundedRect(125, 16, 70, 22, 2, 2, 'FD');
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(51, 65, 85);
+        doc.text('Hann Maristes, Dakar, Senegal', 129, 22);
+        doc.text('Tel: 77 646 21 02 / 70 348 26 82', 129, 28);
+        doc.text('Email: @ousmanedesign.sn', 129, 34);
+
+        // Bloc Infos Client & Commande
+        doc.roundedRect(16, 45, 179, 24, 2, 2, 'FD');
+
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(30, 41, 59);
+        doc.text('Nom du client :', 20, 52);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${selectedVente.client_nom || ''}`, 48, 52);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text('Telephone :', 20, 58);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(217, 119, 6);
+        doc.text(`${selectedVente.client_tel || '-'}`, 48, 58);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(30, 41, 59);
+        doc.text('Date :', 20, 64);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${formattedDate}`, 48, 64);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text('Mode de commande :', 110, 52);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${selectedVente.mode_commande || 'Pret-a-porter'}`, 148, 52);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text('Mode de paiement :', 110, 58);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${selectedVente.mode_paiement || 'Especes'}`, 148, 58);
+
+        // Tableau des articles
         autoTable(doc, {
-          startY: 63,
-          head: [['Designation', 'Quantite', 'Prix Unitaire', 'Total']],
+          startY: 75,
+          margin: { left: 16, right: 15 },
+          head: [['DESIGNATION', 'QUANTITE', 'PRIX UNITAIRE', 'TOTAL']],
           body: [
             [
               getItemName(selectedVente),
@@ -188,32 +220,92 @@ export default function VentesPage() {
               `${formatAmount(mTotal)} FCFA`
             ]
           ],
-          headStyles: { fillColor: [217, 119, 6], textColor: [255, 255, 255], fontStyle: 'bold' },
-          theme: 'striped',
+          headStyles: { 
+            fillColor: [217, 119, 6], 
+            textColor: [255, 255, 255], 
+            fontStyle: 'bold',
+            fontSize: 9,
+            halign: 'left'
+          },
+          columnStyles: {
+            0: { halign: 'left', cellWidth: 'auto' },
+            1: { halign: 'center', cellWidth: 30 },
+            2: { halign: 'right', cellWidth: 45 },
+            3: { halign: 'right', cellWidth: 45, fontStyle: 'bold' }
+          },
+          bodyStyles: {
+            fontSize: 9,
+            textColor: [30, 41, 59]
+          },
+          theme: 'plain',
         });
 
-        const finalY = (doc as any).lastAutoTable?.finalY || 100;
+        // @ts-ignore
+        const finalY = (doc as any).lastAutoTable?.finalY || 105;
 
-        doc.setFontSize(10);
-        doc.text(`Montant Total : ${formatAmount(mTotal)} FCFA`, 120, finalY + 10);
-        doc.text(`Avance Versee : ${formatAmount(mAvance)} FCFA`, 120, finalY + 16);
-        doc.setFontSize(11);
-        doc.setTextColor(217, 119, 6);
-        doc.text(`Reste a payer : ${formatAmount(mReste)} FCFA`, 120, finalY + 23);
+        // Bloc Observations (gauche)
+        doc.setDrawColor(226, 232, 240);
+        doc.setFillColor(248, 250, 252);
+        doc.roundedRect(16, finalY + 8, 85, 32, 2, 2, 'FD');
 
-        doc.setFontSize(9);
-        doc.setTextColor(100);
-        doc.text(`Observations : ${selectedVente.observations || 'Articles livres en parfait etat.'}`, 14, finalY + 10);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(51, 65, 85);
+        doc.text('OBSERVATIONS :', 20, finalY + 15);
+        
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(100, 116, 139);
+        const obsText = selectedVente.observations || 'Articles livres en parfait etat.';
+        doc.text(doc.splitTextToSize(obsText, 77), 20, finalY + 22);
 
-        doc.setTextColor(0);
-        doc.setFontSize(9);
-        doc.text('Signature Client :', 25, finalY + 45);
-        doc.text('Ousmane Design (Signature & Cachet) :', 110, finalY + 45);
+        // Totaux financiers (droite)
+        const totalX = 110;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(71, 85, 105);
+
+        doc.text('MONTANT TOTAL :', totalX, finalY + 14);
+        doc.setTextColor(15, 23, 42);
+        doc.text(`${formatAmount(mTotal)} FCFA`, 190, finalY + 14, { align: 'right' });
+
+        doc.setDrawColor(241, 245, 249);
+        doc.line(totalX, finalY + 17, 190, finalY + 17);
+
+        doc.setTextColor(71, 85, 105);
+        doc.text('AVANCE VERSEE :', totalX, finalY + 23);
+        doc.setTextColor(16, 185, 129);
+        doc.text(`${formatAmount(mAvance)} FCFA`, 190, finalY + 23, { align: 'right' });
+
+        doc.line(totalX, finalY + 26, 190, finalY + 26);
+
+        // Encadré Reste à Payer (Orange)
+        doc.setFillColor(217, 119, 6);
+        doc.roundedRect(totalX - 2, finalY + 29, 83, 10, 1.5, 1.5, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 255, 255);
+        doc.text('RESTE A PAYER :', totalX + 2, finalY + 35.5);
+        doc.text(`${formatAmount(mReste)} FCFA`, 188, finalY + 35.5, { align: 'right' });
+
+        // Signatures en bas
+        const sigY = finalY + 65;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(51, 65, 85);
+        doc.text('SIGNATURE DU CLIENT', 35, sigY, { align: 'center' });
+        doc.text('OUSMANE DESIGN (SIGNATURE & CACHET)', 145, sigY, { align: 'center' });
+
+        // Lignes pointillées pour signatures
+        doc.setLineWidth(0.3);
+        doc.setDrawColor(203, 213, 225);
+        doc.setLineDashPattern([1, 1], 0);
+        doc.line(16, sigY + 12, 85, sigY + 12);
+        doc.line(110, sigY + 12, 185, sigY + 12);
 
         const safeName = (selectedVente.client_nom || 'Client').replace(/\s+/g, '_');
         doc.save(`Facture_${safeName}.pdf`);
       }
 
+      // Envoi WhatsApp
       let cleanPhone = (selectedVente.client_tel || '').replace(/\s+/g, '').replace(/[^0-9]/g, '');
       if (cleanPhone.length === 9) cleanPhone = '221' + cleanPhone;
 
@@ -224,9 +316,9 @@ export default function VentesPage() {
       const textMsg = `Bonjour ${selectedVente.client_nom},\n\nVoici votre facture de chez *Ousmane Design* :\n` +
         `- Article : ${getItemName(selectedVente)}\n` +
         `- Total : ${formatAmount(mTotal)} FCFA\n` +
-        `- Avance : ${formatAmount(mAvance)} FCFA\n` +
-        `- Reste : ${formatAmount(mReste)} FCFA\n\n` +
-        `Le fichier PDF a ete telecharge. Merci pour votre confiance !`;
+        `- Avance versée : ${formatAmount(mAvance)} FCFA\n` +
+        `- Reste à payer : ${formatAmount(mReste)} FCFA\n\n` +
+        `Le fichier PDF de votre facture a été téléchargé. Merci pour votre confiance !`;
 
       const waUrl = cleanPhone 
         ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(textMsg)}`
@@ -465,7 +557,7 @@ export default function VentesPage() {
         </div>
       )}
 
-      {/* MODAL FACTURE */}
+      {/* MODAL FACTURE VISUELLE */}
       {selectedVente && (
         <div 
           onClick={() => setSelectedVente(null)}
@@ -540,10 +632,10 @@ export default function VentesPage() {
               <table className="w-full text-xs text-left border-collapse">
                 <thead>
                   <tr className="bg-amber-600 text-white font-bold uppercase">
-                    <th className="p-2.5 rounded-tl-lg">Désignation</th>
-                    <th className="p-2.5 text-center">Quantité</th>
-                    <th className="p-2.5 text-right">Prix Unitaire</th>
-                    <th className="p-2.5 text-right rounded-tr-lg">Total</th>
+                    <th className="p-2.5 rounded-tl-lg">DÉSIGNATION</th>
+                    <th className="p-2.5 text-center">QUANTITÉ</th>
+                    <th className="p-2.5 text-right">PRIX UNITAIRE</th>
+                    <th className="p-2.5 text-right rounded-tr-lg">TOTAL</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-amber-100 border-b border-amber-200">
@@ -580,11 +672,11 @@ export default function VentesPage() {
 
               <div className="pt-6 grid grid-cols-2 gap-8 text-[11px] text-center font-bold text-slate-700">
                 <div>
-                  <p className="uppercase tracking-wider">Signature du Client</p>
+                  <p className="uppercase tracking-wider">SIGNATURE DU CLIENT</p>
                   <div className="mt-8 border-b border-dashed border-slate-300"></div>
                 </div>
                 <div>
-                  <p className="uppercase tracking-wider">Ousmane Design (Signature & Cachet)</p>
+                  <p className="uppercase tracking-wider">OUSMANE DESIGN (SIGNATURE & CACHET)</p>
                   <div className="mt-8 border-b border-dashed border-slate-300"></div>
                 </div>
               </div>
