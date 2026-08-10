@@ -118,7 +118,6 @@ export default function VentesPage() {
     fetchVentes();
   };
 
-  // Formate les montants et remplace les caractères insécables générés par toLocaleString
   const formatAmount = (val: number | undefined | null) => {
     return (Number(val) || 0).toLocaleString('fr-FR').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ');
   };
@@ -127,7 +126,6 @@ export default function VentesPage() {
     return v.designation || v.article || v.description || v.modele || 'Article sur mesure';
   };
 
-  // Génération du PDF strictement identique au rendu Web
   const handleSharePDFWhatsApp = async () => {
     if (!selectedVente) return;
     setExporting(true);
@@ -148,12 +146,12 @@ export default function VentesPage() {
           ? new Date(selectedVente.created_at).toLocaleDateString('fr-FR')
           : new Date().toLocaleDateString('fr-FR');
 
-        // Cadre extérieur orange autour de la facture
-        doc.setLineWidth(0.6);
+        // 1. Cadre extérieur ambre
+        doc.setLineWidth(0.8);
         doc.setDrawColor(217, 119, 6);
         doc.roundedRect(10, 10, 190, 277, 3, 3, 'S');
 
-        // En-tête : Ousmane Design
+        // 2. En-tête : Titre & Sous-titre
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(22);
         doc.setTextColor(120, 53, 15);
@@ -164,52 +162,81 @@ export default function VentesPage() {
         doc.setTextColor(217, 119, 6);
         doc.text('CREATION & COUTURE CONTEMPORAINE', 16, 30);
 
-        // Bloc Coordonnées (à droite)
+        // 3. Bloc Coordonnées (En haut à droite avec icônes visuelles)
         doc.setDrawColor(254, 215, 170);
         doc.setFillColor(255, 251, 235);
-        doc.roundedRect(125, 16, 70, 22, 2, 2, 'FD');
+        doc.roundedRect(118, 15, 77, 24, 2, 2, 'FD');
 
-        doc.setFont('helvetica', 'normal');
+        // Dessin des icônes de contact
+        // Icône Adresse (Pin/Cercle)
+        doc.setFillColor(217, 119, 6);
+        doc.circle(123, 21, 1.8, 'F');
+        doc.setFont('helvetica', 'bold');
         doc.setFontSize(8);
-        doc.setTextColor(51, 65, 85);
-        doc.text('Hann Maristes, Dakar, Senegal', 129, 22);
-        doc.text('Tel: 77 646 21 02 / 70 348 26 82', 129, 28);
-        doc.text('Email: @ousmanedesign.sn', 129, 34);
+        doc.setTextColor(30, 41, 59);
+        doc.text('Hann Maristes, Dakar, Senegal', 127, 22);
 
-        // Bloc Infos Client & Commande
-        doc.roundedRect(16, 45, 179, 24, 2, 2, 'FD');
+        // Icône Téléphone
+        doc.setFillColor(217, 119, 6);
+        doc.circle(123, 27, 1.8, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(30, 41, 59);
+        doc.text('Tel: 77 646 21 02 / 70 348 26 82', 127, 28);
+
+        // Icône Email
+        doc.setFillColor(217, 119, 6);
+        doc.circle(123, 33, 1.8, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(30, 41, 59);
+        doc.text('Email: @ousmanedesign.sn', 127, 34);
+
+        // 4. Bloc Infos Client (Fond ultra clair, haute lisibilité)
+        doc.setDrawColor(254, 215, 170);
+        doc.setFillColor(255, 251, 235);
+        doc.roundedRect(16, 45, 179, 25, 2, 2, 'FD');
+
+        // Ligne 1 : Client & Mode de commande
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(30, 41, 59);
+        doc.text('Nom du client :', 20, 52);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(15, 23, 42);
+        doc.text(`${selectedVente.client_nom || ''}`, 50, 52);
 
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(30, 41, 59);
-        doc.text('Nom du client :', 20, 52);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`${selectedVente.client_nom || ''}`, 48, 52);
+        doc.text('Mode de commande :', 112, 52);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(15, 23, 42);
+        doc.text(`${selectedVente.mode_commande || 'Pret-a-porter'}`, 150, 52);
+
+        // Ligne 2 : Téléphone & Mode de paiement
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(30, 41, 59);
+        doc.text('Telephone :', 20, 58);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(217, 119, 6);
+        doc.text(`${selectedVente.client_tel || '-'}`, 50, 58);
 
         doc.setFont('helvetica', 'bold');
-        doc.text('Telephone :', 20, 58);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(217, 119, 6);
-        doc.text(`${selectedVente.client_tel || '-'}`, 48, 58);
+        doc.setTextColor(30, 41, 59);
+        doc.text('Mode de paiement :', 112, 58);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(15, 23, 42);
+        doc.text(`${selectedVente.mode_paiement || 'Especes'}`, 150, 58);
 
+        // Ligne 3 : Date
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(30, 41, 59);
         doc.text('Date :', 20, 64);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`${formattedDate}`, 48, 64);
-
         doc.setFont('helvetica', 'bold');
-        doc.text('Mode de commande :', 110, 52);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`${selectedVente.mode_commande || 'Pret-a-porter'}`, 148, 52);
+        doc.setTextColor(15, 23, 42);
+        doc.text(`${formattedDate}`, 50, 64);
 
-        doc.setFont('helvetica', 'bold');
-        doc.text('Mode de paiement :', 110, 58);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`${selectedVente.mode_paiement || 'Especes'}`, 148, 58);
-
-        // Tableau des articles
+        // 5. Tableau des articles
         autoTable(doc, {
-          startY: 75,
+          startY: 76,
           margin: { left: 16, right: 15 },
           head: [['DESIGNATION', 'QUANTITE', 'PRIX UNITAIRE', 'TOTAL']],
           body: [
@@ -235,7 +262,8 @@ export default function VentesPage() {
           },
           bodyStyles: {
             fontSize: 9,
-            textColor: [30, 41, 59]
+            textColor: [30, 41, 59],
+            fontStyle: 'bold'
           },
           theme: 'plain',
         });
@@ -243,13 +271,13 @@ export default function VentesPage() {
         // @ts-ignore
         const finalY = (doc as any).lastAutoTable?.finalY || 105;
 
-        // Bloc Observations (gauche)
+        // 6. Bloc Observations
         doc.setDrawColor(226, 232, 240);
         doc.setFillColor(248, 250, 252);
         doc.roundedRect(16, finalY + 8, 85, 32, 2, 2, 'FD');
 
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8);
+        doc.setFontSize(8.5);
         doc.setTextColor(51, 65, 85);
         doc.text('OBSERVATIONS :', 20, finalY + 15);
         
@@ -258,12 +286,13 @@ export default function VentesPage() {
         const obsText = selectedVente.observations || 'Articles livres en parfait etat.';
         doc.text(doc.splitTextToSize(obsText, 77), 20, finalY + 22);
 
-        // Totaux financiers (droite)
+        // 7. Totaux Financiers (Texte en gras)
         const totalX = 110;
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8.5);
-        doc.setTextColor(71, 85, 105);
+        doc.setFontSize(9);
 
+        // Montant Total
+        doc.setTextColor(51, 65, 85);
         doc.text('MONTANT TOTAL :', totalX, finalY + 14);
         doc.setTextColor(15, 23, 42);
         doc.text(`${formatAmount(mTotal)} FCFA`, 190, finalY + 14, { align: 'right' });
@@ -271,14 +300,15 @@ export default function VentesPage() {
         doc.setDrawColor(241, 245, 249);
         doc.line(totalX, finalY + 17, 190, finalY + 17);
 
-        doc.setTextColor(71, 85, 105);
+        // Avance Versée
+        doc.setTextColor(51, 65, 85);
         doc.text('AVANCE VERSEE :', totalX, finalY + 23);
         doc.setTextColor(16, 185, 129);
         doc.text(`${formatAmount(mAvance)} FCFA`, 190, finalY + 23, { align: 'right' });
 
         doc.line(totalX, finalY + 26, 190, finalY + 26);
 
-        // Encadré Reste à Payer (Orange)
+        // Encadré Reste à Payer (Orange vif)
         doc.setFillColor(217, 119, 6);
         doc.roundedRect(totalX - 2, finalY + 29, 83, 10, 1.5, 1.5, 'F');
         doc.setFont('helvetica', 'bold');
@@ -286,15 +316,14 @@ export default function VentesPage() {
         doc.text('RESTE A PAYER :', totalX + 2, finalY + 35.5);
         doc.text(`${formatAmount(mReste)} FCFA`, 188, finalY + 35.5, { align: 'right' });
 
-        // Signatures en bas
+        // 8. Signatures en bas
         const sigY = finalY + 65;
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8);
+        doc.setFontSize(8.5);
         doc.setTextColor(51, 65, 85);
         doc.text('SIGNATURE DU CLIENT', 35, sigY, { align: 'center' });
         doc.text('OUSMANE DESIGN (SIGNATURE & CACHET)', 145, sigY, { align: 'center' });
 
-        // Lignes pointillées pour signatures
         doc.setLineWidth(0.3);
         doc.setDrawColor(203, 213, 225);
         doc.setLineDashPattern([1, 1], 0);
@@ -305,7 +334,7 @@ export default function VentesPage() {
         doc.save(`Facture_${safeName}.pdf`);
       }
 
-      // Envoi WhatsApp
+      // Redirection WhatsApp avec message pré-rempli
       let cleanPhone = (selectedVente.client_tel || '').replace(/\s+/g, '').replace(/[^0-9]/g, '');
       if (cleanPhone.length === 9) cleanPhone = '221' + cleanPhone;
 
@@ -601,31 +630,31 @@ export default function VentesPage() {
                   </p>
                 </div>
 
-                <div className="border border-amber-200/80 bg-amber-50/30 p-2.5 rounded-lg text-[11px] text-slate-700 space-y-1">
-                  <div className="flex items-center gap-1.5">
-                    <MapPin size={13} className="text-amber-700 shrink-0" />
+                <div className="border border-amber-200 bg-amber-50/50 p-3 rounded-lg text-xs text-slate-800 space-y-1.5 font-medium shadow-2xs">
+                  <div className="flex items-center gap-2">
+                    <MapPin size={14} className="text-amber-600 shrink-0" />
                     <span>Hann Maristes, Dakar, Sénégal</span>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <Phone size={13} className="text-amber-700 shrink-0" />
+                  <div className="flex items-center gap-2">
+                    <Phone size={14} className="text-amber-600 shrink-0" />
                     <span>77 646 21 02 / 70 348 26 82</span>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <Mail size={13} className="text-amber-700 shrink-0" />
+                  <div className="flex items-center gap-2">
+                    <Mail size={14} className="text-amber-600 shrink-0" />
                     <span>@ousmanedesign.sn</span>
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 border border-amber-200 rounded-lg p-3 bg-amber-50/20 text-xs">
-                <div className="space-y-1">
-                  <p><strong className="text-slate-800">Nom du client :</strong> {selectedVente.client_nom}</p>
-                  <p><strong className="text-slate-800">Téléphone :</strong> <span className="text-amber-700 font-medium">{selectedVente.client_tel || '-'}</span></p>
-                  <p><strong className="text-slate-800">Date :</strong> {selectedVente.created_at ? new Date(selectedVente.created_at).toLocaleDateString('fr-FR') : new Date().toLocaleDateString('fr-FR')}</p>
+              <div className="grid grid-cols-2 gap-4 border border-amber-200 rounded-lg p-3 bg-amber-50/30 text-xs">
+                <div className="space-y-1.5">
+                  <p><strong className="text-slate-900">Nom du client :</strong> <span className="font-bold text-slate-900">{selectedVente.client_nom}</span></p>
+                  <p><strong className="text-slate-900">Téléphone :</strong> <span className="text-amber-700 font-bold">{selectedVente.client_tel || '-'}</span></p>
+                  <p><strong className="text-slate-900">Date :</strong> <span className="font-bold text-slate-800">{selectedVente.created_at ? new Date(selectedVente.created_at).toLocaleDateString('fr-FR') : new Date().toLocaleDateString('fr-FR')}</span></p>
                 </div>
-                <div className="space-y-1">
-                  <p><strong className="text-slate-800">Mode de commande :</strong> {selectedVente.mode_commande || 'Prêt-à-porter'}</p>
-                  <p><strong className="text-slate-800">Mode de paiement :</strong> {selectedVente.mode_paiement || 'Espèces'}</p>
+                <div className="space-y-1.5">
+                  <p><strong className="text-slate-900">Mode de commande :</strong> <span className="font-bold text-slate-800">{selectedVente.mode_commande || 'Prêt-à-porter'}</span></p>
+                  <p><strong className="text-slate-900">Mode de paiement :</strong> <span className="font-bold text-slate-800">{selectedVente.mode_paiement || 'Espèces'}</span></p>
                 </div>
               </div>
 
@@ -640,9 +669,9 @@ export default function VentesPage() {
                 </thead>
                 <tbody className="divide-y divide-amber-100 border-b border-amber-200">
                   <tr>
-                    <td className="p-2.5 font-medium text-slate-800">{getItemName(selectedVente)}</td>
-                    <td className="p-2.5 text-center">{selectedVente.quantite || 1}</td>
-                    <td className="p-2.5 text-right">{formatAmount(selectedVente.prix_unitaire || selectedVente.montant_total)} FCFA</td>
+                    <td className="p-2.5 font-bold text-slate-900">{getItemName(selectedVente)}</td>
+                    <td className="p-2.5 text-center font-bold">{selectedVente.quantite || 1}</td>
+                    <td className="p-2.5 text-right font-bold">{formatAmount(selectedVente.prix_unitaire || selectedVente.montant_total)} FCFA</td>
                     <td className="p-2.5 text-right font-bold text-slate-900">{formatAmount(selectedVente.montant_total)} FCFA</td>
                   </tr>
                 </tbody>
@@ -650,17 +679,17 @@ export default function VentesPage() {
 
               <div className="grid grid-cols-2 gap-4 text-xs">
                 <div className="border border-slate-200 rounded-lg p-3 bg-slate-50/50">
-                  <p className="font-bold text-slate-700 mb-1">OBSERVATIONS :</p>
-                  <p className="text-slate-500 italic">{selectedVente.observations || 'Articles livrés en parfait état.'}</p>
+                  <p className="font-bold text-slate-800 mb-1">OBSERVATIONS :</p>
+                  <p className="text-slate-600 italic font-medium">{selectedVente.observations || 'Articles livrés en parfait état.'}</p>
                 </div>
 
                 <div className="space-y-1.5 text-right">
                   <div className="flex justify-between py-1 px-2 border-b border-slate-100">
-                    <span className="text-slate-600 font-semibold">MONTANT TOTAL :</span>
+                    <span className="text-slate-700 font-bold">MONTANT TOTAL :</span>
                     <span className="font-bold text-slate-900">{formatAmount(selectedVente.montant_total)} FCFA</span>
                   </div>
                   <div className="flex justify-between py-1 px-2 border-b border-slate-100">
-                    <span className="text-slate-600 font-semibold">AVANCE VERSÉE :</span>
+                    <span className="text-slate-700 font-bold">AVANCE VERSÉE :</span>
                     <span className="font-bold text-emerald-600">{formatAmount(selectedVente.avance)} FCFA</span>
                   </div>
                   <div className="flex justify-between py-1.5 px-2 bg-amber-600 text-white font-bold rounded-md">
@@ -670,7 +699,7 @@ export default function VentesPage() {
                 </div>
               </div>
 
-              <div className="pt-6 grid grid-cols-2 gap-8 text-[11px] text-center font-bold text-slate-700">
+              <div className="pt-6 grid grid-cols-2 gap-8 text-[11px] text-center font-bold text-slate-800">
                 <div>
                   <p className="uppercase tracking-wider">SIGNATURE DU CLIENT</p>
                   <div className="mt-8 border-b border-dashed border-slate-300"></div>
