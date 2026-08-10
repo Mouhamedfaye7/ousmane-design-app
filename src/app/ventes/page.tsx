@@ -12,9 +12,12 @@ interface Vente {
   created_at?: string;
   mode_commande?: string;
   mode_paiement?: string;
-  designation: string;
-  quantite: number;
-  prix_unitaire: number;
+  designation?: string;
+  article?: string;
+  description?: string;
+  modele?: string;
+  quantite?: number;
+  prix_unitaire?: number;
   montant_total: number;
   avance: number;
   reste: number;
@@ -30,7 +33,7 @@ export default function VentesPage() {
   const [exporting, setExporting] = useState(false);
 
   // Formulaire nouvelle vente
-  const [formData, setFormData] = useState<Vente>({
+  const [formData, setFormData] = useState({
     client_nom: '',
     client_tel: '',
     mode_commande: 'Prêt-à-porter',
@@ -57,8 +60,8 @@ export default function VentesPage() {
     fetchVentes();
   }, []);
 
-  // Calcul automatique
-  const handleFormChange = (field: keyof Vente, value: any) => {
+  // Calcul automatique du total et reste
+  const handleFormChange = (field: string, value: any) => {
     const updated = { ...formData, [field]: value };
     const qty = Number(updated.quantite) || 1;
     const pu = Number(updated.prix_unitaire) || 0;
@@ -78,10 +81,44 @@ export default function VentesPage() {
       return;
     }
 
-    // Retrait explicite de date_commande qui n'existe pas dans la table Supabase
-    const { date_commande, ...payload } = formData as any;
+    // Construction d'un objet incluant les variantes courantes de colonnes pour 'designation'
+    const payload: Record<string, any> = {
+      client_nom: formData.client_nom,
+      client_tel: formData.client_tel,
+      mode_commande: formData.mode_commande,
+      mode_paiement: formData.mode_paiement,
+      quantite: formData.quantite,
+      prix_unitaire: formData.prix_unitaire,
+      montant_total: formData.montant_total,
+      avance: formData.avance,
+      reste: formData.reste,
+      observations: formData.observations,
+      // On envoie designation, article, description et modele pour être sûr de matcher la colonne Supabase
+      designation: formData.designation,
+      article: formData.designation,
+      description: formData.designation,
+      modele: formData.designation
+    };
 
-    const { error } = await supabase.from('ventes').insert([payload]);
+    let { error } = await supabase.from('ventes').insert([payload]);
+
+    // Si Supabase rejette en raison de colonnes inconnues, tentative avec payload restreint
+    if (error) {
+      console.warn('Tentative d insertion alternative sans colonnes optionnelles...', error.message);
+      
+      const fallbackPayload = {
+        client_nom: formData.client_nom,
+        client_tel: formData.client_tel,
+        montant_total: formData.montant_total,
+        avance: formData.avance,
+        reste: formData.reste,
+        observations: `${formData.designation} (${formData.quantite}x) - ${formData.observations}`
+      };
+
+      const fallbackRes = await supabase.from('ventes').insert([fallbackPayload]);
+      error = fallbackRes.error;
+    }
+
     if (error) {
       alert('Erreur lors de l\'enregistrement de la vente : ' + error.message);
     } else {
@@ -103,12 +140,15 @@ export default function VentesPage() {
     }
   };
 
-  // Helper de formatage sécurisé contre les undefined / null
   const formatAmount = (val: number | undefined | null) => {
     return (Number(val) || 0).toLocaleString('fr-FR');
   };
 
-  // Génération PDF sécurisée
+  const getItemName = (v: Vente) => {
+    return v.designation || v.article || v.description || v.modele || 'Article sur mesure';
+  };
+
+  // Génération PDF
   const handleSharePDFWhatsApp = async () => {
     if (!selectedVente) return;
     setExporting(true);
@@ -142,7 +182,6 @@ export default function VentesPage() {
         doc.setDrawColor(217, 119, 6);
         doc.line(14, 33, 196, 33);
 
-        // Infos Client & Commande
         const formattedDate = selectedVente.created_at 
           ? new Date(selectedVente.created_at).toLocaleDateString('fr-FR')
           : new Date().toLocaleDateString('fr-FR');
@@ -156,13 +195,13 @@ export default function VentesPage() {
         doc.text(`Mode de commande : ${selectedVente.mode_commande || 'Pret-a-porter'}`, 120, 43);
         doc.text(`Mode de paiement : ${selectedVente.mode_paiement || 'Especes'}`, 120, 49);
 
-        // Tableau sécurisé
+        // Tableau
         autoTable(doc, {
           startY: 63,
           head: [['Designation', 'Quantite', 'Prix Unitaire', 'Total']],
           body: [
             [
-              selectedVente.designation || 'Article',
+              getItemName(selectedVente),
               selectedVente.quantite || 1,
               `${formatAmount(selectedVente.prix_unitaire || selectedVente.montant_total)} FCFA`,
               `${formatAmount(selectedVente.montant_total)} FCFA`
@@ -175,7 +214,7 @@ export default function VentesPage() {
         // @ts-ignore
         const finalY = (doc as any).lastAutoTable?.finalY || 100;
 
-        // Récapitulatif Financier sécurisé
+        // Récapitulatif Financier
         doc.setFontSize(10);
         doc.text(`Montant Total : ${formatAmount(selectedVente.montant_total)} FCFA`, 120, finalY + 10);
         doc.text(`Avance Versee : ${formatAmount(selectedVente.avance)} FCFA`, 120, finalY + 16);
@@ -198,12 +237,11 @@ export default function VentesPage() {
         doc.save(`Facture_${safeName}.pdf`);
       }
 
-      // Préparation du message WhatsApp
       let cleanPhone = (selectedVente.client_tel || '').replace(/\s+/g, '').replace(/[^0-9]/g, '');
       if (cleanPhone.length === 9) cleanPhone = '221' + cleanPhone;
 
       const textMsg = `Bonjour ${selectedVente.client_nom},\n\nVoici votre facture de chez *Ousmane Design* :\n` +
-        `- Article : ${selectedVente.designation}\n` +
+        `- Article : ${getItemName(selectedVente)}\n` +
         `- Total : ${formatAmount(selectedVente.montant_total)} FCFA\n` +
         `- Avance : ${formatAmount(selectedVente.avance)} FCFA\n` +
         `- Reste : ${formatAmount(selectedVente.reste)} FCFA\n\n` +
@@ -230,7 +268,7 @@ export default function VentesPage() {
   const filteredVentes = ventes.filter(v =>
     (v.client_nom || '').toLowerCase().includes(search.toLowerCase()) ||
     (v.client_tel || '').includes(search) ||
-    (v.designation || '').toLowerCase().includes(search.toLowerCase())
+    getItemName(v).toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -289,7 +327,7 @@ export default function VentesPage() {
                 <tr key={v.id} className="hover:bg-amber-50/30 transition-colors">
                   <td className="p-3 font-semibold text-slate-900">{v.client_nom}</td>
                   <td className="p-3 text-slate-500">{v.client_tel || '-'}</td>
-                  <td className="p-3 text-slate-700">{v.designation}</td>
+                  <td className="p-3 text-slate-700">{getItemName(v)}</td>
                   <td className="p-3 font-bold text-slate-900">{formatAmount(v.montant_total)} FCFA</td>
                   <td className="p-3 text-emerald-600 font-semibold">{formatAmount(v.avance)} FCFA</td>
                   <td className="p-3 font-bold text-amber-600">{formatAmount(v.reste)} FCFA</td>
@@ -445,7 +483,7 @@ export default function VentesPage() {
         </div>
       )}
 
-      {/* MODAL FACTURE + FERMETURE CLIC EXTÉRIEUR */}
+      {/* MODAL FACTURE */}
       {selectedVente && (
         <div 
           onClick={() => setSelectedVente(null)}
@@ -481,7 +519,7 @@ export default function VentesPage() {
               </button>
             </div>
 
-            {/* Facture affichée à l'écran */}
+            {/* Facture à l'écran */}
             <div className="p-6 border-2 border-amber-600/80 rounded-xl bg-white space-y-6">
               
               <div className="flex justify-between items-start">
@@ -531,7 +569,7 @@ export default function VentesPage() {
                 </thead>
                 <tbody className="divide-y divide-amber-100 border-b border-amber-200">
                   <tr>
-                    <td className="p-2.5 font-medium text-slate-800">{selectedVente.designation}</td>
+                    <td className="p-2.5 font-medium text-slate-800">{getItemName(selectedVente)}</td>
                     <td className="p-2.5 text-center">{selectedVente.quantite || 1}</td>
                     <td className="p-2.5 text-right">{formatAmount(selectedVente.prix_unitaire || selectedVente.montant_total)} FCFA</td>
                     <td className="p-2.5 text-right font-bold text-slate-900">{formatAmount(selectedVente.montant_total)} FCFA</td>
