@@ -28,16 +28,22 @@ export default function Dashboard() {
       setLoading(true);
 
       try {
-        // 1. Récupérer le vrai nombre total de clients depuis la table 'clients'
-        const { count: clientCount, error: clientError } = await supabase
+        // 1. Comptage des clients
+        const { data: clientsData, count: clientCount, error: clientError } = await supabase
           .from('clients')
-          .select('*', { count: 'exact', head: true });
+          .select('id', { count: 'exact' });
 
-        if (!clientError && clientCount !== null) {
-          setTotalClients(clientCount);
+        if (!clientError) {
+          if (typeof clientCount === 'number' && clientCount > 0) {
+            setTotalClients(clientCount);
+          } else if (clientsData) {
+            setTotalClients(clientsData.length);
+          }
+        } else {
+          console.error("Erreur récuperation clients:", clientError);
         }
 
-        // 2. Récupérer les commandes pour l'atelier
+        // 2. Récupération des commandes
         const { data: commandes, error: cmdError } = await supabase
           .from('commandes')
           .select('*');
@@ -59,7 +65,7 @@ export default function Dashboard() {
         setEnCoursCount(enCours);
         setPretesCount(pretes);
 
-        // 3. Récupérer les ventes directes (si la table 'ventes' existe)
+        // 3. Récupération des ventes directes (si existantes)
         const { data: ventes, error: ventError } = await supabase
           .from('ventes')
           .select('*');
@@ -69,11 +75,10 @@ export default function Dashboard() {
           caVentes = ventes.reduce((acc, v) => acc + (Number(v.montant_total) || Number(v.montant) || 0), 0);
         }
 
-        // Chiffre d'affaires global cumulé (Commandes + Ventes)
         setChiffreAffaires(caCommandes + caVentes);
 
       } catch (err) {
-        console.error("Erreur lors du chargement du tableau de bord :", err);
+        console.error("Erreur globale Dashboard :", err);
       } finally {
         setLoading(false);
       }
@@ -81,9 +86,8 @@ export default function Dashboard() {
 
     loadDashboardStats();
 
-    // Écouteur temps réel pour synchroniser instantanément si des modifications ont lieu ailleurs
     const channel = supabase
-      .channel('dashboard-realtime')
+      .channel('dashboard-changes')
       .on('postgres_changes', { event: '*', schema: 'public' }, () => {
         loadDashboardStats();
       })
