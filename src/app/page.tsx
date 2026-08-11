@@ -27,25 +27,26 @@ export default function Dashboard() {
     async function loadDashboardStats() {
       setLoading(true);
 
-      // Fetch depuis la table 'clients'
-      const { data: clientsData, count: clientsCount } = await supabase
-        .from('clients')
-        .select('*', { count: 'exact' });
+      const { data: commandes, error } = await supabase.from('commandes').select('*');
 
-      // Fetch depuis la table 'commandes'
-      const { data: commandes } = await supabase.from('commandes').select('*');
+      if (!error && commandes) {
+        // Total clients uniques à partir des commandes
+        const clientsUniques = new Set(
+          commandes.map(c => (c.client_nom || '').trim().toLowerCase()).filter(Boolean)
+        );
+        setTotalClients(clientsUniques.size);
 
-      setTotalClients(clientsCount || (clientsData ? clientsData.length : 0));
-
-      if (commandes) {
+        // Commandes en cours atelier (Reçue / En Coupe)
         const enCours = commandes.filter(
           c => !c.statut || c.statut === 'Reçue' || c.statut === 'En Coupe'
         ).length;
         setEnCoursCount(enCours);
 
+        // Commandes prêtes
         const pretes = commandes.filter(c => c.statut === 'Prête').length;
         setPretesCount(pretes);
 
+        // Chiffre d'affaires cumulé
         const totalCA = commandes.reduce((acc, c) => acc + (Number(c.montant_total) || 0), 0);
         setChiffreAffaires(totalCA);
       }
@@ -76,13 +77,13 @@ export default function Dashboard() {
           <div className="flex items-center gap-3">
             <Link
               href="/commandes"
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-xs transition-colors text-sm"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-xs transition-colors cursor-pointer text-sm"
             >
               <Plus size={18} /> Nouvelle Vente
             </Link>
             <Link
               href="/commandes"
-              className="bg-amber-700 hover:bg-amber-800 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-xs transition-colors text-sm"
+              className="bg-amber-700 hover:bg-amber-800 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-xs transition-colors cursor-pointer text-sm"
             >
               <Plus size={18} /> Nouvelle Commande
             </Link>
@@ -145,7 +146,7 @@ export default function Dashboard() {
           <h2 className="text-base font-bold text-slate-800">Modules de Gestion</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <Link href="/commandes" className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all group flex items-start gap-4">
+            <Link href="/ventes" className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all group flex items-start gap-4">
               <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl group-hover:scale-105 transition-transform shrink-0">
                 <ShoppingBag size={24} />
               </div>
@@ -181,7 +182,7 @@ export default function Dashboard() {
               </div>
             </Link>
 
-            <Link href="/commandes" className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all group flex items-start gap-4">
+            <Link href="/stock" className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all group flex items-start gap-4">
               <div className="p-3 bg-purple-50 text-purple-600 rounded-xl group-hover:scale-105 transition-transform shrink-0">
                 <Layers size={24} />
               </div>
@@ -193,7 +194,7 @@ export default function Dashboard() {
               </div>
             </Link>
 
-            <Link href="/commandes" className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all group flex items-start gap-4">
+            <Link href="/catalogue" className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all group flex items-start gap-4">
               <div className="p-3 bg-rose-50 text-rose-600 rounded-xl group-hover:scale-105 transition-transform shrink-0">
                 <BookOpen size={24} />
               </div>
