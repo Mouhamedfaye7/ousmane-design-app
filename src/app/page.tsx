@@ -2,17 +2,17 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { 
-  Users, 
-  Clock, 
-  CheckCircle2, 
-  TrendingUp, 
-  Plus, 
-  ShoppingBag, 
-  Scissors, 
-  Layers, 
-  BookOpen, 
-  BarChart3 
+import {
+  Users,
+  Clock,
+  CheckCircle2,
+  TrendingUp,
+  Plus,
+  ShoppingBag,
+  Scissors,
+  Layers,
+  BookOpen,
+  BarChart3
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -27,34 +27,71 @@ export default function Dashboard() {
     async function loadDashboardStats() {
       setLoading(true);
 
-      const { data: commandes, error } = await supabase.from('commandes').select('*');
+      try {
+        // 1. Récupérer le vrai nombre total de clients depuis la table 'clients'
+        const { count: clientCount, error: clientError } = await supabase
+          .from('clients')
+          .select('*', { count: 'exact', head: true });
 
-      if (!error && commandes) {
-        // Total clients uniques à partir des commandes
-        const clientsUniques = new Set(
-          commandes.map(c => (c.client_nom || '').trim().toLowerCase()).filter(Boolean)
-        );
-        setTotalClients(clientsUniques.size);
+        if (!clientError && clientCount !== null) {
+          setTotalClients(clientCount);
+        }
 
-        // Commandes en cours atelier (Reçue / En Coupe)
-        const enCours = commandes.filter(
-          c => !c.statut || c.statut === 'Reçue' || c.statut === 'En Coupe'
-        ).length;
+        // 2. Récupérer les commandes pour l'atelier
+        const { data: commandes, error: cmdError } = await supabase
+          .from('commandes')
+          .select('*');
+
+        let caCommandes = 0;
+        let enCours = 0;
+        let pretes = 0;
+
+        if (!cmdError && commandes) {
+          enCours = commandes.filter(
+            c => !c.statut || c.statut === 'Reçue' || c.statut === 'En Coupe'
+          ).length;
+
+          pretes = commandes.filter(c => c.statut === 'Prête').length;
+
+          caCommandes = commandes.reduce((acc, c) => acc + (Number(c.montant_total) || 0), 0);
+        }
+
         setEnCoursCount(enCours);
-
-        // Commandes prêtes
-        const pretes = commandes.filter(c => c.statut === 'Prête').length;
         setPretesCount(pretes);
 
-        // Chiffre d'affaires cumulé
-        const totalCA = commandes.reduce((acc, c) => acc + (Number(c.montant_total) || 0), 0);
-        setChiffreAffaires(totalCA);
-      }
+        // 3. Récupérer les ventes directes (si la table 'ventes' existe)
+        const { data: ventes, error: ventError } = await supabase
+          .from('ventes')
+          .select('*');
 
-      setLoading(false);
+        let caVentes = 0;
+        if (!ventError && ventes) {
+          caVentes = ventes.reduce((acc, v) => acc + (Number(v.montant_total) || Number(v.montant) || 0), 0);
+        }
+
+        // Chiffre d'affaires global cumulé (Commandes + Ventes)
+        setChiffreAffaires(caCommandes + caVentes);
+
+      } catch (err) {
+        console.error("Erreur lors du chargement du tableau de bord :", err);
+      } finally {
+        setLoading(false);
+      }
     }
 
     loadDashboardStats();
+
+    // Écouteur temps réel pour synchroniser instantanément si des modifications ont lieu ailleurs
+    const channel = supabase
+      .channel('dashboard-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public' }, () => {
+        loadDashboardStats();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const formatAmount = (val: number) => {
@@ -76,13 +113,13 @@ export default function Dashboard() {
 
           <div className="flex items-center gap-3">
             <Link
-              href="/commandes"
+              href="/ventes"
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-xs transition-colors cursor-pointer text-sm"
             >
               <Plus size={18} /> Nouvelle Vente
             </Link>
             <Link
-              href="/commandes"
+              href="/clients"
               className="bg-amber-700 hover:bg-amber-800 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-xs transition-colors cursor-pointer text-sm"
             >
               <Plus size={18} /> Nouvelle Commande
