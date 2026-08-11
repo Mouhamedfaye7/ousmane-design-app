@@ -50,7 +50,7 @@ export default function VentesPage() {
     if (!error && data) {
       setVentes(data);
     } else if (error) {
-      console.error("Erreur de chargement des ventes :", error.message);
+      console.error("Erreur de chargement :", error.message);
     }
     setLoading(false);
   };
@@ -89,7 +89,6 @@ export default function VentesPage() {
     const { error } = await supabase.from('ventes').insert([payload]);
 
     if (error) {
-      console.error('Erreur Supabase:', error);
       const fallbackPayload = {
         client_nom: formData.client_nom,
         client_tel: formData.client_tel,
@@ -121,31 +120,30 @@ export default function VentesPage() {
   };
 
   const handleDeleteVente = async (id: string | undefined) => {
-    if (!id) return;
-    const confirmDelete = window.confirm("Êtes-vous sûr de vouloir supprimer cette facture/vente ? Cette action est irréversible.");
+    if (!id) {
+      alert("Impossible de supprimer : ID invalide ou manquant.");
+      return;
+    }
+
+    const confirmDelete = window.confirm("Êtes-vous sûr de vouloir supprimer cette facture ?");
     if (!confirmDelete) return;
 
-    try {
-      const { error } = await supabase.from('ventes').delete().eq('id', id);
+    // Suppression dans Supabase
+    const { error, count } = await supabase
+      .from('ventes')
+      .delete({ count: 'exact' })
+      .eq('id', id);
 
-      if (error) {
-        alert("Erreur lors de la suppression Supabase : " + error.message + "\n\nVérifiez que la politique RLS de votre table 'ventes' autorise l'action DELETE.");
-        return;
-      }
-
-      // Mise à jour immédiate du tableau local
-      setVentes((prevVentes) => prevVentes.filter((v) => v.id !== id));
-
-      // Si la vente supprimée était affichée dans la modale, on ferme la modale
-      if (selectedVente?.id === id) {
-        setSelectedVente(null);
-      }
-
-      // Rechargement optionnel depuis la base
-      fetchVentes();
-    } catch (err: any) {
-      alert("Erreur imprévue : " + err.message);
+    if (error) {
+      alert("Erreur Supabase lors de la suppression :\n" + error.message + "\n\nAssurez-vous d'avoir exécuté la politique RLS dans Supabase.");
+      return;
     }
+
+    // Retrait immédiat de l'affichage local
+    setVentes((prev) => prev.filter((v) => v.id !== id));
+
+    // Si la modale ouverte concerne cette facture, on la ferme
+    setSelectedVente(null);
   };
 
   const formatAmount = (val: number | undefined | null) => {
@@ -176,12 +174,10 @@ export default function VentesPage() {
           ? new Date(selectedVente.created_at).toLocaleDateString('fr-FR')
           : new Date().toLocaleDateString('fr-FR');
 
-        // Cadre ambre
         doc.setLineWidth(0.8);
         doc.setDrawColor(217, 119, 6);
         doc.roundedRect(10, 10, 190, 277, 3, 3, 'S');
 
-        // Titre
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(22);
         doc.setTextColor(120, 53, 15);
@@ -192,46 +188,17 @@ export default function VentesPage() {
         doc.setTextColor(217, 119, 6);
         doc.text('CREATION & COUTURE CONTEMPORAINE', 16, 30);
 
-        // Coordonnées
         doc.setDrawColor(254, 215, 170);
         doc.setFillColor(255, 251, 235);
         doc.roundedRect(118, 15, 77, 24, 2, 2, 'FD');
-
-        doc.setLineWidth(0.35);
-        doc.setDrawColor(217, 119, 6);
-
-        doc.circle(123, 19.8, 1.2, 'S');
-        doc.circle(123, 19.8, 0.4, 'S');
-        doc.line(121.9, 20.2, 123, 22.2);
-        doc.line(124.1, 20.2, 123, 22.2);
 
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(8);
         doc.setTextColor(30, 41, 59);
         doc.text('Hann Maristes, Dakar, Senegal', 127, 21.5);
-
-        doc.line(121.7, 25.7, 122.3, 25.1);
-        doc.line(122.3, 25.1, 122.8, 25.6);
-        doc.line(122.8, 25.6, 123.9, 26.7);
-        doc.line(123.9, 26.7, 124.4, 27.2);
-        doc.line(124.4, 27.2, 123.8, 27.8);
-        doc.line(123.8, 27.8, 123.3, 27.3);
-        doc.line(123.3, 27.3, 122.2, 26.2);
-        doc.line(122.2, 26.2, 121.7, 25.7);
-
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(30, 41, 59);
         doc.text('77 646 21 02 / 70 348 26 82', 127, 27.5);
-
-        doc.roundedRect(121.2, 31.2, 3.6, 2.6, 0.3, 0.3, 'S');
-        doc.line(121.2, 31.2, 123, 32.6);
-        doc.line(124.8, 31.2, 123, 32.6);
-
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(30, 41, 59);
         doc.text('@ousmanedesign.sn', 127, 33.5);
 
-        // Client
         doc.setDrawColor(254, 215, 170);
         doc.setFillColor(255, 251, 235);
         doc.roundedRect(16, 45, 179, 25, 2, 2, 'FD');
@@ -240,39 +207,22 @@ export default function VentesPage() {
         doc.setFontSize(9);
         doc.setTextColor(30, 41, 59);
         doc.text('Nom du client :', 20, 52);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(15, 23, 42);
         doc.text(`${selectedVente.client_nom || ''}`, 50, 52);
 
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(30, 41, 59);
         doc.text('Mode de commande :', 112, 52);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(15, 23, 42);
         doc.text(`${selectedVente.mode_commande || 'Pret-a-porter'}`, 150, 52);
 
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(30, 41, 59);
         doc.text('Telephone :', 20, 58);
-        doc.setFont('helvetica', 'bold');
         doc.setTextColor(217, 119, 6);
         doc.text(`${selectedVente.client_tel || '-'}`, 50, 58);
 
-        doc.setFont('helvetica', 'bold');
         doc.setTextColor(30, 41, 59);
         doc.text('Mode de paiement :', 112, 58);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(15, 23, 42);
         doc.text(`${selectedVente.mode_paiement || 'Especes'}`, 150, 58);
 
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(30, 41, 59);
         doc.text('Date :', 20, 64);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(15, 23, 42);
         doc.text(`${formattedDate}`, 50, 64);
 
-        // Table
         autoTable(doc, {
           startY: 76,
           margin: { left: 16, right: 15 },
@@ -285,31 +235,14 @@ export default function VentesPage() {
               `${formatAmount(mTotal)} FCFA`
             ]
           ],
-          headStyles: { 
-            fillColor: [217, 119, 6], 
-            textColor: [255, 255, 255], 
-            fontStyle: 'bold',
-            fontSize: 9,
-            halign: 'left'
-          },
-          columnStyles: {
-            0: { halign: 'left', cellWidth: 'auto' },
-            1: { halign: 'center', cellWidth: 30 },
-            2: { halign: 'right', cellWidth: 45 },
-            3: { halign: 'right', cellWidth: 45, fontStyle: 'bold' }
-          },
-          bodyStyles: {
-            fontSize: 9,
-            textColor: [30, 41, 59],
-            fontStyle: 'bold'
-          },
+          headStyles: { fillColor: [217, 119, 6], textColor: [255, 255, 255], fontStyle: 'bold' },
+          bodyStyles: { fontSize: 9, textColor: [30, 41, 59], fontStyle: 'bold' },
           theme: 'plain',
         });
 
         // @ts-ignore
         const finalY = (doc as any).lastAutoTable?.finalY || 105;
 
-        // Observations
         doc.setDrawColor(226, 232, 240);
         doc.setFillColor(248, 250, 252);
         doc.roundedRect(16, finalY + 8, 85, 32, 2, 2, 'FD');
@@ -324,7 +257,6 @@ export default function VentesPage() {
         const obsText = selectedVente.observations || 'Articles livres en parfait etat.';
         doc.text(doc.splitTextToSize(obsText, 77), 20, finalY + 22);
 
-        // Totaux
         const totalX = 110;
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
@@ -334,36 +266,16 @@ export default function VentesPage() {
         doc.setTextColor(15, 23, 42);
         doc.text(`${formatAmount(mTotal)} FCFA`, 190, finalY + 14, { align: 'right' });
 
-        doc.setDrawColor(241, 245, 249);
-        doc.line(totalX, finalY + 17, 190, finalY + 17);
-
         doc.setTextColor(51, 65, 85);
         doc.text('AVANCE VERSEE :', totalX, finalY + 23);
         doc.setTextColor(16, 185, 129);
         doc.text(`${formatAmount(mAvance)} FCFA`, 190, finalY + 23, { align: 'right' });
 
-        doc.line(totalX, finalY + 26, 190, finalY + 26);
-
         doc.setFillColor(217, 119, 6);
         doc.roundedRect(totalX - 2, finalY + 29, 83, 10, 1.5, 1.5, 'F');
-        doc.setFont('helvetica', 'bold');
         doc.setTextColor(255, 255, 255);
         doc.text('RESTE A PAYER :', totalX + 2, finalY + 35.5);
         doc.text(`${formatAmount(mReste)} FCFA`, 188, finalY + 35.5, { align: 'right' });
-
-        // Signatures
-        const sigY = finalY + 65;
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8.5);
-        doc.setTextColor(51, 65, 85);
-        doc.text('SIGNATURE DU CLIENT', 35, sigY, { align: 'center' });
-        doc.text('OUSMANE DESIGN (SIGNATURE & CACHET)', 145, sigY, { align: 'center' });
-
-        doc.setLineWidth(0.3);
-        doc.setDrawColor(203, 213, 225);
-        doc.setLineDashPattern([1, 1], 0);
-        doc.line(16, sigY + 12, 85, sigY + 12);
-        doc.line(110, sigY + 12, 185, sigY + 12);
 
         const safeName = (selectedVente.client_nom || 'Client').replace(/\s+/g, '_');
         doc.save(`Facture_${safeName}.pdf`);
@@ -390,7 +302,6 @@ export default function VentesPage() {
       window.open(waUrl, '_blank');
 
     } catch (err: any) {
-      console.error('Erreur génération PDF:', err);
       alert('Erreur génération PDF : ' + err.message);
     } finally {
       setExporting(false);
@@ -417,7 +328,7 @@ export default function VentesPage() {
 
         <button
           onClick={() => setShowAddModal(true)}
-          className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-sm transition-colors self-start md:self-auto cursor-pointer"
+          className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-sm transition-colors cursor-pointer"
         >
           <Plus size={18} /> Enregistrer une vente
         </button>
@@ -469,7 +380,7 @@ export default function VentesPage() {
                       <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() => setSelectedVente(v)}
-                          className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-1.5 rounded-md shadow-xs transition-colors cursor-pointer"
+                          className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-1.5 rounded-md shadow-xs cursor-pointer"
                         >
                           Facture
                         </button>
@@ -629,7 +540,7 @@ export default function VentesPage() {
         </div>
       )}
 
-      {/* MODAL FACTURE VISUELLE */}
+      {/* MODAL FACTURE */}
       {selectedVente && (
         <div 
           onClick={() => setSelectedVente(null)}
