@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Search, Printer, Share2, MapPin, Phone, Mail, X } from 'lucide-react';
+import { ArrowLeft, Plus, Search, Printer, Share2, MapPin, Phone, Mail, X, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 interface Vente {
@@ -118,6 +118,23 @@ export default function VentesPage() {
     fetchVentes();
   };
 
+  const handleDeleteVente = async (id: string | undefined) => {
+    if (!id) return;
+    const confirmDelete = window.confirm("Êtes-vous sûr de vouloir supprimer cette facture/vente ? Cette action est irréversible.");
+    if (!confirmDelete) return;
+
+    const { error } = await supabase.from('ventes').delete().eq('id', id);
+
+    if (error) {
+      alert("Erreur lors de la suppression : " + error.message);
+    } else {
+      if (selectedVente?.id === id) {
+        setSelectedVente(null);
+      }
+      fetchVentes();
+    }
+  };
+
   const formatAmount = (val: number | undefined | null) => {
     return (Number(val) || 0).toLocaleString('fr-FR').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ');
   };
@@ -167,11 +184,10 @@ export default function VentesPage() {
         doc.setFillColor(255, 251, 235);
         doc.roundedRect(118, 15, 77, 24, 2, 2, 'FD');
 
-        // Icônes de contact vectorielles (Style Lucide Orange)
         doc.setLineWidth(0.35);
         doc.setDrawColor(217, 119, 6);
 
-        // Icône Localisation (Map Pin)
+        // Icône Localisation
         doc.circle(123, 19.8, 1.2, 'S');
         doc.circle(123, 19.8, 0.4, 'S');
         doc.line(121.9, 20.2, 123, 22.2);
@@ -210,7 +226,6 @@ export default function VentesPage() {
         doc.setFillColor(255, 251, 235);
         doc.roundedRect(16, 45, 179, 25, 2, 2, 'FD');
 
-        // Ligne 1 : Client & Mode de commande
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
         doc.setTextColor(30, 41, 59);
@@ -226,7 +241,6 @@ export default function VentesPage() {
         doc.setTextColor(15, 23, 42);
         doc.text(`${selectedVente.mode_commande || 'Pret-a-porter'}`, 150, 52);
 
-        // Ligne 2 : Téléphone & Mode de paiement
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(30, 41, 59);
         doc.text('Telephone :', 20, 58);
@@ -241,7 +255,6 @@ export default function VentesPage() {
         doc.setTextColor(15, 23, 42);
         doc.text(`${selectedVente.mode_paiement || 'Especes'}`, 150, 58);
 
-        // Ligne 3 : Date
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(30, 41, 59);
         doc.text('Date :', 20, 64);
@@ -306,7 +319,6 @@ export default function VentesPage() {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
 
-        // Montant Total
         doc.setTextColor(51, 65, 85);
         doc.text('MONTANT TOTAL :', totalX, finalY + 14);
         doc.setTextColor(15, 23, 42);
@@ -315,7 +327,6 @@ export default function VentesPage() {
         doc.setDrawColor(241, 245, 249);
         doc.line(totalX, finalY + 17, 190, finalY + 17);
 
-        // Avance Versée
         doc.setTextColor(51, 65, 85);
         doc.text('AVANCE VERSEE :', totalX, finalY + 23);
         doc.setTextColor(16, 185, 129);
@@ -323,7 +334,6 @@ export default function VentesPage() {
 
         doc.line(totalX, finalY + 26, 190, finalY + 26);
 
-        // Encadré Reste à Payer
         doc.setFillColor(217, 119, 6);
         doc.roundedRect(totalX - 2, finalY + 29, 83, 10, 1.5, 1.5, 'F');
         doc.setFont('helvetica', 'bold');
@@ -349,7 +359,6 @@ export default function VentesPage() {
         doc.save(`Facture_${safeName}.pdf`);
       }
 
-      // Redirection WhatsApp avec message pré-rempli
       let cleanPhone = (selectedVente.client_tel || '').replace(/\s+/g, '').replace(/[^0-9]/g, '');
       if (cleanPhone.length === 9) cleanPhone = '221' + cleanPhone;
 
@@ -447,12 +456,21 @@ export default function VentesPage() {
                     <td className="p-3 text-emerald-600 font-semibold">{formatAmount(avance)} FCFA</td>
                     <td className="p-3 font-bold text-amber-600">{formatAmount(reste)} FCFA</td>
                     <td className="p-3 text-center">
-                      <button
-                        onClick={() => setSelectedVente(v)}
-                        className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-1.5 rounded-md shadow-xs transition-colors cursor-pointer"
-                      >
-                        Facture
-                      </button>
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => setSelectedVente(v)}
+                          className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-1.5 rounded-md shadow-xs transition-colors cursor-pointer"
+                        >
+                          Facture
+                        </button>
+                        <button
+                          onClick={() => handleDeleteVente(v.id)}
+                          title="Supprimer la facture"
+                          className="bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold p-1.5 rounded-md transition-colors cursor-pointer"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -625,6 +643,12 @@ export default function VentesPage() {
                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   <Share2 size={15} /> {exporting ? 'Génération...' : 'WhatsApp (PDF)'}
+                </button>
+                <button
+                  onClick={() => handleDeleteVente(selectedVente.id)}
+                  className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                >
+                  <Trash2 size={15} /> Supprimer
                 </button>
               </div>
 
