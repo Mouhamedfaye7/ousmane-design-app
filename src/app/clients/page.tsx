@@ -210,26 +210,32 @@ export default function ClientsPage() {
     } catch (err) {
       console.error('Erreur PDF/WhatsApp:', err);
       alert('Erreur lors du partage. Veuillez réessayer.');
-    } finally {
+    } fontally {
       setExporting(false);
     }
   };
 
   const handleAddClient = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newNom) return;
+    if (!newNom.trim()) return;
+
+    const formattedTel = newTel.trim() || null;
 
     const newClientData = {
-      nom_complet: newNom,
-      telephone: newTel || 'Non renseigné',
-      adresse: newAdresse || 'Dakar',
+      nom_complet: newNom.trim(),
+      telephone: formattedTel,
+      adresse: newAdresse.trim() || 'Dakar',
       mesures: defaultMesures
     };
 
     const { error } = await supabase.from('clients').insert([newClientData]);
 
     if (error) {
-      alert("Erreur lors de l'ajout : " + error.message);
+      if (error.code === '23505') {
+        alert("Un client existe déjà avec ce numéro de téléphone.");
+      } else {
+        alert("Erreur lors de l'ajout : " + error.message);
+      }
     } else {
       setNewNom('');
       setNewTel('');
