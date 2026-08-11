@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, UserPlus, Save, Search, Ruler, Phone, MapPin, X, Share2 } from 'lucide-react';
+import { ArrowLeft, UserPlus, Save, Search, Ruler, Phone, MapPin, X, Share2, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 interface Mesures {
@@ -91,6 +91,38 @@ export default function ClientsPage() {
     } else {
       setSelectedClient({ ...selectedClient, mesures: currentMesures });
       alert('Mesures enregistrées avec succès !');
+    }
+  };
+
+  const handleDeleteClient = async () => {
+    if (!selectedClient) return;
+
+    const confirmDelete = window.confirm(
+      `Êtes-vous sûr de vouloir supprimer le client "${selectedClient.nom_complet}" ? Cette action est irréversible.`
+    );
+
+    if (!confirmDelete) return;
+
+    const { error } = await supabase
+      .from('clients')
+      .delete()
+      .eq('id', selectedClient.id);
+
+    if (error) {
+      alert("Erreur lors de la suppression : " + error.message);
+    } else {
+      const remainingClients = clients.filter(c => c.id !== selectedClient.id);
+      setClients(remainingClients);
+
+      if (remainingClients.length > 0) {
+        setSelectedClient(remainingClients[0]);
+        setCurrentMesures(remainingClients[0].mesures || defaultMesures);
+      } else {
+        setSelectedClient(null);
+        setCurrentMesures(defaultMesures);
+      }
+
+      alert('Client supprimé avec succès.');
     }
   };
 
@@ -292,6 +324,14 @@ export default function ClientsPage() {
               </div>
 
               <div className="flex items-center gap-2">
+                <button
+                  onClick={handleDeleteClient}
+                  className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs px-3 py-2.5 rounded-lg shadow-xs flex items-center gap-1.5 transition-colors"
+                  title="Supprimer ce client"
+                >
+                  <Trash2 size={16} /> Supprimer
+                </button>
+
                 <button
                   onClick={handleShareWhatsApp}
                   disabled={exporting}
