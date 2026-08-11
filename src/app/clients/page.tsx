@@ -103,27 +103,37 @@ export default function ClientsPage() {
 
     if (!confirmDelete) return;
 
-    const { error } = await supabase
+    // Suppression physique dans Supabase
+    const { data, error } = await supabase
       .from('clients')
       .delete()
-      .eq('id', selectedClient.id);
+      .eq('id', selectedClient.id)
+      .select();
 
     if (error) {
-      alert("Erreur lors de la suppression : " + error.message);
-    } else {
-      const remainingClients = clients.filter(c => c.id !== selectedClient.id);
-      setClients(remainingClients);
-
-      if (remainingClients.length > 0) {
-        setSelectedClient(remainingClients[0]);
-        setCurrentMesures(remainingClients[0].mesures || defaultMesures);
-      } else {
-        setSelectedClient(null);
-        setCurrentMesures(defaultMesures);
-      }
-
-      alert('Client supprimé avec succès.');
+      alert("Erreur lors de la suppression Supabase : " + error.message);
+      return;
     }
+
+    // Si aucune ligne n'a été supprimée (souvent causé par le RLS Supabase)
+    if (!data || data.length === 0) {
+      alert("La suppression a échoué. Vérifiez vos permissions RLS sur Supabase.");
+      return;
+    }
+
+    // Mise à jour de l'état local après succès réel dans la DB
+    const remainingClients = clients.filter(c => c.id !== selectedClient.id);
+    setClients(remainingClients);
+
+    if (remainingClients.length > 0) {
+      setSelectedClient(remainingClients[0]);
+      setCurrentMesures(remainingClients[0].mesures || defaultMesures);
+    } else {
+      setSelectedClient(null);
+      setCurrentMesures(defaultMesures);
+    }
+
+    alert('Client supprimé définitivement du Cloud !');
   };
 
   const handleShareWhatsApp = async () => {
@@ -210,7 +220,7 @@ export default function ClientsPage() {
     } catch (err) {
       console.error('Erreur PDF/WhatsApp:', err);
       alert('Erreur lors du partage. Veuillez réessayer.');
-    } fontally {
+    } finally {
       setExporting(false);
     }
   };
@@ -219,11 +229,9 @@ export default function ClientsPage() {
     e.preventDefault();
     if (!newNom.trim()) return;
 
-    const formattedTel = newTel.trim() || null;
-
     const newClientData = {
       nom_complet: newNom.trim(),
-      telephone: formattedTel,
+      telephone: newTel.trim() || null,
       adresse: newAdresse.trim() || 'Dakar',
       mesures: defaultMesures
     };
