@@ -94,7 +94,7 @@ export default function VentesPage() {
         client_tel: formData.client_tel,
         montant_total: montantTotalCalcul,
         avance: avanceNum,
-        observations: `[${formData.designation}] Qté: ${qtyNum} x ${puNum} FCFA - Reste: ${resteCalcul} FCFA | ${formData.observations}`.trim()
+        observations: `[${formData.designation}] Qté: ${qtyNum} x ${puNum} FCFA - Mode: ${formData.mode_paiement} - Reste: ${resteCalcul} FCFA | ${formData.observations}`.trim()
       };
       
       const { error: fallbackError } = await supabase.from('ventes').insert([fallbackPayload]);
@@ -128,8 +128,7 @@ export default function VentesPage() {
     const confirmDelete = window.confirm("Êtes-vous sûr de vouloir supprimer cette facture ?");
     if (!confirmDelete) return;
 
-    // Suppression dans Supabase
-    const { error, count } = await supabase
+    const { error } = await supabase
       .from('ventes')
       .delete({ count: 'exact' })
       .eq('id', id);
@@ -139,10 +138,7 @@ export default function VentesPage() {
       return;
     }
 
-    // Retrait immédiat de l'affichage local
     setVentes((prev) => prev.filter((v) => v.id !== id));
-
-    // Si la modale ouverte concerne cette facture, on la ferme
     setSelectedVente(null);
   };
 
@@ -441,6 +437,35 @@ export default function VentesPage() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold mb-1">Mode de commande</label>
+                  <select
+                    value={formData.mode_commande}
+                    onChange={(e) => setFormData({ ...formData, mode_commande: e.target.value })}
+                    className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none font-medium text-slate-800"
+                  >
+                    <option value="Prêt-à-porter">Prêt-à-porter</option>
+                    <option value="Sur mesure">Sur mesure</option>
+                    <option value="Commande spéciale">Commande spéciale</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-semibold mb-1">Mode de paiement</label>
+                  <select
+                    value={formData.mode_paiement}
+                    onChange={(e) => setFormData({ ...formData, mode_paiement: e.target.value })}
+                    className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none font-bold text-amber-800"
+                  >
+                    <option value="Espèces">Espèces</option>
+                    <option value="Wave">Wave</option>
+                    <option value="Orange Money">Orange Money</option>
+                    <option value="Virement bancaire">Virement bancaire</option>
+                    <option value="Chèque">Chèque</option>
+                  </select>
+                </div>
+              </div>
+
               <div>
                 <label className="block font-semibold mb-1">Désignation / Article *</label>
                 <input
@@ -614,7 +639,7 @@ export default function VentesPage() {
                 </div>
                 <div className="space-y-1.5">
                   <p><strong className="text-slate-900">Mode de commande :</strong> <span className="font-bold text-slate-800">{selectedVente.mode_commande || 'Prêt-à-porter'}</span></p>
-                  <p><strong className="text-slate-900">Mode de paiement :</strong> <span className="font-bold text-slate-800">{selectedVente.mode_paiement || 'Espèces'}</span></p>
+                  <p><strong className="text-slate-900">Mode de paiement :</strong> <span className="font-bold text-amber-800">{selectedVente.mode_paiement || 'Espèces'}</span></p>
                 </div>
               </div>
 
