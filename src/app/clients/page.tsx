@@ -1,355 +1,258 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Search, Plus, Save, Trash2, Send, Ruler } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import jsPDF from 'jspdf';
+autoTable from 'jspdf-autotable';
 
 interface Client {
-  id?: string;
+  id: string;
   nom: string;
   telephone: string;
   adresse: string;
-  cou?: number | string;
-  epaule?: number | string;
-  poitrine?: number | string;
-  longueur_bras?: number | string;
-  tour_bras?: number | string;
-  poignet?: number | string;
-  longueur_haut?: number | string;
-  ceinture?: number | string;
-  longueur_pantalon?: number | string;
-  tour_cuisse?: number | string;
-  tour_cheville?: number | string;
-  notes?: string;
+  mesures: {
+    cou: string;
+    epaule: string;
+    poitrine: string;
+    longueurBras: string;
+    tourBras: string;
+    poignet: string;
+    longueurHaut: string;
+    ceinture: string;
+    longueurPantalon: string;
+    tourCuisse: string;
+    tourCheville: string;
+  };
+  notes: string;
 }
 
 export default function ClientsPage() {
-  const [clients, setClients] = useState<Client[]>([]);
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [clients, setClients] = useState<Client[]>([
+    {
+      id: '1',
+      nom: 'Omar Diome',
+      telephone: '772028031',
+      adresse: 'Dalifort',
+      mesures: {
+        cou: '41',
+        epaule: '47',
+        poitrine: '102',
+        longueurBras: '65',
+        tourBras: '38',
+        poignet: '20',
+        longueurHaut: '75',
+        ceinture: '102',
+        longueurPantalon: '98',
+        tourCuisse: '51',
+        tourCheville: '33',
+      },
+      notes: 'longueur bobou 145',
+    },
+  ]);
 
-  useEffect(() => {
-    fetchClients();
-  }, []);
+  const [selectedClient, setSelectedClient] = useState<Client>(clients[0]);
 
-  const fetchClients = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.from('clients').select('*').order('created_at', { ascending: false });
-      if (!error && data) {
-        // Uniformiser nom / nom_complet au cas où
-        const formattedData = data.map((c: any) => ({
-          ...c,
-          nom: c.nom || c.nom_complet || ''
-        }));
-        setClients(formattedData);
-        if (formattedData.length > 0) {
-          setSelectedClient(formattedData[0]);
-        } else {
-          setSelectedClient(null);
-        }
-      }
-    } catch (err) {
-      console.error('Erreur chargement clients:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const generatePDF = () => {
+    if (!selectedClient) return;
 
-  const sanitizeClientPayload = (client: Client) => {
-    const payload: any = {
-      nom: client.nom || 'Sans nom',
-      telephone: client.telephone || '',
-      adresse: client.adresse || '',
-      notes: client.notes || ''
-    };
+    const doc = new jsPDF();
 
-    const numericFields: (keyof Client)[] = [
-      'cou', 'epaule', 'poitrine', 'longueur_bras', 'tour_bras',
-      'poignet', 'longueur_haut', 'ceinture', 'longueur_pantalon',
-      'tour_cuisse', 'tour_cheville'
+    doc.setFontSize(20);
+    doc.setTextColor(180, 83, 9);
+    doc.text('Ousmane Design', 14, 20);
+
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text('Fiche de Mesures Client', 14, 26);
+
+    doc.setDrawColor(229, 231, 235);
+    doc.line(14, 30, 196, 30);
+
+    doc.setFontSize(12);
+    doc.setTextColor(0);
+    doc.text(`Nom : ${selectedClient.nom}`, 14, 40);
+    doc.text(`Téléphone : ${selectedClient.telephone || 'N/A'}`, 14, 47);
+    doc.text(`Adresse : ${selectedClient.adresse || 'N/A'}`, 14, 54);
+
+    const tableData = [
+      ['Cou', `${selectedClient.mesures.cou || '-'} cm`, 'Épaule', `${selectedClient.mesures.epaule || '-'} cm`],
+      ['Poitrine', `${selectedClient.mesures.poitrine || '-'} cm`, 'Lg. Bras', `${selectedClient.mesures.longueurBras || '-'} cm`],
+      ['Tour Bras', `${selectedClient.mesures.tourBras || '-'} cm`, 'Poignet', `${selectedClient.mesures.poignet || '-'} cm`],
+      ['Lg. Haut/Boubou', `${selectedClient.mesures.longueurHaut || '-'} cm`, 'Ceinture / Taille', `${selectedClient.mesures.ceinture || '-'} cm`],
+      ['Lg. Pantalon', `${selectedClient.mesures.longueurPantalon || '-'} cm`, 'Tour Cuisse', `${selectedClient.mesures.tourCuisse || '-'} cm`],
+      ['Tour Cheville', `${selectedClient.mesures.tourCheville || '-'} cm`, '', ''],
     ];
 
-    numericFields.forEach((field) => {
-      const val = client[field];
-      if (val !== undefined && val !== '' && val !== null && !isNaN(Number(val))) {
-        payload[field] = Number(val);
-      } else {
-        payload[field] = null;
-      }
+    (doc as any).autoTable({
+      startY: 62,
+      head: [['Mesure', 'Valeur', 'Mesure', 'Valeur']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [180, 83, 9] },
     });
 
-    return payload;
+    const finalY = (doc as any).lastAutoTable?.finalY || 130;
+    doc.setFontSize(11);
+    doc.text('Notes & Particularités :', 14, finalY + 12);
+    doc.setFontSize(10);
+    doc.setTextColor(80);
+    doc.text(selectedClient.notes || 'Aucune note spécifique', 14, finalY + 19);
+
+    doc.save(`Fiche_Mesures_${selectedClient.nom.replace(/\s+/g, '_')}.pdf`);
   };
 
-  const handleSave = async () => {
+  const shareWhatsApp = () => {
     if (!selectedClient) return;
 
-    const payload = sanitizeClientPayload(selectedClient);
+    const phone = selectedClient.telephone ? `221${selectedClient.telephone.replace(/\s+/g, '')}` : '';
 
-    try {
-      if (selectedClient.id) {
-        const { error } = await supabase
-          .from('clients')
-          .update(payload)
-          .eq('id', selectedClient.id);
+    const message = `*Ousmane Design - Fiche de Mesures*%0A%0A` +
+      `*Client :* ${selectedClient.nom}%0A` +
+      `----------------------------------%0A` +
+      `• *Cou :* ${selectedClient.mesures.cou} cm%0A` +
+      `• *Épaule :* ${selectedClient.mesures.epaule} cm%0A` +
+      `• *Poitrine :* ${selectedClient.mesures.poitrine} cm%0A` +
+      `• *Lg. Bras :* ${selectedClient.mesures.longueurBras} cm%0A` +
+      `• *Tour Bras :* ${selectedClient.mesures.tourBras} cm%0A` +
+      `• *Poignet :* ${selectedClient.mesures.poignet} cm%0A` +
+      `• *Lg. Haut/Boubou :* ${selectedClient.mesures.longueurHaut} cm%0A` +
+      `• *Ceinture/Taille :* ${selectedClient.mesures.ceinture} cm%0A` +
+      `• *Lg. Pantalon :* ${selectedClient.mesures.longueurPantalon} cm%0A` +
+      `• *Tour Cuisse :* ${selectedClient.mesures.tourCuisse} cm%0A` +
+      `• *Tour Cheville :* ${selectedClient.mesures.tourCheville} cm%0A` +
+      `----------------------------------%0A` +
+      `*Notes :* ${selectedClient.notes || 'N/A'}`;
 
-        if (error) throw error;
-      } else {
-        const { data, error } = await supabase
-          .from('clients')
-          .insert([payload])
-          .select();
+    const url = phone
+      ? `https://api.whatsapp.com/send?phone=${phone}&text=${message}`
+      : `https://api.whatsapp.com/send?text=${message}`;
 
-        if (error) throw error;
-        if (data && data[0]) setSelectedClient(data[0]);
-      }
-
-      alert('Fiche client enregistrée avec succès !');
-      await fetchClients();
-    } catch (err: any) {
-      console.error('Erreur enregistrement:', err);
-      alert('Erreur lors de la sauvegarde : ' + (err.message || 'Problème de connexion Supabase'));
-    }
-  };
-
-  const handleDeleteClient = async () => {
-    if (!selectedClient) return;
-
-    const nomAffiche = selectedClient.nom || selectedClient.telephone || 'ce client';
-
-    if (!confirm(`Voulez-vous vraiment supprimer définitivement ${nomAffiche} ?`)) {
-      return;
-    }
-
-    try {
-      if (selectedClient.id) {
-        const { error } = await supabase.from('clients').delete().eq('id', selectedClient.id);
-        if (error && selectedClient.telephone) {
-          await supabase.from('clients').delete().eq('telephone', selectedClient.telephone);
-        }
-      } else if (selectedClient.telephone) {
-        await supabase.from('clients').delete().eq('telephone', selectedClient.telephone);
-      }
-
-      const listFiltree = clients.filter(c => {
-        if (selectedClient.id && c.id) return c.id !== selectedClient.id;
-        if (selectedClient.telephone && c.telephone) return c.telephone !== selectedClient.telephone;
-        return true;
-      });
-
-      setClients(listFiltree);
-      setSelectedClient(listFiltree.length > 0 ? listFiltree[0] : null);
-
-      alert('Client supprimé avec succès.');
-      fetchClients();
-    } catch (err: any) {
-      alert('Erreur lors de la suppression : ' + (err.message || 'Impossible de supprimer.'));
-    }
-  };
-
-  const handleShareWhatsApp = () => {
-    if (!selectedClient) return;
-    let cleanPhone = (selectedClient.telephone || '').replace(/[^0-9]/g, '');
-    if (cleanPhone.length === 9) cleanPhone = '221' + cleanPhone;
-
-    let msg = `*OUSMANE DESIGN — Carnet de Mesures*\n`;
-    msg += `Client: *${selectedClient.nom || 'Sans nom'}*\n\n`;
-    if (selectedClient.cou) msg += `- Cou: ${selectedClient.cou} cm\n`;
-    if (selectedClient.epaule) msg += `- Épaule: ${selectedClient.epaule} cm\n`;
-    if (selectedClient.poitrine) msg += `- Poitrine: ${selectedClient.poitrine} cm\n`;
-    if (selectedClient.longueur_bras) msg += `- Long. Bras: ${selectedClient.longueur_bras} cm\n`;
-    if (selectedClient.longueur_haut) msg += `- Long. Haut: ${selectedClient.longueur_haut} cm\n`;
-    if (selectedClient.ceinture) msg += `- Ceinture/Taille: ${selectedClient.ceinture} cm\n`;
-    if (selectedClient.longueur_pantalon) msg += `- Long. Pantalon: ${selectedClient.longueur_pantalon} cm\n`;
-
-    const url = cleanPhone 
-      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`
-      : `https://wa.me/?text=${encodeURIComponent(msg)}`;
     window.open(url, '_blank');
   };
 
-  const handleNewClient = () => {
-    const newC: Client = {
-      nom: '',
-      telephone: '',
-      adresse: '',
-      notes: ''
-    };
-    setSelectedClient(newC);
-  };
-
-  const filteredClients = clients.filter(c => 
-    (c.nom || '').toLowerCase().includes(search.toLowerCase()) || 
-    (c.telephone || '').includes(search)
-  );
-
-  const mesureFields: Array<{ label: string; key: keyof Client }> = [
-    { label: 'Cou (cm)', key: 'cou' },
-    { label: 'Épaule (cm)', key: 'epaule' },
-    { label: 'Poitrine (cm)', key: 'poitrine' },
-    { label: 'Longueur Bras (cm)', key: 'longueur_bras' },
-    { label: 'Tour de Bras (cm)', key: 'tour_bras' },
-    { label: 'Poignet (cm)', key: 'poignet' },
-    { label: 'Longueur Boubou/Haut (cm)', key: 'longueur_haut' },
-    { label: 'Ceinture/Taille (cm)', key: 'ceinture' },
-    { label: 'Longueur Pantalon (cm)', key: 'longueur_pantalon' },
-    { label: 'Tour Cuisse (cm)', key: 'tour_cuisse' },
-    { label: 'Tour Cheville (cm)', key: 'tour_cheville' },
-  ];
-
   return (
-    <div className="min-h-screen bg-slate-100 p-6 text-slate-800">
-      <div className="max-w-7xl mx-auto mb-6 flex justify-between items-center">
-        <div>
-          <Link href="/" className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1 mb-2">
-            <ArrowLeft size={16} /> Retour au tableau de bord
-          </Link>
-          <h1 className="text-2xl font-bold text-slate-900">Clients & Carnet de Mesures</h1>
-          <p className="text-sm text-slate-500">Ousmane Design — Gestion des profils clients</p>
-        </div>
-        <button 
-          onClick={handleNewClient}
-          className="bg-amber-700 hover:bg-amber-800 text-white font-semibold px-4 py-2 rounded-lg flex items-center gap-2 shadow-xs cursor-pointer"
-        >
-          <Plus size={18} /> Nouveau Client
-        </button>
-      </div>
+    <div className="min-h-screen bg-slate-100 p-6">
+      <div className="max-w-7xl mx-auto space-y-4">
+        <Link href="/" className="text-sm text-slate-600 hover:underline">
+          ← Retour au tableau de bord
+        </Link>
 
-      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* LISTE CLIENTS */}
-        <div className="space-y-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-3 text-slate-400" size={16} />
-            <input
-              type="text"
-              placeholder="Rechercher nom, téléphone..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-white rounded-lg border border-slate-200 text-sm outline-none"
-            />
+        <header className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800">Clients & Carnet de Mesures</h1>
+            <p className="text-sm text-slate-500">Ousmane Design — Gestion des profils clients</p>
+          </div>
+          <button className="bg-amber-700 hover:bg-amber-800 text-white px-4 py-2 rounded-lg font-medium shadow-sm">
+            + Nouveau Client
+          </button>
+        </header>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 space-y-2">
+            {clients.map((c) => (
+              <div
+                key={c.id}
+                onClick={() => setSelectedClient(c)}
+                className={`p-3 rounded-lg cursor-pointer border transition-all ${
+                  selectedClient.id === c.id
+                    ? 'border-amber-500 bg-amber-50/50'
+                    : 'border-slate-100 hover:bg-slate-50'
+                }`}
+              >
+                <div className="font-semibold text-slate-800">{c.nom}</div>
+                <div className="text-xs text-slate-500">{c.telephone}</div>
+              </div>
+            ))}
           </div>
 
-          <div className="space-y-2 max-h-[600px] overflow-y-auto">
-            {loading ? (
-              <p className="text-sm text-slate-400 p-2">Chargement des clients...</p>
-            ) : filteredClients.length === 0 ? (
-              <p className="text-sm text-slate-400 p-2">Aucun client trouvé.</p>
-            ) : (
-              filteredClients.map((c) => (
-                <div
-                  key={c.id || c.telephone || c.nom}
-                  onClick={() => setSelectedClient(c)}
-                  className={`p-4 rounded-xl border cursor-pointer transition-all bg-white ${
-                    (selectedClient?.id && selectedClient.id === c.id) ||
-                    (!selectedClient?.id && selectedClient?.telephone === c.telephone)
-                      ? 'border-amber-500 ring-2 ring-amber-500/20' 
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-bold text-slate-900 text-sm">{c.nom || 'Sans nom'}</h3>
-                      <p className="text-xs text-slate-500 mt-0.5">{c.telephone || 'Sans téléphone'}</p>
-                    </div>
-                    <Ruler size={16} className="text-amber-600" />
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* FORMULAIRE & MESURES */}
-        {selectedClient ? (
-          <div className="md:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-6">
-            <div className="flex justify-between items-start border-b border-slate-100 pb-4">
+          <div className="md:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-6">
+            <div className="flex justify-between items-center pb-4 border-b">
               <div>
-                <input
-                  type="text"
-                  value={selectedClient.nom || ''}
-                  onChange={(e) => setSelectedClient({...selectedClient, nom: e.target.value})}
-                  placeholder="Nom complet du client"
-                  className="text-2xl font-bold text-slate-900 border-b border-dashed border-slate-300 focus:border-amber-500 outline-none pb-1"
-                />
-                <div className="flex items-center gap-4 mt-2">
-                  <input
-                    type="text"
-                    value={selectedClient.telephone || ''}
-                    onChange={(e) => setSelectedClient({...selectedClient, telephone: e.target.value})}
-                    placeholder="Numéro Téléphone"
-                    className="text-xs text-slate-500 border-b border-slate-200 outline-none"
-                  />
-                  <input
-                    type="text"
-                    value={selectedClient.adresse || ''}
-                    onChange={(e) => setSelectedClient({...selectedClient, adresse: e.target.value})}
-                    placeholder="Adresse / Quartier"
-                    className="text-xs text-slate-500 border-b border-slate-200 outline-none"
-                  />
+                <h2 className="text-2xl font-bold text-slate-800">{selectedClient.nom}</h2>
+                <div className="flex gap-4 text-sm text-slate-500 mt-1">
+                  <span>{selectedClient.telephone}</span>
+                  <span>{selectedClient.adresse}</span>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
                 <button
-                  onClick={handleShareWhatsApp}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 text-xs cursor-pointer shadow-xs"
+                  onClick={generatePDF}
+                  className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 shadow-sm transition-colors"
                 >
-                  <Send size={14} /> Partager WhatsApp
+                  📄 PDF
                 </button>
 
                 <button
-                  onClick={handleDeleteClient}
-                  className="bg-red-50 hover:bg-red-100 text-red-600 p-2.5 rounded-lg flex items-center justify-center transition-colors cursor-pointer"
-                  title="Supprimer définitivement ce client"
+                  onClick={shareWhatsApp}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 shadow-sm transition-colors"
                 >
-                  <Trash2 size={18} />
+                  Partager WhatsApp
                 </button>
 
-                <button
-                  onClick={handleSave}
-                  className="bg-amber-700 hover:bg-amber-800 text-white font-semibold px-4 py-2 rounded-lg flex items-center gap-1.5 text-xs cursor-pointer shadow-xs"
-                >
-                  <Save size={14} /> Enregistrer
+                <button className="bg-amber-700 hover:bg-amber-800 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm">
+                  Enregistrer
                 </button>
               </div>
             </div>
 
-            {/* GRILLE DES MESURES */}
             <div className="grid grid-cols-3 gap-4">
-              {mesureFields.map((m) => (
-                <div key={m.key}>
-                  <label className="text-[11px] font-bold text-slate-700 block mb-1">{m.label}</label>
-                  <input
-                    type="number"
-                    value={selectedClient[m.key] ?? ''}
-                    onChange={(e) => setSelectedClient({
-                      ...selectedClient, 
-                      [m.key]: e.target.value ? Number(e.target.value) : ''
-                    })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold outline-none focus:bg-white focus:border-amber-500"
-                  />
-                </div>
-              ))}
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Cou (cm)</label>
+                <input
+                  type="text"
+                  value={selectedClient.mesures.cou}
+                  onChange={(e) =>
+                    setSelectedClient({
+                      ...selectedClient,
+                      mesures: { ...selectedClient.mesures, cou: e.target.value },
+                    })
+                  }
+                  className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Épaule (cm)</label>
+                <input
+                  type="text"
+                  value={selectedClient.mesures.epaule}
+                  onChange={(e) =>
+                    setSelectedClient({
+                      ...selectedClient,
+                      mesures: { ...selectedClient.mesures, epaule: e.target.value },
+                    })
+                  }
+                  className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Poitrine (cm)</label>
+                <input
+                  type="text"
+                  value={selectedClient.mesures.poitrine}
+                  onChange={(e) =>
+                    setSelectedClient({
+                      ...selectedClient,
+                      mesures: { ...selectedClient.mesures, poitrine: e.target.value },
+                    })
+                  }
+                  className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-sm"
+                />
+              </div>
             </div>
 
             <div>
-              <label className="text-[11px] font-bold text-slate-700 block mb-1">Notes & Particularités du Modèle</label>
+              <label className="block text-xs font-bold text-slate-600 mb-1">
+                Notes & Particularités du Modèle
+              </label>
               <textarea
-                value={selectedClient.notes || ''}
-                onChange={(e) => setSelectedClient({...selectedClient, notes: e.target.value})}
-                rows={3}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm outline-none focus:bg-white focus:border-amber-500"
+                value={selectedClient.notes}
+                onChange={(e) => setSelectedClient({ ...selectedClient, notes: e.target.value })}
+                className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-sm h-24"
               />
             </div>
           </div>
-        ) : (
-          <div className="md:col-span-2 bg-white p-12 rounded-2xl border border-slate-200 text-center text-slate-400">
-            Sélectionnez un client ou cliquez sur "Nouveau Client".
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
