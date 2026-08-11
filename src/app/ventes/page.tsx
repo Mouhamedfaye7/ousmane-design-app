@@ -49,6 +49,8 @@ export default function VentesPage() {
     const { data, error } = await supabase.from('ventes').select('*').order('created_at', { ascending: false });
     if (!error && data) {
       setVentes(data);
+    } else if (error) {
+      console.error("Erreur de chargement des ventes :", error.message);
     }
     setLoading(false);
   };
@@ -123,15 +125,26 @@ export default function VentesPage() {
     const confirmDelete = window.confirm("Êtes-vous sûr de vouloir supprimer cette facture/vente ? Cette action est irréversible.");
     if (!confirmDelete) return;
 
-    const { error } = await supabase.from('ventes').delete().eq('id', id);
+    try {
+      const { error } = await supabase.from('ventes').delete().eq('id', id);
 
-    if (error) {
-      alert("Erreur lors de la suppression : " + error.message);
-    } else {
+      if (error) {
+        alert("Erreur lors de la suppression Supabase : " + error.message + "\n\nVérifiez que la politique RLS de votre table 'ventes' autorise l'action DELETE.");
+        return;
+      }
+
+      // Mise à jour immédiate du tableau local
+      setVentes((prevVentes) => prevVentes.filter((v) => v.id !== id));
+
+      // Si la vente supprimée était affichée dans la modale, on ferme la modale
       if (selectedVente?.id === id) {
         setSelectedVente(null);
       }
+
+      // Rechargement optionnel depuis la base
       fetchVentes();
+    } catch (err: any) {
+      alert("Erreur imprévue : " + err.message);
     }
   };
 
@@ -163,12 +176,12 @@ export default function VentesPage() {
           ? new Date(selectedVente.created_at).toLocaleDateString('fr-FR')
           : new Date().toLocaleDateString('fr-FR');
 
-        // 1. Cadre extérieur ambre
+        // Cadre ambre
         doc.setLineWidth(0.8);
         doc.setDrawColor(217, 119, 6);
         doc.roundedRect(10, 10, 190, 277, 3, 3, 'S');
 
-        // 2. En-tête : Titre & Sous-titre
+        // Titre
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(22);
         doc.setTextColor(120, 53, 15);
@@ -179,7 +192,7 @@ export default function VentesPage() {
         doc.setTextColor(217, 119, 6);
         doc.text('CREATION & COUTURE CONTEMPORAINE', 16, 30);
 
-        // 3. Bloc Coordonnées (En haut à droite)
+        // Coordonnées
         doc.setDrawColor(254, 215, 170);
         doc.setFillColor(255, 251, 235);
         doc.roundedRect(118, 15, 77, 24, 2, 2, 'FD');
@@ -187,7 +200,6 @@ export default function VentesPage() {
         doc.setLineWidth(0.35);
         doc.setDrawColor(217, 119, 6);
 
-        // Icône Localisation
         doc.circle(123, 19.8, 1.2, 'S');
         doc.circle(123, 19.8, 0.4, 'S');
         doc.line(121.9, 20.2, 123, 22.2);
@@ -198,7 +210,6 @@ export default function VentesPage() {
         doc.setTextColor(30, 41, 59);
         doc.text('Hann Maristes, Dakar, Senegal', 127, 21.5);
 
-        // Icône Téléphone
         doc.line(121.7, 25.7, 122.3, 25.1);
         doc.line(122.3, 25.1, 122.8, 25.6);
         doc.line(122.8, 25.6, 123.9, 26.7);
@@ -212,7 +223,6 @@ export default function VentesPage() {
         doc.setTextColor(30, 41, 59);
         doc.text('77 646 21 02 / 70 348 26 82', 127, 27.5);
 
-        // Icône Email
         doc.roundedRect(121.2, 31.2, 3.6, 2.6, 0.3, 0.3, 'S');
         doc.line(121.2, 31.2, 123, 32.6);
         doc.line(124.8, 31.2, 123, 32.6);
@@ -221,7 +231,7 @@ export default function VentesPage() {
         doc.setTextColor(30, 41, 59);
         doc.text('@ousmanedesign.sn', 127, 33.5);
 
-        // 4. Bloc Infos Client
+        // Client
         doc.setDrawColor(254, 215, 170);
         doc.setFillColor(255, 251, 235);
         doc.roundedRect(16, 45, 179, 25, 2, 2, 'FD');
@@ -262,7 +272,7 @@ export default function VentesPage() {
         doc.setTextColor(15, 23, 42);
         doc.text(`${formattedDate}`, 50, 64);
 
-        // 5. Tableau des articles
+        // Table
         autoTable(doc, {
           startY: 76,
           margin: { left: 16, right: 15 },
@@ -299,7 +309,7 @@ export default function VentesPage() {
         // @ts-ignore
         const finalY = (doc as any).lastAutoTable?.finalY || 105;
 
-        // 6. Bloc Observations
+        // Observations
         doc.setDrawColor(226, 232, 240);
         doc.setFillColor(248, 250, 252);
         doc.roundedRect(16, finalY + 8, 85, 32, 2, 2, 'FD');
@@ -314,7 +324,7 @@ export default function VentesPage() {
         const obsText = selectedVente.observations || 'Articles livres en parfait etat.';
         doc.text(doc.splitTextToSize(obsText, 77), 20, finalY + 22);
 
-        // 7. Totaux Financiers
+        // Totaux
         const totalX = 110;
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
@@ -341,7 +351,7 @@ export default function VentesPage() {
         doc.text('RESTE A PAYER :', totalX + 2, finalY + 35.5);
         doc.text(`${formatAmount(mReste)} FCFA`, 188, finalY + 35.5, { align: 'right' });
 
-        // 8. Signatures en bas
+        // Signatures
         const sigY = finalY + 65;
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(8.5);
