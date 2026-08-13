@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Search, Printer, Share2, MapPin, Phone, Mail, X, CheckCircle2, Download } from 'lucide-react';
+import { ArrowLeft, Plus, Search, Printer, Share2, MapPin, Phone, Mail, X, CheckCircle2, Download, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 interface Vente {
@@ -149,7 +149,7 @@ export default function VentesPage() {
       }
     }
 
-    // SI LA VENTE EST ISSUED D'UNE COMMANDE, ON MET À JOUR LA TABLE COMMANDES (ACOMPTE = MONTANT_TOTAL)
+    // SI LA VENTE EST ISSUE D'UNE COMMANDE, ON MET À JOUR LA TABLE COMMANDES (ACOMPTE = MONTANT_TOTAL)
     if (formData.commande_id) {
       const { error: updateCmdError } = await supabase
         .from('commandes')
@@ -182,6 +182,19 @@ export default function VentesPage() {
     fetchCommandesToImport();
   };
 
+  const handleDeleteVente = async (id?: string, clientNom?: string) => {
+    if (!id) return;
+    const confirmDelete = window.confirm(`Êtes-vous sûr de vouloir supprimer la vente de "${clientNom || 'ce client'}" ?`);
+    if (!confirmDelete) return;
+
+    const { error } = await supabase.from('ventes').delete().eq('id', id);
+    if (error) {
+      alert('Erreur lors de la suppression : ' + error.message);
+    } else {
+      fetchVentes();
+    }
+  };
+
   const formatAmount = (val: number | undefined | null) => {
     return (Number(val) || 0).toLocaleString('fr-FR').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ');
   };
@@ -210,12 +223,12 @@ export default function VentesPage() {
           ? new Date(selectedVente.created_at).toLocaleDateString('fr-FR')
           : new Date().toLocaleDateString('fr-FR');
 
-        // 1. Cadre extérieur ambre
+        // Cadre extérieur
         doc.setLineWidth(0.8);
         doc.setDrawColor(217, 119, 6);
         doc.roundedRect(10, 10, 190, 277, 3, 3, 'S');
 
-        // 2. En-tête : Titre & Sous-titre
+        // En-tête
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(22);
         doc.setTextColor(120, 53, 15);
@@ -226,7 +239,7 @@ export default function VentesPage() {
         doc.setTextColor(217, 119, 6);
         doc.text('CREATION & COUTURE CONTEMPORAINE', 16, 30);
 
-        // 3. Bloc Coordonnées (En haut à droite)
+        // Coordonnées
         doc.setDrawColor(254, 215, 170);
         doc.setFillColor(255, 251, 235);
         doc.roundedRect(118, 15, 77, 24, 2, 2, 'FD');
@@ -268,7 +281,7 @@ export default function VentesPage() {
         doc.setTextColor(30, 41, 59);
         doc.text('@ousmanedesign.sn', 127, 33.5);
 
-        // 4. Bloc Infos Client
+        // Infos Client
         doc.setDrawColor(254, 215, 170);
         doc.setFillColor(255, 251, 235);
         doc.roundedRect(16, 45, 179, 25, 2, 2, 'FD');
@@ -309,7 +322,7 @@ export default function VentesPage() {
         doc.setTextColor(15, 23, 42);
         doc.text(`${formattedDate}`, 50, 64);
 
-        // 5. Tableau
+        // Tableau
         autoTable(doc, {
           startY: 76,
           margin: { left: 16, right: 15 },
@@ -346,7 +359,7 @@ export default function VentesPage() {
         // @ts-ignore
         const finalY = (doc as any).lastAutoTable?.finalY || 105;
 
-        // 6. Observations
+        // Observations
         doc.setDrawColor(226, 232, 240);
         doc.setFillColor(248, 250, 252);
         doc.roundedRect(16, finalY + 8, 85, 32, 2, 2, 'FD');
@@ -361,7 +374,7 @@ export default function VentesPage() {
         const obsText = selectedVente.observations || 'Articles livres en parfait etat.';
         doc.text(doc.splitTextToSize(obsText, 77), 20, finalY + 22);
 
-        // 7. Totaux Financiers
+        // Totaux
         const totalX = 110;
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
@@ -388,7 +401,7 @@ export default function VentesPage() {
         doc.text('RESTE A PAYER :', totalX + 2, finalY + 35.5);
         doc.text(`${formatAmount(mReste)} FCFA`, 188, finalY + 35.5, { align: 'right' });
 
-        // 8. Signatures
+        // Signatures
         const sigY = finalY + 65;
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(8.5);
@@ -497,7 +510,7 @@ export default function VentesPage() {
                 <th className="p-3">Total</th>
                 <th className="p-3">Réglé</th>
                 <th className="p-3">Reste</th>
-                <th className="p-3 text-center">Action</th>
+                <th className="p-3 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -518,12 +531,22 @@ export default function VentesPage() {
                     <td className="p-3 text-emerald-600 font-semibold">{formatAmount(avance)} FCFA</td>
                     <td className="p-3 font-bold text-amber-600">{formatAmount(reste)} FCFA</td>
                     <td className="p-3 text-center">
-                      <button
-                        onClick={() => setSelectedVente(v)}
-                        className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-1.5 rounded-md shadow-xs transition-colors cursor-pointer"
-                      >
-                        Facture
-                      </button>
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => setSelectedVente(v)}
+                          className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-1.5 rounded-md shadow-xs transition-colors cursor-pointer"
+                          title="Voir / Imprimer Facture"
+                        >
+                          Facture
+                        </button>
+                        <button
+                          onClick={() => handleDeleteVente(v.id, v.client_nom)}
+                          className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
+                          title="Supprimer la vente"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
