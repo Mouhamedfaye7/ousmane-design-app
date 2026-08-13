@@ -48,17 +48,33 @@ export default function StatistiquesPage() {
     return (Number(val) || 0).toLocaleString('fr-FR').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ');
   };
 
+  // --- HELPER : CALCUL DE L'AVANCE RÉELLE ET DU RESTE ---
+  // Si la commande est "Livrée", elle est considérée comme payée en totalité (avance = montant_total, reste = 0)
+  const getCalculatedFinancials = (c: Commande) => {
+    const tot = Number(c.montant_total) || 0;
+    let av = Number(c.avance) || 0;
+
+    if (c.statut === 'Livrée') {
+      av = tot; // Une commande livrée est intégralement réglée
+    }
+
+    const reste = Math.max(0, tot - av);
+    return { tot, av, reste };
+  };
+
   // --- CALCULS DYNAMIQUES EN TEMPS RÉEL ---
   const totalCommandes = commandes.length;
 
   const caTotal = commandes.reduce((acc, c) => acc + (Number(c.montant_total) || 0), 0);
-  const totalAvances = commandes.reduce((acc, c) => acc + (Number(c.avance) || 0), 0);
+  
+  const totalAvances = commandes.reduce((acc, c) => {
+    const { av } = getCalculatedFinancials(c);
+    return acc + av;
+  }, 0);
+
   const totalReste = commandes.reduce((acc, c) => {
-    const tot = Number(c.montant_total) || 0;
-    const av = Number(c.avance) || 0;
-    // Correction : calcul dynamique direct du reste (montant total - avance)
-    const r = tot - av;
-    return acc + Math.max(0, r);
+    const { reste } = getCalculatedFinancials(c);
+    return acc + reste;
   }, 0);
 
   const nbRecues = commandes.filter(c => (c.statut || 'Reçue') === 'Reçue').length;
@@ -271,10 +287,7 @@ export default function StatistiquesPage() {
                 </tr>
               ) : (
                 commandes.slice(0, 10).map((c) => {
-                  const total = Number(c.montant_total) || 0;
-                  const avance = Number(c.avance) || 0;
-                  // Correction : calcul dynamique direct pour chaque ligne du tableau
-                  const reste = Math.max(0, total - avance);
+                  const { tot, av, reste } = getCalculatedFinancials(c);
 
                   let badgeColor = "bg-slate-100 text-slate-700 border-slate-300";
                   if (c.statut === 'En Coupe') badgeColor = "bg-amber-100 text-amber-800 border-amber-300";
@@ -291,8 +304,8 @@ export default function StatistiquesPage() {
                           {c.statut || 'Reçue'}
                         </span>
                       </td>
-                      <td className="p-3 text-right font-semibold text-slate-800">{formatAmount(total)} F</td>
-                      <td className="p-3 text-right font-semibold text-emerald-600">{formatAmount(avance)} F</td>
+                      <td className="p-3 text-right font-semibold text-slate-800">{formatAmount(tot)} F</td>
+                      <td className="p-3 text-right font-semibold text-emerald-600">{formatAmount(av)} F</td>
                       <td className="p-3 text-right font-bold text-amber-700">{formatAmount(reste)} F</td>
                     </tr>
                   );
