@@ -12,44 +12,62 @@ import {
   Scissors,
   Layers,
   BookOpen,
-  BarChart3
+  BarChart3,
+  DollarSign,
+  AlertCircle
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+
+interface Commande {
+  id?: string;
+  code_commande?: string;
+  client_nom?: string;
+  statut?: string;
+  designation?: string;
+  montant_total?: number;
+  avance?: number;
+  reste?: number;
+  created_at?: string;
+}
 
 export default function Dashboard() {
   const [totalClients, setTotalClients] = useState<number>(0);
   const [enCoursCount, setEnCoursCount] = useState<number>(0);
   const [pretesCount, setPretesCount] = useState<number>(0);
   const [chiffreAffaires, setChiffreAffaires] = useState<number>(0);
+  const [totalAvances, setTotalAvances] = useState<number>(0);
+  const [totalReste, setTotalReste] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // Helper : Alignement strict avec la page statistiques pour le calcul des finances
+  const getCalculatedFinancials = (c: Commande) => {
+    const tot = Number(c.montant_total) || 0;
+    let av = Number(c.avance) || 0;
+
+    if (c.statut === 'Livrée') {
+      av = tot; // Une commande livrée est totalement réglée
+    }
+
+    const reste = Math.max(0, tot - av);
+    return { tot, av, reste };
+  };
 
   useEffect(() => {
     async function loadDashboardStats() {
       setLoading(true);
 
-      // 1. Récupération des clients réels depuis la table 'clients'
-      const { data: clientsData } = await supabase.from('clients').select('id');
-      
-      // 2. Récupération des commandes
-      const { data: commandes } = await supabase.from('commandes').select('*');
+      const { data: commandes, error } = await supabase
+        .from('commandes')
+        .select('*');
 
-      // 3. Récupération des ventes directes boutique (si la table existe)
-      const { data: ventes } = await supabase.from('ventes').select('montant_total');
-
-      // --- CALCULS SYNCHRONISÉS ---
-      
-      // Total Clients : priorité à la table 'clients'
-      if (clientsData && clientsData.length > 0) {
-        setTotalClients(clientsData.length);
-      } else if (commandes) {
+      if (!error && commandes) {
+        // Total des clients uniques
         const clientsUniques = new Set(
           commandes.map(c => (c.client_nom || '').trim().toLowerCase()).filter(Boolean)
         );
         setTotalClients(clientsUniques.size);
-      }
 
-      if (commandes) {
-        // En Cours Atelier (Reçue / En Coupe)
+        // Commandes en cours atelier (Reçue / En Coupe)
         const enCours = commandes.filter(
           c => !c.statut || c.statut === 'Reçue' || c.statut === 'En Coupe'
         ).length;
@@ -59,13 +77,23 @@ export default function Dashboard() {
         const pretes = commandes.filter(c => c.statut === 'Prête').length;
         setPretesCount(pretes);
 
-        // Chiffre d'Affaires des commandes sur mesure
-        const totalCACommandes = commandes.reduce((acc, c) => acc + (Number(c.montant_total) || 0), 0);
-        
-        // Chiffre d'Affaires des ventes directes boutique
-        const totalCAVentes = ventes ? ventes.reduce((acc, v) => acc + (Number(v.montant_total) || 0), 0) : 0;
+        // Chiffre d'affaires global
+        const caTotal = commandes.reduce((acc, c) => acc + (Number(c.montant_total) || 0), 0);
+        setChiffreAffaires(caTotal);
 
-        setChiffreAffaires(totalCACommandes + totalCAVentes);
+        // Cumul des Avances / Encaissements réels
+        const avancesTotales = commandes.reduce((acc, c) => {
+          const { av } = getCalculatedFinancials(c);
+          return acc + av;
+        }, 0);
+        setTotalAvances(avancesTotales);
+
+        // Cumul des Solde / Créances clients
+        const resteTotal = commandes.reduce((acc, c) => {
+          const { reste } = getCalculatedFinancials(c);
+          return acc + reste;
+        }, 0);
+        setTotalReste(resteTotal);
       }
 
       setLoading(false);
@@ -81,6 +109,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-slate-50 p-6 text-slate-800">
       <div className="max-w-7xl mx-auto space-y-8">
+        
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
           <div>
@@ -106,55 +135,87 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* INDICATEURS DYNAMIQUES */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {/* INDICATEURS DYNAMIQUES SYNCHRONISÉS */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          
+          {/* Total Clients */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex justify-between items-center">
             <div>
               <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Clients</p>
-              <h2 className="text-2xl font-bold text-slate-900 mt-1">
+              <h2 className="text-xl font-bold text-slate-900 mt-1">
                 {loading ? '...' : totalClients}
               </h2>
             </div>
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
-              <Users size={22} />
+            <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">
+              <Users size={20} />
             </div>
           </div>
 
+          {/* En Cours Atelier */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex justify-between items-center">
             <div>
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">En Cours Atelier</p>
-              <h2 className="text-2xl font-bold text-amber-600 mt-1">
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">En Cours</p>
+              <h2 className="text-xl font-bold text-amber-600 mt-1">
                 {loading ? '...' : enCoursCount}
               </h2>
             </div>
-            <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
-              <Clock size={22} />
+            <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl">
+              <Clock size={20} />
             </div>
           </div>
 
+          {/* Commandes Prêtes */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex justify-between items-center">
             <div>
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Commandes Prêtes</p>
-              <h2 className="text-2xl font-bold text-emerald-600 mt-1">
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Prêtes</p>
+              <h2 className="text-xl font-bold text-emerald-600 mt-1">
                 {loading ? '...' : pretesCount}
               </h2>
             </div>
-            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
-              <CheckCircle2 size={22} />
+            <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
+              <CheckCircle2 size={20} />
             </div>
           </div>
 
+          {/* Chiffre d'Affaires */}
           <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex justify-between items-center">
             <div>
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Chiffre d'Affaires</p>
-              <h2 className="text-2xl font-bold text-slate-900 mt-1">
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">CA Total</p>
+              <h2 className="text-xl font-bold text-slate-900 mt-1">
                 {loading ? '...' : `${formatAmount(chiffreAffaires)} F`}
               </h2>
             </div>
-            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
-              <TrendingUp size={22} />
+            <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl">
+              <TrendingUp size={20} />
             </div>
           </div>
+
+          {/* Avances Perçues */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex justify-between items-center">
+            <div>
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Encaissé</p>
+              <h2 className="text-xl font-bold text-emerald-600 mt-1">
+                {loading ? '...' : `${formatAmount(totalAvances)} F`}
+              </h2>
+            </div>
+            <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
+              <DollarSign size={20} />
+            </div>
+          </div>
+
+          {/* Reste à Recouvrer */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex justify-between items-center">
+            <div>
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Reste à Recouvrer</p>
+              <h2 className="text-xl font-bold text-rose-600 mt-1">
+                {loading ? '...' : `${formatAmount(totalReste)} F`}
+              </h2>
+            </div>
+            <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl">
+              <AlertCircle size={20} />
+            </div>
+          </div>
+
         </div>
 
         {/* MODULES DE GESTION */}
