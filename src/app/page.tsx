@@ -27,75 +27,51 @@ export default function Dashboard() {
     async function loadDashboardStats() {
       setLoading(true);
 
-      try {
-        // 1. Comptage des clients
-        const { data: clientsData, count: clientCount, error: clientError } = await supabase
-          .from('clients')
-          .select('id', { count: 'exact' });
+      // 1. Récupération des clients réels depuis la table 'clients'
+      const { data: clientsData } = await supabase.from('clients').select('id');
+      
+      // 2. Récupération des commandes
+      const { data: commandes } = await supabase.from('commandes').select('*');
 
-        if (!clientError) {
-          if (typeof clientCount === 'number' && clientCount > 0) {
-            setTotalClients(clientCount);
-          } else if (clientsData) {
-            setTotalClients(clientsData.length);
-          }
-        } else {
-          console.error("Erreur récuperation clients:", clientError);
-        }
+      // 3. Récupération des ventes directes boutique (si la table existe)
+      const { data: ventes } = await supabase.from('ventes').select('montant_total');
 
-        // 2. Récupération des commandes
-        const { data: commandes, error: cmdError } = await supabase
-          .from('commandes')
-          .select('*');
+      // --- CALCULS SYNCHRONISÉS ---
+      
+      // Total Clients : priorité à la table 'clients'
+      if (clientsData && clientsData.length > 0) {
+        setTotalClients(clientsData.length);
+      } else if (commandes) {
+        const clientsUniques = new Set(
+          commandes.map(c => (c.client_nom || '').trim().toLowerCase()).filter(Boolean)
+        );
+        setTotalClients(clientsUniques.size);
+      }
 
-        let caCommandes = 0;
-        let enCours = 0;
-        let pretes = 0;
-
-        if (!cmdError && commandes) {
-          enCours = commandes.filter(
-            c => !c.statut || c.statut === 'Reçue' || c.statut === 'En Coupe'
-          ).length;
-
-          pretes = commandes.filter(c => c.statut === 'Prête').length;
-
-          caCommandes = commandes.reduce((acc, c) => acc + (Number(c.montant_total) || 0), 0);
-        }
-
+      if (commandes) {
+        // En Cours Atelier (Reçue / En Coupe)
+        const enCours = commandes.filter(
+          c => !c.statut || c.statut === 'Reçue' || c.statut === 'En Coupe'
+        ).length;
         setEnCoursCount(enCours);
+
+        // Commandes prêtes
+        const pretes = commandes.filter(c => c.statut === 'Prête').length;
         setPretesCount(pretes);
 
-        // 3. Récupération des ventes directes (si existantes)
-        const { data: ventes, error: ventError } = await supabase
-          .from('ventes')
-          .select('*');
+        // Chiffre d'Affaires des commandes sur mesure
+        const totalCACommandes = commandes.reduce((acc, c) => acc + (Number(c.montant_total) || 0), 0);
+        
+        // Chiffre d'Affaires des ventes directes boutique
+        const totalCAVentes = ventes ? ventes.reduce((acc, v) => acc + (Number(v.montant_total) || 0), 0) : 0;
 
-        let caVentes = 0;
-        if (!ventError && ventes) {
-          caVentes = ventes.reduce((acc, v) => acc + (Number(v.montant_total) || Number(v.montant) || 0), 0);
-        }
-
-        setChiffreAffaires(caCommandes + caVentes);
-
-      } catch (err) {
-        console.error("Erreur globale Dashboard :", err);
-      } finally {
-        setLoading(false);
+        setChiffreAffaires(totalCACommandes + totalCAVentes);
       }
+
+      setLoading(false);
     }
 
     loadDashboardStats();
-
-    const channel = supabase
-      .channel('dashboard-changes')
-      .on('postgres_changes', { event: '*', schema: 'public' }, () => {
-        loadDashboardStats();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, []);
 
   const formatAmount = (val: number) => {
@@ -105,7 +81,6 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-slate-50 p-6 text-slate-800">
       <div className="max-w-7xl mx-auto space-y-8">
-        
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
           <div>
