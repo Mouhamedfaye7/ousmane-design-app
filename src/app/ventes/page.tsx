@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Search, Printer, Share2, MapPin, Phone, Mail, X, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Search, Printer, Share2, MapPin, Phone, Mail, X, CheckCircle2, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 interface Vente {
@@ -24,15 +24,31 @@ interface Vente {
   observations?: string;
 }
 
+interface Commande {
+  id: string;
+  client_nom: string;
+  client_tel: string;
+  modele?: string;
+  statut?: string;
+  montant_total?: number;
+  acompte?: number;
+  mode_paiement?: string;
+  notes?: string;
+}
+
 export default function VentesPage() {
   const [ventes, setVentes] = useState<Vente[]>([]);
+  const [commandesPending, setCommandesPending] = useState<Commande[]>([]);
   const [search, setSearch] = useState('');
   const [selectedVente, setSelectedVente] = useState<Vente | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importSearch, setImportSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
   const [formData, setFormData] = useState({
+    commande_id: '',
     client_nom: '',
     client_tel: '',
     mode_commande: 'Prêt-à-porter',
@@ -49,14 +65,20 @@ export default function VentesPage() {
     const { data, error } = await supabase.from('ventes').select('*').order('created_at', { ascending: false });
     if (!error && data) {
       setVentes(data);
-    } else if (error) {
-      console.error("Erreur de chargement :", error.message);
     }
     setLoading(false);
   };
 
+  const fetchCommandesToImport = async () => {
+    const { data, error } = await supabase.from('commandes').select('*').order('created_at', { ascending: false });
+    if (!error && data) {
+      setCommandesPending(data);
+    }
+  };
+
   useEffect(() => {
     fetchVentes();
+    fetchCommandesToImport();
   }, []);
 
   const qtyNum = Number(formData.quantite) || 0;
@@ -64,6 +86,28 @@ export default function VentesPage() {
   const montantTotalCalcul = qtyNum * puNum;
   const avanceNum = Number(formData.avance) || 0;
   const resteCalcul = montantTotalCalcul - avanceNum;
+
+  // Sélectionner une commande à importer dans le formulaire de vente
+  const handleSelectCommandeToImport = (cmd: Commande) => {
+    const total = Number(cmd.montant_total) || 0;
+    const acompte = Number(cmd.acompte) || 0;
+
+    setFormData({
+      commande_id: cmd.id,
+      client_nom: cmd.client_nom || '',
+      client_tel: cmd.client_tel || '',
+      mode_commande: 'Sur Mesure',
+      mode_paiement: cmd.mode_paiement || 'Espèces',
+      designation: cmd.modele || 'Commande Sur Mesure',
+      quantite: '1',
+      prix_unitaire: total.toString(),
+      avance: total.toString(), // On solde le reste à payer lors de la vente
+      observations: cmd.notes || `Solde de la commande #${cmd.id.slice(0, 5)} (Avance initiale: ${acompte} FCFA)`
+    });
+
+    setShowImportModal(false);
+    setShowAddModal(true);
+  };
 
   const handleCreateVente = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,12 +133,13 @@ export default function VentesPage() {
     const { error } = await supabase.from('ventes').insert([payload]);
 
     if (error) {
+      console.error('Erreur Supabase Ventes:', error);
       const fallbackPayload = {
         client_nom: formData.client_nom,
         client_tel: formData.client_tel,
         montant_total: montantTotalCalcul,
         avance: avanceNum,
-        observations: `[${formData.designation}] Qté: ${qtyNum} x ${puNum} FCFA - Mode: ${formData.mode_paiement} - Reste: ${resteCalcul} FCFA | ${formData.observations}`.trim()
+        observations: `[${formData.designation}] Qté: ${qtyNum} x ${puNum} FCFA - Reste: ${resteCalcul} FCFA | ${formData.observations}`.trim()
       };
       
       const { error: fallbackError } = await supabase.from('ventes').insert([fallbackPayload]);
@@ -104,8 +149,24 @@ export default function VentesPage() {
       }
     }
 
+    // SI LA VENTE EST ISSUED D'UNE COMMANDE, ON MET À JOUR LA TABLE COMMANDES (ACOMPTE = MONTANT_TOTAL)
+    if (formData.commande_id) {
+      const { error: updateCmdError } = await supabase
+        .from('commandes')
+        .update({ 
+          acompte: montantTotalCalcul,
+          statut: 'Livrée' 
+        })
+        .eq('id', formData.commande_id);
+
+      if (updateCmdError) {
+        console.error('Erreur mise à jour commande:', updateCmdError);
+      }
+    }
+
     setShowAddModal(false);
     setFormData({
+      commande_id: '',
       client_nom: '',
       client_tel: '',
       mode_commande: 'Prêt-à-porter',
@@ -116,30 +177,9 @@ export default function VentesPage() {
       avance: '',
       observations: ''
     });
+
     fetchVentes();
-  };
-
-  const handleDeleteVente = async (id: string | undefined) => {
-    if (!id) {
-      alert("Impossible de supprimer : ID invalide ou manquant.");
-      return;
-    }
-
-    const confirmDelete = window.confirm("Êtes-vous sûr de vouloir supprimer cette facture ?");
-    if (!confirmDelete) return;
-
-    const { error } = await supabase
-      .from('ventes')
-      .delete({ count: 'exact' })
-      .eq('id', id);
-
-    if (error) {
-      alert("Erreur Supabase lors de la suppression :\n" + error.message + "\n\nAssurez-vous d'avoir exécuté la politique RLS dans Supabase.");
-      return;
-    }
-
-    setVentes((prev) => prev.filter((v) => v.id !== id));
-    setSelectedVente(null);
+    fetchCommandesToImport();
   };
 
   const formatAmount = (val: number | undefined | null) => {
@@ -170,10 +210,12 @@ export default function VentesPage() {
           ? new Date(selectedVente.created_at).toLocaleDateString('fr-FR')
           : new Date().toLocaleDateString('fr-FR');
 
+        // 1. Cadre extérieur ambre
         doc.setLineWidth(0.8);
         doc.setDrawColor(217, 119, 6);
         doc.roundedRect(10, 10, 190, 277, 3, 3, 'S');
 
+        // 2. En-tête : Titre & Sous-titre
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(22);
         doc.setTextColor(120, 53, 15);
@@ -184,17 +226,49 @@ export default function VentesPage() {
         doc.setTextColor(217, 119, 6);
         doc.text('CREATION & COUTURE CONTEMPORAINE', 16, 30);
 
+        // 3. Bloc Coordonnées (En haut à droite)
         doc.setDrawColor(254, 215, 170);
         doc.setFillColor(255, 251, 235);
         doc.roundedRect(118, 15, 77, 24, 2, 2, 'FD');
+
+        doc.setLineWidth(0.35);
+        doc.setDrawColor(217, 119, 6);
+
+        // Map Pin
+        doc.circle(123, 19.8, 1.2, 'S');
+        doc.circle(123, 19.8, 0.4, 'S');
+        doc.line(121.9, 20.2, 123, 22.2);
+        doc.line(124.1, 20.2, 123, 22.2);
 
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(8);
         doc.setTextColor(30, 41, 59);
         doc.text('Hann Maristes, Dakar, Senegal', 127, 21.5);
+
+        // Phone
+        doc.line(121.7, 25.7, 122.3, 25.1);
+        doc.line(122.3, 25.1, 122.8, 25.6);
+        doc.line(122.8, 25.6, 123.9, 26.7);
+        doc.line(123.9, 26.7, 124.4, 27.2);
+        doc.line(124.4, 27.2, 123.8, 27.8);
+        doc.line(123.8, 27.8, 123.3, 27.3);
+        doc.line(123.3, 27.3, 122.2, 26.2);
+        doc.line(122.2, 26.2, 121.7, 25.7);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(30, 41, 59);
         doc.text('77 646 21 02 / 70 348 26 82', 127, 27.5);
+
+        // Email
+        doc.roundedRect(121.2, 31.2, 3.6, 2.6, 0.3, 0.3, 'S');
+        doc.line(121.2, 31.2, 123, 32.6);
+        doc.line(124.8, 31.2, 123, 32.6);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(30, 41, 59);
         doc.text('@ousmanedesign.sn', 127, 33.5);
 
+        // 4. Bloc Infos Client
         doc.setDrawColor(254, 215, 170);
         doc.setFillColor(255, 251, 235);
         doc.roundedRect(16, 45, 179, 25, 2, 2, 'FD');
@@ -203,22 +277,39 @@ export default function VentesPage() {
         doc.setFontSize(9);
         doc.setTextColor(30, 41, 59);
         doc.text('Nom du client :', 20, 52);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(15, 23, 42);
         doc.text(`${selectedVente.client_nom || ''}`, 50, 52);
 
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(30, 41, 59);
         doc.text('Mode de commande :', 112, 52);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(15, 23, 42);
         doc.text(`${selectedVente.mode_commande || 'Pret-a-porter'}`, 150, 52);
 
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(30, 41, 59);
         doc.text('Telephone :', 20, 58);
+        doc.setFont('helvetica', 'bold');
         doc.setTextColor(217, 119, 6);
         doc.text(`${selectedVente.client_tel || '-'}`, 50, 58);
 
+        doc.setFont('helvetica', 'bold');
         doc.setTextColor(30, 41, 59);
         doc.text('Mode de paiement :', 112, 58);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(15, 23, 42);
         doc.text(`${selectedVente.mode_paiement || 'Especes'}`, 150, 58);
 
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(30, 41, 59);
         doc.text('Date :', 20, 64);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(15, 23, 42);
         doc.text(`${formattedDate}`, 50, 64);
 
+        // 5. Tableau
         autoTable(doc, {
           startY: 76,
           margin: { left: 16, right: 15 },
@@ -231,14 +322,31 @@ export default function VentesPage() {
               `${formatAmount(mTotal)} FCFA`
             ]
           ],
-          headStyles: { fillColor: [217, 119, 6], textColor: [255, 255, 255], fontStyle: 'bold' },
-          bodyStyles: { fontSize: 9, textColor: [30, 41, 59], fontStyle: 'bold' },
+          headStyles: { 
+            fillColor: [217, 119, 6], 
+            textColor: [255, 255, 255], 
+            fontStyle: 'bold',
+            fontSize: 9,
+            halign: 'left'
+          },
+          columnStyles: {
+            0: { halign: 'left', cellWidth: 'auto' },
+            1: { halign: 'center', cellWidth: 30 },
+            2: { halign: 'right', cellWidth: 45 },
+            3: { halign: 'right', cellWidth: 45, fontStyle: 'bold' }
+          },
+          bodyStyles: {
+            fontSize: 9,
+            textColor: [30, 41, 59],
+            fontStyle: 'bold'
+          },
           theme: 'plain',
         });
 
         // @ts-ignore
         const finalY = (doc as any).lastAutoTable?.finalY || 105;
 
+        // 6. Observations
         doc.setDrawColor(226, 232, 240);
         doc.setFillColor(248, 250, 252);
         doc.roundedRect(16, finalY + 8, 85, 32, 2, 2, 'FD');
@@ -253,6 +361,7 @@ export default function VentesPage() {
         const obsText = selectedVente.observations || 'Articles livres en parfait etat.';
         doc.text(doc.splitTextToSize(obsText, 77), 20, finalY + 22);
 
+        // 7. Totaux Financiers
         const totalX = 110;
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
@@ -262,16 +371,36 @@ export default function VentesPage() {
         doc.setTextColor(15, 23, 42);
         doc.text(`${formatAmount(mTotal)} FCFA`, 190, finalY + 14, { align: 'right' });
 
+        doc.setDrawColor(241, 245, 249);
+        doc.line(totalX, finalY + 17, 190, finalY + 17);
+
         doc.setTextColor(51, 65, 85);
-        doc.text('AVANCE VERSEE :', totalX, finalY + 23);
+        doc.text('MONTANT REGLE :', totalX, finalY + 23);
         doc.setTextColor(16, 185, 129);
         doc.text(`${formatAmount(mAvance)} FCFA`, 190, finalY + 23, { align: 'right' });
 
+        doc.line(totalX, finalY + 26, 190, finalY + 26);
+
         doc.setFillColor(217, 119, 6);
         doc.roundedRect(totalX - 2, finalY + 29, 83, 10, 1.5, 1.5, 'F');
+        doc.setFont('helvetica', 'bold');
         doc.setTextColor(255, 255, 255);
         doc.text('RESTE A PAYER :', totalX + 2, finalY + 35.5);
         doc.text(`${formatAmount(mReste)} FCFA`, 188, finalY + 35.5, { align: 'right' });
+
+        // 8. Signatures
+        const sigY = finalY + 65;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(51, 65, 85);
+        doc.text('SIGNATURE DU CLIENT', 35, sigY, { align: 'center' });
+        doc.text('OUSMANE DESIGN (SIGNATURE & CACHET)', 145, sigY, { align: 'center' });
+
+        doc.setLineWidth(0.3);
+        doc.setDrawColor(203, 213, 225);
+        doc.setLineDashPattern([1, 1], 0);
+        doc.line(16, sigY + 12, 85, sigY + 12);
+        doc.line(110, sigY + 12, 185, sigY + 12);
 
         const safeName = (selectedVente.client_nom || 'Client').replace(/\s+/g, '_');
         doc.save(`Facture_${safeName}.pdf`);
@@ -287,7 +416,7 @@ export default function VentesPage() {
       const textMsg = `Bonjour ${selectedVente.client_nom},\n\nVoici votre facture de chez *Ousmane Design* :\n` +
         `- Article : ${getItemName(selectedVente)}\n` +
         `- Total : ${formatAmount(mTotal)} FCFA\n` +
-        `- Avance versée : ${formatAmount(mAvance)} FCFA\n` +
+        `- Montant réglé : ${formatAmount(mAvance)} FCFA\n` +
         `- Reste à payer : ${formatAmount(mReste)} FCFA\n\n` +
         `Le fichier PDF de votre facture a été téléchargé. Merci pour votre confiance !`;
 
@@ -298,6 +427,7 @@ export default function VentesPage() {
       window.open(waUrl, '_blank');
 
     } catch (err: any) {
+      console.error('Erreur génération PDF:', err);
       alert('Erreur génération PDF : ' + err.message);
     } finally {
       setExporting(false);
@@ -310,6 +440,12 @@ export default function VentesPage() {
     getItemName(v).toLowerCase().includes(search.toLowerCase())
   );
 
+  const filteredCommandesToImport = commandesPending.filter(c => 
+    (c.client_nom || '').toLowerCase().includes(importSearch.toLowerCase()) ||
+    (c.client_tel || '').includes(importSearch) ||
+    (c.modele || '').toLowerCase().includes(importSearch.toLowerCase())
+  );
+
   return (
     <div className="min-h-screen bg-slate-100 p-6 text-slate-800">
       
@@ -319,15 +455,24 @@ export default function VentesPage() {
             <ArrowLeft size={16} /> Retour au tableau de bord
           </Link>
           <h1 className="text-2xl font-bold text-slate-900">Gestion des Ventes & Factures</h1>
-          <p className="text-sm text-slate-500">Ousmane Design — Enregistrement et suivi</p>
+          <p className="text-sm text-slate-500">Ousmane Design — Enregistrement, facturation et encaissement</p>
         </div>
 
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-sm transition-colors cursor-pointer"
-        >
-          <Plus size={18} /> Enregistrer une vente
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-sm transition-colors cursor-pointer"
+          >
+            <Download size={18} /> Solder une Commande
+          </button>
+
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-sm transition-colors cursor-pointer"
+          >
+            <Plus size={18} /> Vente Prêt-à-porter
+          </button>
+        </div>
       </div>
 
       <div className="max-w-7xl mx-auto bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
@@ -335,7 +480,7 @@ export default function VentesPage() {
           <Search className="absolute left-3 top-3 text-slate-400" size={16} />
           <input
             type="text"
-            placeholder="Rechercher..."
+            placeholder="Rechercher une facture..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-amber-500"
@@ -350,7 +495,7 @@ export default function VentesPage() {
                 <th className="p-3">Téléphone</th>
                 <th className="p-3">Désignation</th>
                 <th className="p-3">Total</th>
-                <th className="p-3">Avance</th>
+                <th className="p-3">Réglé</th>
                 <th className="p-3">Reste</th>
                 <th className="p-3 text-center">Action</th>
               </tr>
@@ -373,21 +518,12 @@ export default function VentesPage() {
                     <td className="p-3 text-emerald-600 font-semibold">{formatAmount(avance)} FCFA</td>
                     <td className="p-3 font-bold text-amber-600">{formatAmount(reste)} FCFA</td>
                     <td className="p-3 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => setSelectedVente(v)}
-                          className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-1.5 rounded-md shadow-xs cursor-pointer"
-                        >
-                          Facture
-                        </button>
-                        <button
-                          onClick={() => handleDeleteVente(v.id)}
-                          title="Supprimer la facture"
-                          className="bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold p-1.5 rounded-md transition-colors cursor-pointer"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => setSelectedVente(v)}
+                        className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-1.5 rounded-md shadow-xs transition-colors cursor-pointer"
+                      >
+                        Facture
+                      </button>
                     </td>
                   </tr>
                 );
@@ -397,7 +533,75 @@ export default function VentesPage() {
         </div>
       </div>
 
-      {/* MODAL AJOUT */}
+      {/* MODAL IMPORTATION / SOLDE COMMANDE */}
+      {showImportModal && (
+        <div 
+          onClick={() => setShowImportModal(false)}
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative border border-slate-200"
+          >
+            <div className="flex justify-between items-center mb-4 border-b pb-3">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Solder / Facturer une Commande</h2>
+                <p className="text-xs text-slate-500">Sélectionnez la commande du client pour en encaisser le reliquat.</p>
+              </div>
+              <button onClick={() => setShowImportModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-3 text-slate-400" size={16} />
+              <input
+                type="text"
+                placeholder="Rechercher par nom de client (ex: Omar Diome)..."
+                value={importSearch}
+                onChange={(e) => setImportSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+
+            <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl">
+              {filteredCommandesToImport.length === 0 ? (
+                <div className="p-6 text-center text-xs text-slate-400">Aucune commande trouvée.</div>
+              ) : (
+                filteredCommandesToImport.map((cmd) => {
+                  const total = Number(cmd.montant_total) || 0;
+                  const acompte = Number(cmd.acompte) || 0;
+                  const reliquat = total - acompte;
+
+                  return (
+                    <div key={cmd.id} className="p-3.5 flex items-center justify-between hover:bg-emerald-50/40 transition-colors">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900 text-xs">{cmd.client_nom}</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-semibold">{cmd.statut || 'En cours'}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500">{cmd.modele || 'Commande sur mesure'} — Tel: {cmd.client_tel || '-'}</p>
+                        <p className="text-[11px] text-slate-700">
+                          Total: <strong>{formatAmount(total)} FCFA</strong> | Avance: <span className="text-emerald-600 font-semibold">{formatAmount(acompte)} FCFA</span>
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={() => handleSelectCommandeToImport(cmd)}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer shrink-0"
+                      >
+                        <CheckCircle2 size={14} /> Solder ({formatAmount(reliquat)} F)
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL AJOUT / FACTURATION */}
       {showAddModal && (
         <div 
           onClick={() => setShowAddModal(false)}
@@ -408,7 +612,9 @@ export default function VentesPage() {
             className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl relative border border-slate-200"
           >
             <div className="flex justify-between items-center mb-4 border-b pb-3">
-              <h2 className="text-lg font-bold text-slate-900">Nouvelle Vente</h2>
+              <h2 className="text-lg font-bold text-slate-900">
+                {formData.commande_id ? 'Solder & Générer Facture' : 'Nouvelle Vente'}
+              </h2>
               <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
                 <X size={20} />
               </button>
@@ -434,35 +640,6 @@ export default function VentesPage() {
                     onChange={(e) => setFormData({ ...formData, client_tel: e.target.value })}
                     className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
                   />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold mb-1">Mode de commande</label>
-                  <select
-                    value={formData.mode_commande}
-                    onChange={(e) => setFormData({ ...formData, mode_commande: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none font-medium text-slate-800"
-                  >
-                    <option value="Prêt-à-porter">Prêt-à-porter</option>
-                    <option value="Sur mesure">Sur mesure</option>
-                    <option value="Commande spéciale">Commande spéciale</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-semibold mb-1">Mode de paiement</label>
-                  <select
-                    value={formData.mode_paiement}
-                    onChange={(e) => setFormData({ ...formData, mode_paiement: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none font-bold text-amber-800"
-                  >
-                    <option value="Espèces">Espèces</option>
-                    <option value="Wave">Wave</option>
-                    <option value="Orange Money">Orange Money</option>
-                    <option value="Virement bancaire">Virement bancaire</option>
-                    <option value="Chèque">Chèque</option>
-                  </select>
                 </div>
               </div>
 
@@ -513,7 +690,7 @@ export default function VentesPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold mb-1">Avance versée (FCFA)</label>
+                  <label className="block font-semibold mb-1">Montant Encaissé (FCFA)</label>
                   <input
                     type="number"
                     min="0"
@@ -557,7 +734,7 @@ export default function VentesPage() {
                   type="submit"
                   className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold cursor-pointer"
                 >
-                  Enregistrer
+                  Enregistrer & Solder
                 </button>
               </div>
             </form>
@@ -565,7 +742,7 @@ export default function VentesPage() {
         </div>
       )}
 
-      {/* MODAL FACTURE */}
+      {/* MODAL FACTURE VISUELLE */}
       {selectedVente && (
         <div 
           onClick={() => setSelectedVente(null)}
@@ -589,12 +766,6 @@ export default function VentesPage() {
                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   <Share2 size={15} /> {exporting ? 'Génération...' : 'WhatsApp (PDF)'}
-                </button>
-                <button
-                  onClick={() => handleDeleteVente(selectedVente.id)}
-                  className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-                >
-                  <Trash2 size={15} /> Supprimer
                 </button>
               </div>
 
@@ -639,7 +810,7 @@ export default function VentesPage() {
                 </div>
                 <div className="space-y-1.5">
                   <p><strong className="text-slate-900">Mode de commande :</strong> <span className="font-bold text-slate-800">{selectedVente.mode_commande || 'Prêt-à-porter'}</span></p>
-                  <p><strong className="text-slate-900">Mode de paiement :</strong> <span className="font-bold text-amber-800">{selectedVente.mode_paiement || 'Espèces'}</span></p>
+                  <p><strong className="text-slate-900">Mode de paiement :</strong> <span className="font-bold text-slate-800">{selectedVente.mode_paiement || 'Espèces'}</span></p>
                 </div>
               </div>
 
@@ -674,7 +845,7 @@ export default function VentesPage() {
                     <span className="font-bold text-slate-900">{formatAmount(selectedVente.montant_total)} FCFA</span>
                   </div>
                   <div className="flex justify-between py-1 px-2 border-b border-slate-100">
-                    <span className="text-slate-700 font-bold">AVANCE VERSÉE :</span>
+                    <span className="text-slate-700 font-bold">MONTANT RÉGLÉ :</span>
                     <span className="font-bold text-emerald-600">{formatAmount(selectedVente.avance)} FCFA</span>
                   </div>
                   <div className="flex justify-between py-1.5 px-2 bg-amber-600 text-white font-bold rounded-md">
