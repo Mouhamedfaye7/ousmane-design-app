@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
-  ArrowLeft, Plus, Search, Printer, Share2, MapPin, Phone, Mail, 
+  ArrowLeft, Search, Printer, Share2, MapPin, Phone, Mail, 
   X, CheckCircle2, Download, Trash2, Package, ShoppingBag 
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -69,7 +69,7 @@ export default function VentesPage() {
 
   const [formData, setFormData] = useState({
     commande_id: '',
-    article_id: '', // Pour la déduction de stock dans le catalogue
+    article_id: '',
     client_nom: '',
     client_tel: '',
     mode_commande: 'Prêt-à-porter',
@@ -118,8 +118,12 @@ export default function VentesPage() {
 
   // Sélectionner une commande sur-mesure à solder
   const handleSelectCommandeToImport = (cmd: Commande) => {
-    const total = Number(cmd.montant_total) || 0;
+    let total = Number(cmd.montant_total) || 0;
     const acompte = Number(cmd.acompte) || 0;
+
+    if (total > 0 && total < 1000) {
+      total = total * 1000;
+    }
 
     setFormData({
       commande_id: cmd.id,
@@ -141,6 +145,15 @@ export default function VentesPage() {
 
   // Sélectionner un article depuis le catalogue
   const handleSelectCatalogueItem = (item: CatalogueItem) => {
+    let price = Number(item.prix) || 0;
+    
+    // Correction automatique si le prix est saisi en milliers (ex: 50 au lieu de 50000 FCFA)
+    if (price > 0 && price < 1000) {
+      price = price * 1000;
+    }
+
+    const priceStr = price > 0 ? price.toString() : '';
+
     setFormData({
       commande_id: '',
       article_id: item.id,
@@ -148,10 +161,10 @@ export default function VentesPage() {
       client_tel: '',
       mode_commande: 'Prêt-à-porter',
       mode_paiement: 'Espèces',
-      designation: `${item.nom} (${item.categorie})`,
+      designation: `${item.nom}${item.categorie ? ` (${item.categorie})` : ''}`,
       quantite: '1',
-      prix_unitaire: item.prix.toString(),
-      avance: item.prix.toString(),
+      prix_unitaire: priceStr,
+      avance: priceStr,
       observations: `Achat article catalogue. Stock dispo: ${item.quantite_stock}`
     });
 
@@ -198,7 +211,7 @@ export default function VentesPage() {
       }
     }
 
-    // 1. SI LA VENTE EST ISSUE DU CATALOGUE -> DÉDUCTION DU STOCK
+    // 1. DÉDUCTION DU STOCK CATALOGUE
     if (formData.article_id) {
       const { data: catItem } = await supabase
         .from('catalogue')
@@ -208,30 +221,22 @@ export default function VentesPage() {
 
       if (catItem) {
         const nouveauStock = Math.max(0, Number(catItem.quantite_stock) - qtyNum);
-        const { error: updateStockError } = await supabase
+        await supabase
           .from('catalogue')
           .update({ quantite_stock: nouveauStock })
           .eq('id', formData.article_id);
-
-        if (updateStockError) {
-          console.error('Erreur déduction stock:', updateStockError.message);
-        }
       }
     }
 
-    // 2. SI LA VENTE EST ISSUE D'UNE COMMANDE -> MISE À JOUR DE LA COMMANDE
+    // 2. MISE À JOUR COMMANDE
     if (formData.commande_id) {
-      const { error: updateCmdError } = await supabase
+      await supabase
         .from('commandes')
         .update({
           acompte: montantTotalCalcul,
           statut: 'Livrée'
         })
         .eq('id', formData.commande_id);
-
-      if (updateCmdError) {
-        console.error('Erreur mise à jour commande:', updateCmdError);
-      }
     }
 
     setShowAddModal(false);
@@ -268,11 +273,13 @@ export default function VentesPage() {
   };
 
   const formatAmount = (val: number | undefined | null) => {
-    return (Number(val) || 0).toLocaleString('fr-FR').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ');
+    let num = Number(val) || 0;
+    if (num > 0 && num < 1000) num = num * 1000;
+    return num.toLocaleString('fr-FR').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ');
   };
 
   const getItemName = (v: Vente) => {
-    return v.designation || v.article || v.description || v.modele || 'Article sur mesure';
+    return v.designation || v.article || v.description || v.modele || 'Article catalogue';
   };
 
   const handleSharePDFWhatsApp = async () => {
@@ -288,8 +295,12 @@ export default function VentesPage() {
 
         const doc = new jsPDF({ unit: 'mm', format: 'a4' });
 
-        const mTotal = selectedVente.montant_total || 0;
-        const mAvance = selectedVente.avance || 0;
+        let mTotal = selectedVente.montant_total || 0;
+        let mAvance = selectedVente.avance || 0;
+
+        if (mTotal > 0 && mTotal < 1000) mTotal = mTotal * 1000;
+        if (mAvance > 0 && mAvance < 1000) mAvance = mAvance * 1000;
+
         const mReste = selectedVente.reste !== undefined ? selectedVente.reste : (mTotal - mAvance);
         const formattedDate = selectedVente.created_at
           ? new Date(selectedVente.created_at).toLocaleDateString('fr-FR')
@@ -313,38 +324,11 @@ export default function VentesPage() {
         doc.setFillColor(255, 251, 235);
         doc.roundedRect(118, 15, 77, 24, 2, 2, 'FD');
 
-        doc.setLineWidth(0.35);
-        doc.setDrawColor(217, 119, 6);
-
-        doc.circle(123, 19.8, 1.2, 'S');
-        doc.circle(123, 19.8, 0.4, 'S');
-        doc.line(121.9, 20.2, 123, 22.2);
-        doc.line(124.1, 20.2, 123, 22.2);
-
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(8);
         doc.setTextColor(30, 41, 59);
         doc.text('Hann Maristes, Dakar, Senegal', 127, 21.5);
-
-        doc.line(121.7, 25.7, 122.3, 25.1);
-        doc.line(122.3, 25.1, 122.8, 25.6);
-        doc.line(122.8, 25.6, 123.9, 26.7);
-        doc.line(123.9, 26.7, 124.4, 27.2);
-        doc.line(124.4, 27.2, 123.8, 27.8);
-        doc.line(123.8, 27.8, 123.3, 27.3);
-        doc.line(123.3, 27.3, 122.2, 26.2);
-        doc.line(122.2, 26.2, 121.7, 25.7);
-
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(30, 41, 59);
         doc.text('77 646 21 02 / 70 348 26 82', 127, 27.5);
-
-        doc.roundedRect(121.2, 31.2, 3.6, 2.6, 0.3, 0.3, 'S');
-        doc.line(121.2, 31.2, 123, 32.6);
-        doc.line(124.8, 31.2, 123, 32.6);
-
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(30, 41, 59);
         doc.text('@ousmanedesign.sn', 127, 33.5);
 
         doc.setDrawColor(254, 215, 170);
@@ -355,36 +339,20 @@ export default function VentesPage() {
         doc.setFontSize(9);
         doc.setTextColor(30, 41, 59);
         doc.text('Nom du client :', 20, 52);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(15, 23, 42);
         doc.text(`${selectedVente.client_nom || ''}`, 50, 52);
 
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(30, 41, 59);
         doc.text('Mode de commande :', 112, 52);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(15, 23, 42);
         doc.text(`${selectedVente.mode_commande || 'Pret-a-porter'}`, 150, 52);
 
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(30, 41, 59);
         doc.text('Telephone :', 20, 58);
-        doc.setFont('helvetica', 'bold');
         doc.setTextColor(217, 119, 6);
         doc.text(`${selectedVente.client_tel || '-'}`, 50, 58);
 
-        doc.setFont('helvetica', 'bold');
         doc.setTextColor(30, 41, 59);
         doc.text('Mode de paiement :', 112, 58);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(15, 23, 42);
         doc.text(`${selectedVente.mode_paiement || 'Especes'}`, 150, 58);
 
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(30, 41, 59);
         doc.text('Date :', 20, 64);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(15, 23, 42);
         doc.text(`${formattedDate}`, 50, 64);
 
         autoTable(doc, {
@@ -445,15 +413,10 @@ export default function VentesPage() {
         doc.setTextColor(15, 23, 42);
         doc.text(`${formatAmount(mTotal)} FCFA`, 190, finalY + 14, { align: 'right' });
 
-        doc.setDrawColor(241, 245, 249);
-        doc.line(totalX, finalY + 17, 190, finalY + 17);
-
         doc.setTextColor(51, 65, 85);
         doc.text('MONTANT REGLE :', totalX, finalY + 23);
         doc.setTextColor(16, 185, 129);
         doc.text(`${formatAmount(mAvance)} FCFA`, 190, finalY + 23, { align: 'right' });
-
-        doc.line(totalX, finalY + 26, 190, finalY + 26);
 
         doc.setFillColor(217, 119, 6);
         doc.roundedRect(totalX - 2, finalY + 29, 83, 10, 1.5, 1.5, 'F');
@@ -469,12 +432,6 @@ export default function VentesPage() {
         doc.text('SIGNATURE DU CLIENT', 35, sigY, { align: 'center' });
         doc.text('OUSMANE DESIGN (SIGNATURE & CACHET)', 145, sigY, { align: 'center' });
 
-        doc.setLineWidth(0.3);
-        doc.setDrawColor(203, 213, 225);
-        doc.setLineDashPattern([1, 1], 0);
-        doc.line(16, sigY + 12, 85, sigY + 12);
-        doc.line(110, sigY + 12, 185, sigY + 12);
-
         const safeName = (selectedVente.client_nom || 'Client').replace(/\s+/g, '_');
         doc.save(`Facture_${safeName}.pdf`);
       }
@@ -482,8 +439,11 @@ export default function VentesPage() {
       let cleanPhone = (selectedVente.client_tel || '').replace(/\s+/g, '').replace(/[^0-9]/g, '');
       if (cleanPhone.length === 9) cleanPhone = '221' + cleanPhone;
 
-      const mTotal = selectedVente.montant_total || 0;
-      const mAvance = selectedVente.avance || 0;
+      let mTotal = selectedVente.montant_total || 0;
+      let mAvance = selectedVente.avance || 0;
+      if (mTotal > 0 && mTotal < 1000) mTotal = mTotal * 1000;
+      if (mAvance > 0 && mAvance < 1000) mAvance = mAvance * 1000;
+
       const mReste = selectedVente.reste !== undefined ? selectedVente.reste : (mTotal - mAvance);
 
       const textMsg = `Bonjour ${selectedVente.client_nom},\n\nVoici votre facture de chez *Ousmane Design* :\n` +
@@ -550,28 +510,6 @@ export default function VentesPage() {
           >
             <Download size={18} /> Solder une Commande
           </button>
-
-          <button
-            onClick={() => {
-              setFormData({
-                commande_id: '',
-                article_id: '',
-                client_nom: '',
-                client_tel: '',
-                mode_commande: 'Prêt-à-porter',
-                mode_paiement: 'Espèces',
-                designation: '',
-                quantite: '1',
-                prix_unitaire: '',
-                avance: '',
-                observations: ''
-              });
-              setShowAddModal(true);
-            }}
-            className="bg-slate-800 hover:bg-slate-900 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-sm transition-colors cursor-pointer text-xs"
-          >
-            <Plus size={18} /> Vente Libérale
-          </button>
         </div>
       </div>
 
@@ -607,9 +545,12 @@ export default function VentesPage() {
               ) : filteredVentes.length === 0 ? (
                 <tr><td colSpan={7} className="text-center py-6 text-slate-400">Aucune vente enregistrée.</td></tr>
               ) : filteredVentes.map((v) => {
-                const total = v.montant_total || 0;
-                const avance = v.avance || 0;
+                let total = v.montant_total || 0;
+                let avance = v.avance || 0;
+                if (total > 0 && total < 1000) total = total * 1000;
+                if (avance > 0 && avance < 1000) avance = avance * 1000;
                 const reste = v.reste !== undefined ? v.reste : (total - avance);
+
                 return (
                   <tr key={v.id} className="hover:bg-amber-50/30 transition-colors">
                     <td className="p-3 font-semibold text-slate-900">{v.client_nom}</td>
@@ -748,8 +689,10 @@ export default function VentesPage() {
                 <div className="p-6 text-center text-xs text-slate-400">Aucune commande trouvée.</div>
               ) : (
                 filteredCommandesToImport.map((cmd) => {
-                  const total = Number(cmd.montant_total) || 0;
-                  const acompte = Number(cmd.acompte) || 0;
+                  let total = Number(cmd.montant_total) || 0;
+                  let acompte = Number(cmd.acompte) || 0;
+                  if (total > 0 && total < 1000) total = total * 1000;
+                  if (acompte > 0 && acompte < 1000) acompte = acompte * 1000;
                   const reliquat = total - acompte;
 
                   return (
@@ -780,7 +723,7 @@ export default function VentesPage() {
         </div>
       )}
 
-      {/* MODAL AJOUT / FACTURATION */}
+      {/* MODAL ENREGISTREMENT VENTE */}
       {showAddModal && (
         <div
           onClick={() => setShowAddModal(false)}
@@ -792,7 +735,7 @@ export default function VentesPage() {
           >
             <div className="flex justify-between items-center mb-4 border-b pb-3">
               <h2 className="text-lg font-bold text-slate-900">
-                {formData.commande_id ? 'Solder & Générer Facture' : formData.article_id ? 'Vente Catalogue' : 'Nouvelle Vente'}
+                {formData.commande_id ? 'Solder & Générer Facture' : 'Vente Catalogue'}
               </h2>
               <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
                 <X size={20} />
@@ -827,7 +770,7 @@ export default function VentesPage() {
                 <input
                   type="text"
                   required
-                  placeholder="Ex: Tissu Bazin, Boubou VIP..."
+                  placeholder="Ex: Diaspora (Homme)..."
                   value={formData.designation}
                   onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
                   className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none"
@@ -850,7 +793,7 @@ export default function VentesPage() {
                   <input
                     type="number"
                     min="0"
-                    placeholder="Ex: 25000"
+                    placeholder="Ex: 50000"
                     value={formData.prix_unitaire}
                     onChange={(e) => setFormData({ ...formData, prix_unitaire: e.target.value })}
                     className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none"
@@ -873,7 +816,7 @@ export default function VentesPage() {
                   <input
                     type="number"
                     min="0"
-                    placeholder="Ex: 10000"
+                    placeholder="Ex: 50000"
                     value={formData.avance}
                     onChange={(e) => setFormData({ ...formData, avance: e.target.value })}
                     className="w-full p-2 border border-slate-300 rounded-md bg-white text-emerald-600 font-bold focus:ring-2 focus:ring-amber-500 outline-none"
