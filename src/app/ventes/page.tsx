@@ -2,7 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Search, Printer, Share2, MapPin, Phone, Mail, X, CheckCircle2, Download, Trash2 } from 'lucide-react';
+import { 
+  ArrowLeft, Plus, Search, Printer, Share2, MapPin, Phone, Mail, 
+  X, CheckCircle2, Download, Trash2, Package, ShoppingBag 
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 interface Vente {
@@ -36,19 +39,37 @@ interface Commande {
   notes?: string;
 }
 
+interface CatalogueItem {
+  id: string;
+  nom: string;
+  categorie: string;
+  prix: number;
+  quantite_stock: number;
+  tailles?: string[];
+  couleurs?: string[];
+}
+
 export default function VentesPage() {
   const [ventes, setVentes] = useState<Vente[]>([]);
   const [commandesPending, setCommandesPending] = useState<Commande[]>([]);
+  const [catalogueItems, setCatalogueItems] = useState<CatalogueItem[]>([]);
+  
   const [search, setSearch] = useState('');
   const [selectedVente, setSelectedVente] = useState<Vente | null>(null);
+  
   const [showAddModal, setShowAddModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showCatalogueModal, setShowCatalogueModal] = useState(false);
+  
   const [importSearch, setImportSearch] = useState('');
+  const [catalogueSearch, setCatalogueSearch] = useState('');
+  
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
   const [formData, setFormData] = useState({
     commande_id: '',
+    article_id: '', // Pour la déduction de stock dans le catalogue
     client_nom: '',
     client_tel: '',
     mode_commande: 'Prêt-à-porter',
@@ -76,9 +97,17 @@ export default function VentesPage() {
     }
   };
 
+  const fetchCatalogue = async () => {
+    const { data, error } = await supabase.from('catalogue').select('*').order('created_at', { ascending: false });
+    if (!error && data) {
+      setCatalogueItems(data);
+    }
+  };
+
   useEffect(() => {
     fetchVentes();
     fetchCommandesToImport();
+    fetchCatalogue();
   }, []);
 
   const qtyNum = Number(formData.quantite) || 0;
@@ -87,13 +116,14 @@ export default function VentesPage() {
   const avanceNum = Number(formData.avance) || 0;
   const resteCalcul = montantTotalCalcul - avanceNum;
 
-  // Sélectionner une commande à importer dans le formulaire de vente
+  // Sélectionner une commande sur-mesure à solder
   const handleSelectCommandeToImport = (cmd: Commande) => {
     const total = Number(cmd.montant_total) || 0;
     const acompte = Number(cmd.acompte) || 0;
 
     setFormData({
       commande_id: cmd.id,
+      article_id: '',
       client_nom: cmd.client_nom || '',
       client_tel: cmd.client_tel || '',
       mode_commande: 'Sur Mesure',
@@ -101,11 +131,31 @@ export default function VentesPage() {
       designation: cmd.modele || 'Commande Sur Mesure',
       quantite: '1',
       prix_unitaire: total.toString(),
-      avance: total.toString(), // On solde le reste à payer lors de la vente
+      avance: total.toString(),
       observations: cmd.notes || `Solde de la commande #${cmd.id.slice(0, 5)} (Avance initiale: ${acompte} FCFA)`
     });
 
     setShowImportModal(false);
+    setShowAddModal(true);
+  };
+
+  // Sélectionner un article depuis le catalogue
+  const handleSelectCatalogueItem = (item: CatalogueItem) => {
+    setFormData({
+      commande_id: '',
+      article_id: item.id,
+      client_nom: '',
+      client_tel: '',
+      mode_commande: 'Prêt-à-porter',
+      mode_paiement: 'Espèces',
+      designation: `${item.nom} (${item.categorie})`,
+      quantite: '1',
+      prix_unitaire: item.prix.toString(),
+      avance: item.prix.toString(),
+      observations: `Achat article catalogue. Stock dispo: ${item.quantite_stock}`
+    });
+
+    setShowCatalogueModal(false);
     setShowAddModal(true);
   };
 
@@ -141,7 +191,6 @@ export default function VentesPage() {
         avance: avanceNum,
         observations: `[${formData.designation}] Qté: ${qtyNum} x ${puNum} FCFA - Reste: ${resteCalcul} FCFA | ${formData.observations}`.trim()
       };
-      
       const { error: fallbackError } = await supabase.from('ventes').insert([fallbackPayload]);
       if (fallbackError) {
         alert('Erreur enregistrement : ' + fallbackError.message);
@@ -149,13 +198,34 @@ export default function VentesPage() {
       }
     }
 
-    // SI LA VENTE EST ISSUE D'UNE COMMANDE, ON MET À JOUR LA TABLE COMMANDES (ACOMPTE = MONTANT_TOTAL)
+    // 1. SI LA VENTE EST ISSUE DU CATALOGUE -> DÉDUCTION DU STOCK
+    if (formData.article_id) {
+      const { data: catItem } = await supabase
+        .from('catalogue')
+        .select('quantite_stock')
+        .eq('id', formData.article_id)
+        .single();
+
+      if (catItem) {
+        const nouveauStock = Math.max(0, Number(catItem.quantite_stock) - qtyNum);
+        const { error: updateStockError } = await supabase
+          .from('catalogue')
+          .update({ quantite_stock: nouveauStock })
+          .eq('id', formData.article_id);
+
+        if (updateStockError) {
+          console.error('Erreur déduction stock:', updateStockError.message);
+        }
+      }
+    }
+
+    // 2. SI LA VENTE EST ISSUE D'UNE COMMANDE -> MISE À JOUR DE LA COMMANDE
     if (formData.commande_id) {
       const { error: updateCmdError } = await supabase
         .from('commandes')
-        .update({ 
+        .update({
           acompte: montantTotalCalcul,
-          statut: 'Livrée' 
+          statut: 'Livrée'
         })
         .eq('id', formData.commande_id);
 
@@ -167,6 +237,7 @@ export default function VentesPage() {
     setShowAddModal(false);
     setFormData({
       commande_id: '',
+      article_id: '',
       client_nom: '',
       client_tel: '',
       mode_commande: 'Prêt-à-porter',
@@ -180,6 +251,7 @@ export default function VentesPage() {
 
     fetchVentes();
     fetchCommandesToImport();
+    fetchCatalogue();
   };
 
   const handleDeleteVente = async (id?: string, clientNom?: string) => {
@@ -219,16 +291,14 @@ export default function VentesPage() {
         const mTotal = selectedVente.montant_total || 0;
         const mAvance = selectedVente.avance || 0;
         const mReste = selectedVente.reste !== undefined ? selectedVente.reste : (mTotal - mAvance);
-        const formattedDate = selectedVente.created_at 
+        const formattedDate = selectedVente.created_at
           ? new Date(selectedVente.created_at).toLocaleDateString('fr-FR')
           : new Date().toLocaleDateString('fr-FR');
 
-        // Cadre extérieur
         doc.setLineWidth(0.8);
         doc.setDrawColor(217, 119, 6);
         doc.roundedRect(10, 10, 190, 277, 3, 3, 'S');
 
-        // En-tête
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(22);
         doc.setTextColor(120, 53, 15);
@@ -239,7 +309,6 @@ export default function VentesPage() {
         doc.setTextColor(217, 119, 6);
         doc.text('CREATION & COUTURE CONTEMPORAINE', 16, 30);
 
-        // Coordonnées
         doc.setDrawColor(254, 215, 170);
         doc.setFillColor(255, 251, 235);
         doc.roundedRect(118, 15, 77, 24, 2, 2, 'FD');
@@ -247,7 +316,6 @@ export default function VentesPage() {
         doc.setLineWidth(0.35);
         doc.setDrawColor(217, 119, 6);
 
-        // Map Pin
         doc.circle(123, 19.8, 1.2, 'S');
         doc.circle(123, 19.8, 0.4, 'S');
         doc.line(121.9, 20.2, 123, 22.2);
@@ -258,7 +326,6 @@ export default function VentesPage() {
         doc.setTextColor(30, 41, 59);
         doc.text('Hann Maristes, Dakar, Senegal', 127, 21.5);
 
-        // Phone
         doc.line(121.7, 25.7, 122.3, 25.1);
         doc.line(122.3, 25.1, 122.8, 25.6);
         doc.line(122.8, 25.6, 123.9, 26.7);
@@ -272,7 +339,6 @@ export default function VentesPage() {
         doc.setTextColor(30, 41, 59);
         doc.text('77 646 21 02 / 70 348 26 82', 127, 27.5);
 
-        // Email
         doc.roundedRect(121.2, 31.2, 3.6, 2.6, 0.3, 0.3, 'S');
         doc.line(121.2, 31.2, 123, 32.6);
         doc.line(124.8, 31.2, 123, 32.6);
@@ -281,7 +347,6 @@ export default function VentesPage() {
         doc.setTextColor(30, 41, 59);
         doc.text('@ousmanedesign.sn', 127, 33.5);
 
-        // Infos Client
         doc.setDrawColor(254, 215, 170);
         doc.setFillColor(255, 251, 235);
         doc.roundedRect(16, 45, 179, 25, 2, 2, 'FD');
@@ -322,7 +387,6 @@ export default function VentesPage() {
         doc.setTextColor(15, 23, 42);
         doc.text(`${formattedDate}`, 50, 64);
 
-        // Tableau
         autoTable(doc, {
           startY: 76,
           margin: { left: 16, right: 15 },
@@ -335,9 +399,9 @@ export default function VentesPage() {
               `${formatAmount(mTotal)} FCFA`
             ]
           ],
-          headStyles: { 
-            fillColor: [217, 119, 6], 
-            textColor: [255, 255, 255], 
+          headStyles: {
+            fillColor: [217, 119, 6],
+            textColor: [255, 255, 255],
             fontStyle: 'bold',
             fontSize: 9,
             halign: 'left'
@@ -359,7 +423,6 @@ export default function VentesPage() {
         // @ts-ignore
         const finalY = (doc as any).lastAutoTable?.finalY || 105;
 
-        // Observations
         doc.setDrawColor(226, 232, 240);
         doc.setFillColor(248, 250, 252);
         doc.roundedRect(16, finalY + 8, 85, 32, 2, 2, 'FD');
@@ -368,13 +431,11 @@ export default function VentesPage() {
         doc.setFontSize(8.5);
         doc.setTextColor(51, 65, 85);
         doc.text('OBSERVATIONS :', 20, finalY + 15);
-        
         doc.setFont('helvetica', 'italic');
         doc.setTextColor(100, 116, 139);
         const obsText = selectedVente.observations || 'Articles livres en parfait etat.';
         doc.text(doc.splitTextToSize(obsText, 77), 20, finalY + 22);
 
-        // Totaux
         const totalX = 110;
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
@@ -401,7 +462,6 @@ export default function VentesPage() {
         doc.text('RESTE A PAYER :', totalX + 2, finalY + 35.5);
         doc.text(`${formatAmount(mReste)} FCFA`, 188, finalY + 35.5, { align: 'right' });
 
-        // Signatures
         const sigY = finalY + 65;
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(8.5);
@@ -433,7 +493,7 @@ export default function VentesPage() {
         `- Reste à payer : ${formatAmount(mReste)} FCFA\n\n` +
         `Le fichier PDF de votre facture a été téléchargé. Merci pour votre confiance !`;
 
-      const waUrl = cleanPhone 
+      const waUrl = cleanPhone
         ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(textMsg)}`
         : `https://wa.me/?text=${encodeURIComponent(textMsg)}`;
 
@@ -453,41 +513,69 @@ export default function VentesPage() {
     getItemName(v).toLowerCase().includes(search.toLowerCase())
   );
 
-  const filteredCommandesToImport = commandesPending.filter(c => 
+  const filteredCommandesToImport = commandesPending.filter(c =>
     (c.client_nom || '').toLowerCase().includes(importSearch.toLowerCase()) ||
     (c.client_tel || '').includes(importSearch) ||
     (c.modele || '').toLowerCase().includes(importSearch.toLowerCase())
   );
 
+  const filteredCatalogue = catalogueItems.filter(item =>
+    (item.nom || '').toLowerCase().includes(catalogueSearch.toLowerCase()) ||
+    (item.categorie || '').toLowerCase().includes(catalogueSearch.toLowerCase())
+  );
+
   return (
     <div className="min-h-screen bg-slate-100 p-6 text-slate-800">
-      
+      {/* BOUTONS SUPÉRIEURS */}
       <div className="max-w-7xl mx-auto mb-6 flex flex-col md:flex-row justify-between md:items-center gap-4">
         <div>
-          <Link href="/" className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1 mb-2">
+          <Link href="/" className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1 mb-2 font-semibold">
             <ArrowLeft size={16} /> Retour au tableau de bord
           </Link>
           <h1 className="text-2xl font-bold text-slate-900">Gestion des Ventes & Factures</h1>
-          <p className="text-sm text-slate-500">Ousmane Design — Enregistrement, facturation et encaissement</p>
+          <p className="text-sm font-medium text-slate-500">Ousmane Design — Enregistrement, facturation et encaissement</p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={() => setShowCatalogueModal(true)}
+            className="bg-amber-700 hover:bg-amber-800 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-sm transition-colors cursor-pointer text-xs"
+          >
+            <Package size={18} /> Vendre du Catalogue
+          </button>
+
           <button
             onClick={() => setShowImportModal(true)}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-sm transition-colors cursor-pointer"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-sm transition-colors cursor-pointer text-xs"
           >
             <Download size={18} /> Solder une Commande
           </button>
 
           <button
-            onClick={() => setShowAddModal(true)}
-            className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-sm transition-colors cursor-pointer"
+            onClick={() => {
+              setFormData({
+                commande_id: '',
+                article_id: '',
+                client_nom: '',
+                client_tel: '',
+                mode_commande: 'Prêt-à-porter',
+                mode_paiement: 'Espèces',
+                designation: '',
+                quantite: '1',
+                prix_unitaire: '',
+                avance: '',
+                observations: ''
+              });
+              setShowAddModal(true);
+            }}
+            className="bg-slate-800 hover:bg-slate-900 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-sm transition-colors cursor-pointer text-xs"
           >
-            <Plus size={18} /> Vente Prêt-à-porter
+            <Plus size={18} /> Vente Libérale
           </button>
         </div>
       </div>
 
+      {/* TABLEAU DES VENTRES */}
       <div className="max-w-7xl mx-auto bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-3 text-slate-400" size={16} />
@@ -496,7 +584,7 @@ export default function VentesPage() {
             placeholder="Rechercher une facture..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-amber-500"
+            className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-amber-500 text-slate-900"
           />
         </div>
 
@@ -556,13 +644,81 @@ export default function VentesPage() {
         </div>
       </div>
 
+      {/* MODAL CHOIX ARTICLE DU CATALOGUE */}
+      {showCatalogueModal && (
+        <div
+          onClick={() => setShowCatalogueModal(false)}
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative border border-slate-200"
+          >
+            <div className="flex justify-between items-center mb-4 border-b pb-3">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Vendre un article du Catalogue</h2>
+                <p className="text-xs text-slate-500">Sélectionnez le modèle. Le stock sera déduit automatiquement à la validation.</p>
+              </div>
+              <button onClick={() => setShowCatalogueModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-3 text-slate-400" size={16} />
+              <input
+                type="text"
+                placeholder="Rechercher un modèle dans le catalogue..."
+                value={catalogueSearch}
+                onChange={(e) => setCatalogueSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-amber-500 text-slate-900"
+              />
+            </div>
+
+            <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl">
+              {filteredCatalogue.length === 0 ? (
+                <div className="p-6 text-center text-xs text-slate-400">Aucun article trouvé dans le catalogue.</div>
+              ) : (
+                filteredCatalogue.map((item) => (
+                  <div key={item.id} className="p-3.5 flex items-center justify-between hover:bg-amber-50/40 transition-colors">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900 text-xs">{item.nom}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-bold uppercase">
+                          {item.categorie}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">Prix : <strong className="text-amber-800">{formatAmount(item.prix)} FCFA</strong></p>
+                      <p className="text-[11px] font-semibold">
+                        Stock disponible : 
+                        <span className={`ml-1 px-1.5 py-0.2 rounded ${item.quantite_stock > 0 ? 'bg-emerald-100 text-emerald-900' : 'bg-red-100 text-red-900'}`}>
+                          {item.quantite_stock} dispo.
+                        </span>
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => handleSelectCatalogueItem(item)}
+                      disabled={item.quantite_stock <= 0}
+                      className="bg-amber-700 hover:bg-amber-800 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold text-xs px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer shrink-0"
+                    >
+                      <ShoppingBag size={14} /> Choisir cet article
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL IMPORTATION / SOLDE COMMANDE */}
       {showImportModal && (
-        <div 
+        <div
           onClick={() => setShowImportModal(false)}
           className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto"
         >
-          <div 
+          <div
             onClick={(e) => e.stopPropagation()}
             className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative border border-slate-200"
           >
@@ -580,10 +736,10 @@ export default function VentesPage() {
               <Search className="absolute left-3 top-3 text-slate-400" size={16} />
               <input
                 type="text"
-                placeholder="Rechercher par nom de client (ex: Omar Diome)..."
+                placeholder="Rechercher par nom de client..."
                 value={importSearch}
                 onChange={(e) => setImportSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900"
               />
             </div>
 
@@ -626,17 +782,17 @@ export default function VentesPage() {
 
       {/* MODAL AJOUT / FACTURATION */}
       {showAddModal && (
-        <div 
+        <div
           onClick={() => setShowAddModal(false)}
           className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto"
         >
-          <div 
+          <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl relative border border-slate-200"
+            className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl relative border border-slate-200 text-slate-900"
           >
             <div className="flex justify-between items-center mb-4 border-b pb-3">
               <h2 className="text-lg font-bold text-slate-900">
-                {formData.commande_id ? 'Solder & Générer Facture' : 'Nouvelle Vente'}
+                {formData.commande_id ? 'Solder & Générer Facture' : formData.article_id ? 'Vente Catalogue' : 'Nouvelle Vente'}
               </h2>
               <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
                 <X size={20} />
@@ -646,85 +802,85 @@ export default function VentesPage() {
             <form onSubmit={handleCreateVente} className="space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold mb-1">Nom du client *</label>
+                  <label className="block font-bold text-slate-700 mb-1">Nom du client *</label>
                   <input
                     type="text"
                     required
                     value={formData.client_nom}
                     onChange={(e) => setFormData({ ...formData, client_nom: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
+                    className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold mb-1">Téléphone</label>
+                  <label className="block font-bold text-slate-700 mb-1">Téléphone</label>
                   <input
                     type="text"
                     value={formData.client_tel}
                     onChange={(e) => setFormData({ ...formData, client_tel: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
+                    className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block font-semibold mb-1">Désignation / Article *</label>
+                <label className="block font-bold text-slate-700 mb-1">Désignation / Article *</label>
                 <input
                   type="text"
                   required
                   placeholder="Ex: Tissu Bazin, Boubou VIP..."
                   value={formData.designation}
                   onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
-                  className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
+                  className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none"
                 />
               </div>
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block font-semibold mb-1">Quantité</label>
+                  <label className="block font-bold text-slate-700 mb-1">Quantité</label>
                   <input
                     type="number"
                     min="1"
                     value={formData.quantite}
                     onChange={(e) => setFormData({ ...formData, quantite: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
+                    className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold mb-1">Prix Unitaire (FCFA)</label>
+                  <label className="block font-bold text-slate-700 mb-1">Prix Unitaire (FCFA)</label>
                   <input
                     type="number"
                     min="0"
                     placeholder="Ex: 25000"
                     value={formData.prix_unitaire}
                     onChange={(e) => setFormData({ ...formData, prix_unitaire: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
+                    className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold mb-1">Montant Total</label>
+                  <label className="block font-bold text-slate-700 mb-1">Montant Total</label>
                   <input
                     type="text"
                     readOnly
                     value={`${formatAmount(montantTotalCalcul)} FCFA`}
-                    className="w-full p-2 border border-slate-200 rounded-md bg-slate-100 font-bold text-slate-800"
+                    className="w-full p-2 border border-slate-200 rounded-md bg-slate-100 font-bold text-slate-900"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold mb-1">Montant Encaissé (FCFA)</label>
+                  <label className="block font-bold text-slate-700 mb-1">Montant Encaissé (FCFA)</label>
                   <input
                     type="number"
                     min="0"
                     placeholder="Ex: 10000"
                     value={formData.avance}
                     onChange={(e) => setFormData({ ...formData, avance: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none text-emerald-600 font-bold"
+                    className="w-full p-2 border border-slate-300 rounded-md bg-white text-emerald-600 font-bold focus:ring-2 focus:ring-amber-500 outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold mb-1">Reste à payer</label>
+                  <label className="block font-bold text-slate-700 mb-1">Reste à payer</label>
                   <input
                     type="text"
                     readOnly
@@ -735,13 +891,13 @@ export default function VentesPage() {
               </div>
 
               <div>
-                <label className="block font-semibold mb-1">Observations</label>
+                <label className="block font-bold text-slate-700 mb-1">Observations</label>
                 <textarea
                   rows={2}
                   value={formData.observations}
                   onChange={(e) => setFormData({ ...formData, observations: e.target.value })}
                   placeholder="Notes..."
-                  className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
+                  className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none"
                 ></textarea>
               </div>
 
@@ -749,15 +905,15 @@ export default function VentesPage() {
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-200 text-slate-700 font-semibold cursor-pointer"
+                  className="px-4 py-2 rounded-lg bg-slate-200 text-slate-700 font-bold cursor-pointer"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold cursor-pointer"
+                  className="px-4 py-2 rounded-lg bg-amber-700 hover:bg-amber-800 text-white font-bold cursor-pointer"
                 >
-                  Enregistrer & Solder
+                  Enregistrer la Vente
                 </button>
               </div>
             </form>
@@ -767,11 +923,11 @@ export default function VentesPage() {
 
       {/* MODAL FACTURE VISUELLE */}
       {selectedVente && (
-        <div 
+        <div
           onClick={() => setSelectedVente(null)}
           className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto"
         >
-          <div 
+          <div
             onClick={(e) => e.stopPropagation()}
             className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative border border-slate-200 my-8"
           >
