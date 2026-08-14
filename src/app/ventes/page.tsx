@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   ArrowLeft, Search, Printer, Share2, MapPin, Phone, Mail, 
-  X, CheckCircle2, Download, Trash2, Package, ShoppingBag, PlusCircle, Receipt, CheckSquare, Square
+  X, CheckCircle2, Download, Trash2, Package, ShoppingBag, PlusCircle, Receipt, CheckSquare, Square, Tag
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -48,8 +48,11 @@ interface CatalogueItem {
   categorie: string;
   prix: number;
   quantite_stock: number;
-  tailles?: string[];
-  couleurs?: string[];
+  tailles?: string[] | string;
+  couleurs?: string[] | string;
+  taille?: string;
+  couleur?: string;
+  statut?: string;
 }
 
 export default function VentesPage() {
@@ -69,7 +72,12 @@ export default function VentesPage() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showCatalogueModal, setShowCatalogueModal] = useState(false);
   
-  // Sélection multiple de commandes
+  // Sélection pour déclinaisons catalogue
+  const [selectedCatItem, setSelectedCatItem] = useState<CatalogueItem | null>(null);
+  const [selectedTaille, setSelectedTaille] = useState<string>('');
+  const [selectedCouleur, setSelectedCouleur] = useState<string>('');
+
+  // Sélection multiple de commandes sur-mesure
   const [selectedCommandesIds, setSelectedCommandesIds] = useState<string[]>([]);
   
   const [importSearch, setImportSearch] = useState('');
@@ -127,7 +135,7 @@ export default function VentesPage() {
   const avanceNum = Number(formData.avance) || 0;
   const resteCalcul = montantTotalCalcul - avanceNum;
 
-  // Détail complet d'une commande
+  // Extraire les détails textuels d'une commande
   const getCommandeDetails = (cmd: Commande) => {
     const parts = [];
     if (cmd.modele) parts.push(cmd.modele);
@@ -138,7 +146,24 @@ export default function VentesPage() {
     return parts.length > 0 ? parts.join(' - ') : `Commande sur mesure #${cmd.id.slice(0, 5)}`;
   };
 
-  // Ouvrir la modal Vente Libérale
+  // Helper pour formater les détails d'un article du catalogue (Taille / Couleur)
+  const formatCatalogueDetails = (item: CatalogueItem) => {
+    const details = [];
+    if (item.categorie) details.push(`Catégorie: ${item.categorie}`);
+    
+    // Tailles
+    if (item.taille) details.push(`Taille: ${item.taille}`);
+    else if (Array.isArray(item.tailles) && item.tailles.length > 0) details.push(`Tailles: ${item.tailles.join(', ')}`);
+    else if (typeof item.tailles === 'string' && item.tailles) details.push(`Taille: ${item.tailles}`);
+
+    // Couleurs
+    if (item.couleur) details.push(`Couleur: ${item.couleur}`);
+    else if (Array.isArray(item.couleurs) && item.couleurs.length > 0) details.push(`Couleurs: ${item.couleurs.join(', ')}`);
+    else if (typeof item.couleurs === 'string' && item.couleurs) details.push(`Couleur: ${item.couleurs}`);
+
+    return details.join(' | ');
+  };
+
   const handleOpenVenteLiberale = () => {
     setFormData({
       commande_ids: [],
@@ -156,7 +181,6 @@ export default function VentesPage() {
     setShowAddModal(true);
   };
 
-  // Cocher / Décocher une commande pour solde multiple
   const toggleSelectCommande = (cmdId: string) => {
     if (selectedCommandesIds.includes(cmdId)) {
       setSelectedCommandesIds(selectedCommandesIds.filter(id => id !== cmdId));
@@ -165,14 +189,12 @@ export default function VentesPage() {
     }
   };
 
-  // Importer la/les commande(s) sélectionnée(s)
   const handleConfirmImportCommandes = () => {
     const selectedCmds = commandesPending.filter(c => selectedCommandesIds.includes(c.id));
     if (selectedCmds.length === 0) return;
 
     const firstClient = selectedCmds[0];
     
-    // Si plusieurs commandes sont sélectionnées, on crée chaque vente ou on regroupe
     if (selectedCmds.length === 1) {
       const cmd = selectedCmds[0];
       let total = Number(cmd.montant_total) || 0;
@@ -191,10 +213,7 @@ export default function VentesPage() {
         avance: total.toString(),
         observations: `Solde Commande Sur-Mesure #${cmd.id.slice(0, 5)}`
       });
-      setShowImportModal(false);
-      setShowAddModal(true);
     } else {
-      // Import multiple groupé
       let totalSum = 0;
       const combinedDesignations: string[] = [];
 
@@ -218,17 +237,40 @@ export default function VentesPage() {
         avance: totalSum.toString(),
         observations: `Solde groupé de ${selectedCmds.length} commande(s)`
       });
-      setShowImportModal(false);
-      setShowAddModal(true);
     }
+
+    setShowImportModal(false);
+    setShowAddModal(true);
   };
 
-  // Sélectionner un article depuis le catalogue
-  const handleSelectCatalogueItem = (item: CatalogueItem) => {
+  // Préparer la vente d'un article du catalogue avec ses spécifications
+  const handlePrepareCatalogueItem = (item: CatalogueItem) => {
+    setSelectedCatItem(item);
+    
+    // Déterminer la taille par défaut
+    if (item.taille) setSelectedTaille(item.taille);
+    else if (Array.isArray(item.tailles) && item.tailles.length > 0) setSelectedTaille(item.tailles[0]);
+    else setSelectedTaille('');
+
+    // Déterminer la couleur par défaut
+    if (item.couleur) setSelectedCouleur(item.couleur);
+    else if (Array.isArray(item.couleurs) && item.couleurs.length > 0) setSelectedCouleur(item.couleurs[0]);
+    else setSelectedCouleur('');
+  };
+
+  // Confirmer l'article catalogue vers le formulaire de paiement/vente
+  const handleConfirmCatalogueItem = () => {
+    if (!selectedCatItem) return;
+    const item = selectedCatItem;
+
     let price = Number(item.prix) || 0;
     if (price > 0 && price < 1000) price = price * 1000;
-
     const priceStr = price > 0 ? price.toString() : '';
+
+    const specParts = [];
+    if (selectedTaille) specParts.push(`Taille: ${selectedTaille}`);
+    if (selectedCouleur) specParts.push(`Couleur: ${selectedCouleur}`);
+    const specsStr = specParts.length > 0 ? ` (${specParts.join(', ')})` : '';
 
     setFormData({
       commande_ids: [],
@@ -237,13 +279,14 @@ export default function VentesPage() {
       client_tel: '',
       mode_commande: 'Prêt-à-porter',
       mode_paiement: 'Espèces',
-      designation: `${item.nom}${item.categorie ? ` (${item.categorie})` : ''}`,
+      designation: `${item.nom}${specsStr}`,
       quantite: '1',
       prix_unitaire: priceStr,
       avance: priceStr,
-      observations: `Achat article catalogue. Stock dispo: ${item.quantite_stock}`
+      observations: `Achat Catalogue - ${item.categorie || 'Prêt-à-porter'}`
     });
 
+    setSelectedCatItem(null);
     setShowCatalogueModal(false);
     setShowAddModal(true);
   };
@@ -283,16 +326,20 @@ export default function VentesPage() {
       await supabase.from('ventes').insert([fallbackPayload]);
     }
 
-    // Déduction stock catalogue
+    // Déduction stock catalogue & Marquage "VENDU" si stock = 0
     if (formData.article_id) {
       const { data: catItem } = await supabase.from('catalogue').select('quantite_stock').eq('id', formData.article_id).single();
       if (catItem) {
         const nouveauStock = Math.max(0, Number(catItem.quantite_stock) - qtyNum);
-        await supabase.from('catalogue').update({ quantite_stock: nouveauStock }).eq('id', formData.article_id);
+        const updatePayload: any = { quantite_stock: nouveauStock };
+        if (nouveauStock === 0) {
+          updatePayload.statut = 'Vendu';
+        }
+        await supabase.from('catalogue').update(updatePayload).eq('id', formData.article_id);
       }
     }
 
-    // Mise à jour du statut des commandes à "Soldée" ou "Livrée"
+    // Mise à jour du statut des commandes sur-mesure à "Soldée"
     if (formData.commande_ids && formData.commande_ids.length > 0) {
       for (const cmdId of formData.commande_ids) {
         await supabase.from('commandes').update({ statut: 'Soldée' }).eq('id', cmdId);
@@ -324,10 +371,8 @@ export default function VentesPage() {
     return v.designation || v.article || v.description || v.modele || 'Article sur mesure';
   };
 
-  // Liste des noms de clients uniques ayant au moins une vente
   const uniqueClients = Array.from(new Set(ventes.map(v => (v.client_nom || '').trim()).filter(Boolean)));
 
-  // Générer la facture regroupée pour un client sélectionné
   const handleGenerateGroupedInvoice = (clientNom: string) => {
     const items = ventes.filter(v => (v.client_nom || '').trim().toLowerCase() === clientNom.trim().toLowerCase());
     if (items.length === 0) return;
@@ -337,7 +382,6 @@ export default function VentesPage() {
     setShowGroupModal(true);
   };
 
-  // Partage PDF WhatsApp Facture Regroupée
   const handleShareGroupedPDFWhatsApp = async () => {
     if (clientVentes.length === 0) return;
     setExporting(true);
@@ -503,12 +547,13 @@ export default function VentesPage() {
 
   const filteredCatalogue = catalogueItems.filter(item =>
     (item.nom || '').toLowerCase().includes(catalogueSearch.toLowerCase()) ||
-    (item.categorie || '').toLowerCase().includes(catalogueSearch.toLowerCase())
+    (item.categorie || '').toLowerCase().includes(catalogueSearch.toLowerCase()) ||
+    formatCatalogueDetails(item).toLowerCase().includes(catalogueSearch.toLowerCase())
   );
 
   return (
     <div className="min-h-screen bg-slate-100 p-6 text-slate-800">
-      {/* HEADER & EN-TÊTE DE BOUTONS */}
+      {/* HEADER */}
       <div className="max-w-7xl mx-auto mb-6 flex flex-col md:flex-row justify-between md:items-center gap-4">
         <div>
           <Link href="/" className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1 mb-2 font-semibold">
@@ -542,7 +587,7 @@ export default function VentesPage() {
         </div>
       </div>
 
-      {/* SÉLECTEUR DE FACTURE REGROUPÉE PAR CLIENT */}
+      {/* FACTURE REGROUPÉE PAR CLIENT */}
       <div className="max-w-7xl mx-auto bg-amber-900/5 border border-amber-200 p-4 rounded-xl mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-3">
           <div className="bg-amber-600 text-white p-2.5 rounded-lg">
@@ -648,175 +693,122 @@ export default function VentesPage() {
         </div>
       </div>
 
-      {/* MODAL FACTURE REGROUPÉE MULTI-ARTICLES */}
-      {showGroupModal && (
-        <div
-          onClick={() => setShowGroupModal(false)}
-          className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl relative border border-slate-200 my-8"
-          >
-            <div className="flex justify-between items-center mb-6 border-b pb-4">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => window.print()}
-                  className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-                >
-                  <Printer size={15} /> Imprimer Tout
-                </button>
-                <button
-                  onClick={handleShareGroupedPDFWhatsApp}
-                  disabled={exporting}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
-                >
-                  <Share2 size={15} /> {exporting ? 'Génération...' : 'WhatsApp (PDF Global)'}
-                </button>
-              </div>
-
-              <button
-                onClick={() => setShowGroupModal(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 cursor-pointer"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="p-6 border-2 border-amber-600/80 rounded-xl bg-white space-y-6">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="text-2xl font-serif font-bold text-amber-900 tracking-wide">Ousmane Design</h2>
-                  <p className="text-[10px] uppercase font-bold text-amber-700 tracking-widest mt-0.5">
-                    Création & Couture Contemporaine (Facture Globalisée)
-                  </p>
-                </div>
-
-                <div className="border border-amber-200 bg-amber-50/50 p-3 rounded-lg text-xs text-slate-800 space-y-1.5 font-medium shadow-2xs">
-                  <div className="flex items-center gap-2">
-                    <MapPin size={14} className="text-amber-600 shrink-0" />
-                    <span>Hann Maristes, Dakar, Sénégal</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Phone size={14} className="text-amber-600 shrink-0" />
-                    <span>77 646 21 02 / 70 348 26 82</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 border border-amber-200 rounded-lg p-3 bg-amber-50/30 text-xs">
-                <div className="space-y-1">
-                  <p><strong className="text-slate-900">Nom du client :</strong> <span className="font-bold text-slate-900">{selectedClientName}</span></p>
-                  <p><strong className="text-slate-900">Téléphone :</strong> <span className="text-amber-700 font-bold">{clientVentes[0]?.client_tel || '-'}</span></p>
-                </div>
-                <div className="space-y-1">
-                  <p><strong className="text-slate-900">Date d'édition :</strong> <span className="font-bold text-slate-800">{new Date().toLocaleDateString('fr-FR')}</span></p>
-                  <p><strong className="text-slate-900">Total d'articles :</strong> <span className="font-bold text-amber-800">{clientVentes.length} article(s)</span></p>
-                </div>
-              </div>
-
-              {/* TABLEAU DES ARTICLES GROUPÉS */}
-              <table className="w-full text-xs text-left border-collapse">
-                <thead>
-                  <tr className="bg-amber-600 text-white font-bold uppercase">
-                    <th className="p-2.5 rounded-tl-lg">Article / Désignation</th>
-                    <th className="p-2.5 text-center">Qté</th>
-                    <th className="p-2.5 text-right">P.U</th>
-                    <th className="p-2.5 text-right rounded-tr-lg">Total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-amber-100 border-b border-amber-200">
-                  {clientVentes.map((v, i) => {
-                    let tot = v.montant_total || 0;
-                    if (tot > 0 && tot < 1000) tot *= 1000;
-                    return (
-                      <tr key={i} className="hover:bg-slate-50">
-                        <td className="p-2.5 font-bold text-slate-900">{getItemName(v)}</td>
-                        <td className="p-2.5 text-center font-bold">{v.quantite || 1}</td>
-                        <td className="p-2.5 text-right font-semibold">{formatAmount(v.prix_unitaire || tot)} F</td>
-                        <td className="p-2.5 text-right font-bold text-slate-900">{formatAmount(tot)} FCFA</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-
-              {/* RECAPITULATIF FINANCIER GLOBAL */}
-              {(() => {
-                let totGen = clientVentes.reduce((acc, c) => acc + (c.montant_total || 0), 0);
-                let avGen = clientVentes.reduce((acc, c) => acc + (c.avance || 0), 0);
-                if (totGen > 0 && totGen < 1000) totGen *= 1000;
-                if (avGen > 0 && avGen < 1000) avGen *= 1000;
-                const resteGen = Math.max(0, totGen - avGen);
-
-                return (
-                  <div className="flex justify-end text-xs">
-                    <div className="w-64 space-y-1.5 text-right">
-                      <div className="flex justify-between py-1 px-2 border-b border-slate-100">
-                        <span className="text-slate-700 font-bold">TOTAL GENERAL :</span>
-                        <span className="font-bold text-slate-900">{formatAmount(totGen)} FCFA</span>
-                      </div>
-                      <div className="flex justify-between py-1 px-2 border-b border-slate-100">
-                        <span className="text-slate-700 font-bold">TOTAL ENCAISSÉ :</span>
-                        <span className="font-bold text-emerald-600">{formatAmount(avGen)} FCFA</span>
-                      </div>
-                      <div className="flex justify-between py-1.5 px-2 bg-amber-600 text-white font-bold rounded-md">
-                        <span>NET À PAYER :</span>
-                        <span>{formatAmount(resteGen)} FCFA</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              <div className="pt-6 grid grid-cols-2 gap-8 text-[11px] text-center font-bold text-slate-800">
-                <div>
-                  <p className="uppercase tracking-wider">SIGNATURE DU CLIENT</p>
-                  <div className="mt-8 border-b border-dashed border-slate-300"></div>
-                </div>
-                <div>
-                  <p className="uppercase tracking-wider">OUSMANE DESIGN (SIGNATURE & CACHET)</p>
-                  <div className="mt-8 border-b border-dashed border-slate-300"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL CATALOGUE */}
+      {/* MODAL CATALOGUE AMÉLIORÉE (DÉTAILS TAILLE/COULEUR ET MENTION VENDU) */}
       {showCatalogueModal && (
-        <div onClick={() => setShowCatalogueModal(false)} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+        <div onClick={() => { setShowCatalogueModal(false); setSelectedCatItem(null); }} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
           <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative border border-slate-200">
             <div className="flex justify-between items-center mb-4 border-b pb-3">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">Vendre un article du Catalogue</h2>
                 <p className="text-xs text-slate-500">Sélectionnez le modèle. Le stock sera déduit automatiquement à la validation.</p>
               </div>
-              <button onClick={() => setShowCatalogueModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X size={20} /></button>
+              <button onClick={() => { setShowCatalogueModal(false); setSelectedCatItem(null); }} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X size={20} /></button>
             </div>
+
             <div className="relative mb-4">
               <Search className="absolute left-3 top-3 text-slate-400" size={16} />
-              <input type="text" placeholder="Rechercher dans le catalogue..." value={catalogueSearch} onChange={(e) => setCatalogueSearch(e.target.value)} className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-amber-500 text-slate-900" />
+              <input type="text" placeholder="Rechercher par nom, catégorie, taille ou couleur..." value={catalogueSearch} onChange={(e) => setCatalogueSearch(e.target.value)} className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-amber-500 text-slate-900" />
             </div>
-            <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl">
-              {filteredCatalogue.map((item) => (
-                <div key={item.id} className="p-3.5 flex items-center justify-between hover:bg-amber-50/40 transition-colors">
-                  <div className="space-y-0.5">
-                    <span className="font-bold text-slate-900 text-xs">{item.nom}</span>
-                    <p className="text-[11px] text-slate-500">Prix : <strong className="text-amber-800">{formatAmount(item.prix)} FCFA</strong></p>
+
+            {/* SI AUCUN ARTICLE SELECTIONNE : LISTE DES ARTICLES */}
+            {!selectedCatItem ? (
+              <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl">
+                {filteredCatalogue.length === 0 ? (
+                  <p className="p-4 text-center text-xs text-slate-400">Aucun article trouvé dans le catalogue.</p>
+                ) : filteredCatalogue.map((item) => {
+                  const isVendu = item.quantite_stock <= 0 || item.statut === 'Vendu';
+                  const detailsText = formatCatalogueDetails(item);
+
+                  return (
+                    <div key={item.id} className={`p-3.5 flex items-center justify-between transition-colors ${isVendu ? 'bg-slate-50 opacity-75' : 'hover:bg-amber-50/40'}`}>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900 text-xs">{item.nom}</span>
+                          {isVendu ? (
+                            <span className="bg-rose-100 text-rose-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-rose-200 flex items-center gap-1">
+                              <Tag size={10} /> VENDU
+                            </span>
+                          ) : (
+                            <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                              Stock : {item.quantite_stock}
+                            </span>
+                          )}
+                        </div>
+
+                        {detailsText && (
+                          <p className="text-[11px] text-slate-600 font-medium">
+                            {detailsText}
+                          </p>
+                        )}
+
+                        <p className="text-[11px] text-amber-800 font-bold">
+                          Prix : {formatAmount(item.prix)} FCFA
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={() => handlePrepareCatalogueItem(item)}
+                        disabled={isVendu}
+                        className="bg-amber-700 hover:bg-amber-800 disabled:bg-slate-300 disabled:text-slate-500 text-white font-bold text-xs px-3.5 py-2 rounded-lg cursor-pointer transition-colors shrink-0"
+                      >
+                        {isVendu ? 'Épuisé' : 'Choisir'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              /* SOUS-PANNEAU DE SELECTION DE LA DECLINAISON (TAILLE / COULEUR) */
+              <div className="bg-amber-50/60 border border-amber-200 p-4 rounded-xl space-y-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-sm">{selectedCatItem.nom}</h3>
+                    <p className="text-xs text-amber-800 font-bold">{formatAmount(selectedCatItem.prix)} FCFA</p>
                   </div>
-                  <button onClick={() => handleSelectCatalogueItem(item)} disabled={item.quantite_stock <= 0} className="bg-amber-700 hover:bg-amber-800 disabled:bg-slate-200 text-white font-bold text-xs px-3 py-2 rounded-lg cursor-pointer">
-                    Choisir
-                  </button>
+                  <button onClick={() => setSelectedCatItem(null)} className="text-xs text-slate-500 underline cursor-pointer">Changer d'article</button>
                 </div>
-              ))}
-            </div>
+
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  {/* SELECTION TAILLE */}
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Taille sélectionnée :</label>
+                    {Array.isArray(selectedCatItem.tailles) && selectedCatItem.tailles.length > 0 ? (
+                      <select value={selectedTaille} onChange={(e) => setSelectedTaille(e.target.value)} className="w-full p-2 border border-slate-300 rounded-lg bg-white font-bold">
+                        {selectedCatItem.tailles.map((t, i) => (
+                          <option key={i} value={t}>{t}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input type="text" value={selectedTaille} onChange={(e) => setSelectedTaille(e.target.value)} placeholder="Ex: XL, L, 42..." className="w-full p-2 border border-slate-300 rounded-lg bg-white" />
+                    )}
+                  </div>
+
+                  {/* SELECTION COULEUR */}
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Couleur sélectionnée :</label>
+                    {Array.isArray(selectedCatItem.couleurs) && selectedCatItem.couleurs.length > 0 ? (
+                      <select value={selectedCouleur} onChange={(e) => setSelectedCouleur(e.target.value)} className="w-full p-2 border border-slate-300 rounded-lg bg-white font-bold">
+                        {selectedCatItem.couleurs.map((c, i) => (
+                          <option key={i} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input type="text" value={selectedCouleur} onChange={(e) => setSelectedCouleur(e.target.value)} placeholder="Ex: Bleu Nuit, Blanc..." className="w-full p-2 border border-slate-300 rounded-lg bg-white" />
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button onClick={() => setSelectedCatItem(null)} className="px-3.5 py-2 rounded-lg bg-slate-200 text-xs font-bold cursor-pointer">Retour</button>
+                  <button onClick={handleConfirmCatalogueItem} className="px-4 py-2 rounded-lg bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold cursor-pointer">Valider la sélection</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* MODAL SOLDER COMMANDE AVEC SELECTION MULTIPLE */}
+      {/* MODAL SOLDER COMMANDE */}
       {showImportModal && (
         <div onClick={() => setShowImportModal(false)} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
           <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl relative border border-slate-200">
@@ -960,9 +952,77 @@ export default function VentesPage() {
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 rounded-lg bg-slate-200 font-bold cursor-pointer">Annuler</button>
-                <button type="submit" className="px-4 py-2 rounded-lg bg-amber-700 hover:bg-amber-800 text-white font-bold cursor-pointer">Enregistrer & Solder</button>
+                <button type="submit" className="px-4 py-2 rounded-lg bg-amber-700 hover:bg-amber-800 text-white font-bold cursor-pointer">Enregistrer la vente</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL FACTURE REGROUPÉE */}
+      {showGroupModal && (
+        <div onClick={() => setShowGroupModal(false)} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl relative border border-slate-200 my-8">
+            <div className="flex justify-between items-center mb-6 border-b pb-4">
+              <div className="flex items-center gap-2">
+                <button onClick={() => window.print()} className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer">
+                  <Printer size={15} /> Imprimer
+                </button>
+                <button onClick={handleShareGroupedPDFWhatsApp} disabled={exporting} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 disabled:opacity-50 cursor-pointer">
+                  <Share2 size={15} /> {exporting ? 'Génération...' : 'WhatsApp (PDF)'}
+                </button>
+              </div>
+              <button onClick={() => setShowGroupModal(false)} className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 cursor-pointer"><X size={20} /></button>
+            </div>
+
+            <div className="p-6 border-2 border-amber-600/80 rounded-xl bg-white space-y-6">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h2 className="text-2xl font-serif font-bold text-amber-900 tracking-wide">Ousmane Design</h2>
+                  <p className="text-[10px] uppercase font-bold text-amber-700 tracking-widest mt-0.5">Création & Couture Contemporaine</p>
+                </div>
+                <div className="border border-amber-200 bg-amber-50/50 p-3 rounded-lg text-xs text-slate-800 space-y-1 font-medium">
+                  <div className="flex items-center gap-2"><MapPin size={14} className="text-amber-600" /> Hann Maristes, Dakar</div>
+                  <div className="flex items-center gap-2"><Phone size={14} className="text-amber-600" /> 77 646 21 02 / 70 348 26 82</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 border border-amber-200 rounded-lg p-3 bg-amber-50/30 text-xs">
+                <div>
+                  <p><strong>Client :</strong> {selectedClientName}</p>
+                  <p><strong>Tél :</strong> {clientVentes[0]?.client_tel || '-'}</p>
+                </div>
+                <div>
+                  <p><strong>Date :</strong> {new Date().toLocaleDateString('fr-FR')}</p>
+                  <p><strong>Articles :</strong> {clientVentes.length}</p>
+                </div>
+              </div>
+
+              <table className="w-full text-xs text-left border-collapse">
+                <thead>
+                  <tr className="bg-amber-600 text-white font-bold uppercase">
+                    <th className="p-2.5">Article / Désignation</th>
+                    <th className="p-2.5 text-center">Qté</th>
+                    <th className="p-2.5 text-right">P.U</th>
+                    <th className="p-2.5 text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-amber-100 border-b border-amber-200">
+                  {clientVentes.map((v, i) => {
+                    let tot = v.montant_total || 0;
+                    if (tot > 0 && tot < 1000) tot *= 1000;
+                    return (
+                      <tr key={i}>
+                        <td className="p-2.5 font-bold text-slate-900">{getItemName(v)}</td>
+                        <td className="p-2.5 text-center font-bold">{v.quantite || 1}</td>
+                        <td className="p-2.5 text-right font-semibold">{formatAmount(v.prix_unitaire || tot)} F</td>
+                        <td className="p-2.5 text-right font-bold text-slate-900">{formatAmount(tot)} FCFA</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
