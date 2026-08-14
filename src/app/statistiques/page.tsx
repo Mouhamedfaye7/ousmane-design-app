@@ -2,13 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { 
-  ArrowLeft, 
-  TrendingUp, 
-  DollarSign, 
-  ShoppingBag, 
-  Clock, 
-  CheckCircle2, 
+import {
+  ArrowLeft,
+  TrendingUp,
+  DollarSign,
+  ShoppingBag,
+  Clock,
+  CheckCircle2,
   AlertCircle,
   RefreshCw,
   PieChart
@@ -49,13 +49,14 @@ export default function StatistiquesPage() {
   };
 
   // --- HELPER : CALCUL DE L'AVANCE RÉELLE ET DU RESTE ---
-  // Si la commande est "Livrée", elle est considérée comme payée en totalité (avance = montant_total, reste = 0)
+  // Gère le cas où la commande est "Livrée" OU si le client a payé 100% dès la commande (avance >= montant_total)
   const getCalculatedFinancials = (c: Commande) => {
     const tot = Number(c.montant_total) || 0;
     let av = Number(c.avance) || 0;
 
-    if (c.statut === 'Livrée') {
-      av = tot; // Une commande livrée est intégralement réglée
+    // Si livrée OU si l'avance saisie couvre/dépasse le montant total
+    if (c.statut === 'Livrée' || av >= tot) {
+      av = tot; // Entièrement réglée
     }
 
     const reste = Math.max(0, tot - av);
@@ -66,7 +67,6 @@ export default function StatistiquesPage() {
   const totalCommandes = commandes.length;
 
   const caTotal = commandes.reduce((acc, c) => acc + (Number(c.montant_total) || 0), 0);
-  
   const totalAvances = commandes.reduce((acc, c) => {
     const { av } = getCalculatedFinancials(c);
     return acc + av;
@@ -158,7 +158,6 @@ export default function StatistiquesPage() {
 
       {/* SECTION RÉPARTITION PAR STATUT ET FINANCES */}
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        
         {/* STATUT DE PRODUCTION */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-4">
           <div className="flex justify-between items-center border-b pb-3">
