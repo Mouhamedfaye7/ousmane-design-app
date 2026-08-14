@@ -348,10 +348,9 @@ export default function VentesPage() {
     return v.designation || v.article || v.description || v.modele || 'Article sur mesure';
   };
 
-  // TÉLÉCHARGER LA FACTURE EN PDF
+  // GENERATION ET TELECHARGEMENT DE FACTURE EN PDF
   const handleDownloadPDF = async (v: Vente) => {
     try {
-      // Import dynamique de html2pdf.js pour éviter les erreurs SSR
       const html2pdf = (await import('html2pdf.js')).default;
       const element = invoiceRef.current;
       if (!element) return;
@@ -364,14 +363,13 @@ export default function VentesPage() {
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
       };
 
-      html2pdf().set(opt).from(element).save();
+      await html2pdf().set(opt).from(element).save();
     } catch (err) {
-      // Dégradation gracieuse : ouverture de la fenêtre d'impression native (Sauvegarder en PDF)
+      console.warn('Fallback impression PDF :', err);
       window.print();
     }
   };
 
-  // ENVOI WHATSAPP FACTURE
   const handleSendWhatsAppInvoice = (v: Vente) => {
     let cleanPhone = (v.client_tel || '').trim().replace(/[^0-9]/g, '');
     if (cleanPhone.length === 9) {
@@ -799,7 +797,7 @@ export default function VentesPage() {
         </div>
       )}
 
-      {/* MODAL FACTURE COMPLÈTE AVEC IMPRESSION & TÉLÉCHARGEMENT PDF */}
+      {/* MODAL FACTURE AVEC TÉLÉCHARGEMENT PDF & IMPRESSION */}
       {selectedVente && (() => {
         let total = selectedVente.montant_total || 0;
         let avance = selectedVente.avance || 0;
@@ -814,13 +812,12 @@ export default function VentesPage() {
           <div onClick={() => setSelectedVente(null)} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
             <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative border border-slate-200 my-8">
               
-              {/* BARRE D'ACTIONS FACTURE */}
+              {/* BOUTONS D'ACTION (Masqués lors de l'impression) */}
               <div className="flex justify-between items-center mb-4 border-b pb-3 print:hidden">
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={() => handleDownloadPDF(selectedVente)}
                     className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-xs"
-                    title="Télécharger la facture en document PDF"
                   >
                     <FileText size={15} /> Télécharger PDF
                   </button>
@@ -845,7 +842,7 @@ export default function VentesPage() {
                 </button>
               </div>
 
-              {/* FACTURE IMPRIMABLE ET CIBLÉE POUR LE PDF */}
+              {/* CONTENU FACTURE CIBLÉ POUR EXPORT PDF */}
               <div ref={invoiceRef} className="p-6 border-2 border-amber-800/20 rounded-xl bg-white space-y-5 text-slate-900 font-sans">
                 {/* EN-TÊTE ATELIER */}
                 <div className="flex justify-between items-start border-b border-amber-900/20 pb-4">
@@ -861,7 +858,7 @@ export default function VentesPage() {
                   </div>
                 </div>
 
-                {/* INFOS CLIENT & RÈGLEMENT */}
+                {/* CLIENT ET PAIEMENT */}
                 <div className="grid grid-cols-2 gap-4 bg-amber-50/50 p-3.5 rounded-lg border border-amber-100 text-xs">
                   <div>
                     <p className="text-slate-500 font-medium">Client :</p>
@@ -875,7 +872,7 @@ export default function VentesPage() {
                   </div>
                 </div>
 
-                {/* TABLEAU DES ARTICLES */}
+                {/* TABLEAU ARTICLES */}
                 <div className="border border-slate-200 rounded-lg overflow-hidden text-xs">
                   <table className="w-full text-left">
                     <thead className="bg-amber-900 text-white font-bold uppercase text-[10px]">
@@ -905,7 +902,7 @@ export default function VentesPage() {
                   </div>
                 )}
 
-                {/* RECAPITULATIF FINANCIER */}
+                {/* TOTAL */}
                 <div className="flex justify-end pt-1 text-xs">
                   <div className="w-64 space-y-1.5 border-t-2 border-amber-900/20 pt-2">
                     <div className="flex justify-between text-slate-600">
@@ -923,7 +920,7 @@ export default function VentesPage() {
                   </div>
                 </div>
 
-                {/* BAS DE PAGE - SIGNATURES */}
+                {/* BAS DE PAGE */}
                 <div className="grid grid-cols-2 gap-4 text-[10px] text-slate-500 pt-8 border-t border-slate-200 uppercase font-bold text-center">
                   <div>Signature du client</div>
                   <div>Ousmane Design (Signature & Cachet)</div>
