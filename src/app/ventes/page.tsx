@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   ArrowLeft, Search, Printer, Share2, MapPin, Phone, Mail, 
-  X, CheckCircle2, Download, Trash2, Package, ShoppingBag, PlusCircle, Receipt
+  X, CheckCircle2, Download, Trash2, Package, ShoppingBag, PlusCircle, Receipt, CheckSquare, Square
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -32,11 +32,14 @@ interface Commande {
   client_nom: string;
   client_tel: string;
   modele?: string;
+  tissu?: string;
+  couleur?: string;
   statut?: string;
   montant_total?: number;
   acompte?: number;
   mode_paiement?: string;
   notes?: string;
+  created_at?: string;
 }
 
 interface CatalogueItem {
@@ -66,6 +69,9 @@ export default function VentesPage() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showCatalogueModal, setShowCatalogueModal] = useState(false);
   
+  // Sélection multiple de commandes
+  const [selectedCommandesIds, setSelectedCommandesIds] = useState<string[]>([]);
+  
   const [importSearch, setImportSearch] = useState('');
   const [catalogueSearch, setCatalogueSearch] = useState('');
   
@@ -73,7 +79,7 @@ export default function VentesPage() {
   const [exporting, setExporting] = useState(false);
 
   const [formData, setFormData] = useState({
-    commande_id: '',
+    commande_ids: [] as string[],
     article_id: '',
     client_nom: '',
     client_tel: '',
@@ -121,10 +127,21 @@ export default function VentesPage() {
   const avanceNum = Number(formData.avance) || 0;
   const resteCalcul = montantTotalCalcul - avanceNum;
 
+  // Détail complet d'une commande
+  const getCommandeDetails = (cmd: Commande) => {
+    const parts = [];
+    if (cmd.modele) parts.push(cmd.modele);
+    if (cmd.tissu) parts.push(`Tissu: ${cmd.tissu}`);
+    if (cmd.couleur) parts.push(`Couleur: ${cmd.couleur}`);
+    if (cmd.notes) parts.push(`(${cmd.notes})`);
+    
+    return parts.length > 0 ? parts.join(' - ') : `Commande sur mesure #${cmd.id.slice(0, 5)}`;
+  };
+
   // Ouvrir la modal Vente Libérale
   const handleOpenVenteLiberale = () => {
     setFormData({
-      commande_id: '',
+      commande_ids: [],
       article_id: '',
       client_nom: '',
       client_tel: '',
@@ -139,29 +156,71 @@ export default function VentesPage() {
     setShowAddModal(true);
   };
 
-  // Sélectionner une commande sur-mesure à solder
-  const handleSelectCommandeToImport = (cmd: Commande) => {
-    let total = Number(cmd.montant_total) || 0;
-    const acompte = Number(cmd.acompte) || 0;
+  // Cocher / Décocher une commande pour solde multiple
+  const toggleSelectCommande = (cmdId: string) => {
+    if (selectedCommandesIds.includes(cmdId)) {
+      setSelectedCommandesIds(selectedCommandesIds.filter(id => id !== cmdId));
+    } else {
+      setSelectedCommandesIds([...selectedCommandesIds, cmdId]);
+    }
+  };
 
-    if (total > 0 && total < 1000) total = total * 1000;
+  // Importer la/les commande(s) sélectionnée(s)
+  const handleConfirmImportCommandes = () => {
+    const selectedCmds = commandesPending.filter(c => selectedCommandesIds.includes(c.id));
+    if (selectedCmds.length === 0) return;
 
-    setFormData({
-      commande_id: cmd.id,
-      article_id: '',
-      client_nom: cmd.client_nom || '',
-      client_tel: cmd.client_tel || '',
-      mode_commande: 'Sur Mesure',
-      mode_paiement: cmd.mode_paiement || 'Espèces',
-      designation: cmd.modele || 'Commande Sur Mesure',
-      quantite: '1',
-      prix_unitaire: total.toString(),
-      avance: total.toString(),
-      observations: cmd.notes || `Solde de la commande #${cmd.id.slice(0, 5)}`
-    });
+    const firstClient = selectedCmds[0];
+    
+    // Si plusieurs commandes sont sélectionnées, on crée chaque vente ou on regroupe
+    if (selectedCmds.length === 1) {
+      const cmd = selectedCmds[0];
+      let total = Number(cmd.montant_total) || 0;
+      if (total > 0 && total < 1000) total *= 1000;
 
-    setShowImportModal(false);
-    setShowAddModal(true);
+      setFormData({
+        commande_ids: [cmd.id],
+        article_id: '',
+        client_nom: cmd.client_nom || '',
+        client_tel: cmd.client_tel || '',
+        mode_commande: 'Sur Mesure',
+        mode_paiement: cmd.mode_paiement || 'Espèces',
+        designation: getCommandeDetails(cmd),
+        quantite: '1',
+        prix_unitaire: total.toString(),
+        avance: total.toString(),
+        observations: `Solde Commande Sur-Mesure #${cmd.id.slice(0, 5)}`
+      });
+      setShowImportModal(false);
+      setShowAddModal(true);
+    } else {
+      // Import multiple groupé
+      let totalSum = 0;
+      const combinedDesignations: string[] = [];
+
+      selectedCmds.forEach(cmd => {
+        let tot = Number(cmd.montant_total) || 0;
+        if (tot > 0 && tot < 1000) tot *= 1000;
+        totalSum += tot;
+        combinedDesignations.push(getCommandeDetails(cmd));
+      });
+
+      setFormData({
+        commande_ids: selectedCmds.map(c => c.id),
+        article_id: '',
+        client_nom: firstClient.client_nom || '',
+        client_tel: firstClient.client_tel || '',
+        mode_commande: 'Sur Mesure (Groupé)',
+        mode_paiement: 'Espèces',
+        designation: combinedDesignations.join(' | '),
+        quantite: '1',
+        prix_unitaire: totalSum.toString(),
+        avance: totalSum.toString(),
+        observations: `Solde groupé de ${selectedCmds.length} commande(s)`
+      });
+      setShowImportModal(false);
+      setShowAddModal(true);
+    }
   };
 
   // Sélectionner un article depuis le catalogue
@@ -172,7 +231,7 @@ export default function VentesPage() {
     const priceStr = price > 0 ? price.toString() : '';
 
     setFormData({
-      commande_id: '',
+      commande_ids: [],
       article_id: item.id,
       client_nom: '',
       client_tel: '',
@@ -224,6 +283,7 @@ export default function VentesPage() {
       await supabase.from('ventes').insert([fallbackPayload]);
     }
 
+    // Déduction stock catalogue
     if (formData.article_id) {
       const { data: catItem } = await supabase.from('catalogue').select('quantite_stock').eq('id', formData.article_id).single();
       if (catItem) {
@@ -232,11 +292,15 @@ export default function VentesPage() {
       }
     }
 
-    if (formData.commande_id) {
-      await supabase.from('commandes').update({ acompte: montantTotalCalcul, statut: 'Livrée' }).eq('id', formData.commande_id);
+    // Mise à jour du statut des commandes à "Soldée" ou "Livrée"
+    if (formData.commande_ids && formData.commande_ids.length > 0) {
+      for (const cmdId of formData.commande_ids) {
+        await supabase.from('commandes').update({ statut: 'Soldée' }).eq('id', cmdId);
+      }
     }
 
     setShowAddModal(false);
+    setSelectedCommandesIds([]);
     fetchVentes();
     fetchCommandesToImport();
     fetchCatalogue();
@@ -257,7 +321,7 @@ export default function VentesPage() {
   };
 
   const getItemName = (v: Vente) => {
-    return v.designation || v.article || v.description || v.modele || 'Article catalogue';
+    return v.designation || v.article || v.description || v.modele || 'Article sur mesure';
   };
 
   // Liste des noms de clients uniques ayant au moins une vente
@@ -273,7 +337,7 @@ export default function VentesPage() {
     setShowGroupModal(true);
   };
 
-  // Partage PDF pour la Facture Regroupée
+  // Partage PDF WhatsApp Facture Regroupée
   const handleShareGroupedPDFWhatsApp = async () => {
     if (clientVentes.length === 0) return;
     setExporting(true);
@@ -434,7 +498,7 @@ export default function VentesPage() {
   const filteredCommandesToImport = commandesPending.filter(c =>
     (c.client_nom || '').toLowerCase().includes(importSearch.toLowerCase()) ||
     (c.client_tel || '').includes(importSearch) ||
-    (c.modele || '').toLowerCase().includes(importSearch.toLowerCase())
+    getCommandeDetails(c).toLowerCase().includes(importSearch.toLowerCase())
   );
 
   const filteredCatalogue = catalogueItems.filter(item =>
@@ -720,7 +784,7 @@ export default function VentesPage() {
         </div>
       )}
 
-      {/* MODALS SÉPARÉES (CATALOGUE, IMPORT ET ADD VENTE) */}
+      {/* MODAL CATALOGUE */}
       {showCatalogueModal && (
         <div onClick={() => setShowCatalogueModal(false)} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
           <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative border border-slate-200">
@@ -752,40 +816,106 @@ export default function VentesPage() {
         </div>
       )}
 
+      {/* MODAL SOLDER COMMANDE AVEC SELECTION MULTIPLE */}
       {showImportModal && (
         <div onClick={() => setShowImportModal(false)} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative border border-slate-200">
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl relative border border-slate-200">
             <div className="flex justify-between items-center mb-4 border-b pb-3">
-              <h2 className="text-lg font-bold text-slate-900">Solder / Facturer une Commande</h2>
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Solder des Commandes Sur-Mesure</h2>
+                <p className="text-xs text-slate-500">Sélectionnez une ou plusieurs commandes du même client pour les solder et générer une facture unique.</p>
+              </div>
               <button onClick={() => setShowImportModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X size={20} /></button>
             </div>
+
             <div className="relative mb-4">
               <Search className="absolute left-3 top-3 text-slate-400" size={16} />
-              <input type="text" placeholder="Rechercher par nom de client..." value={importSearch} onChange={(e) => setImportSearch(e.target.value)} className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900" />
+              <input 
+                type="text" 
+                placeholder="Rechercher par nom de client, modèle ou détail..." 
+                value={importSearch} 
+                onChange={(e) => setImportSearch(e.target.value)} 
+                className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900" 
+              />
             </div>
-            <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl">
-              {filteredCommandesToImport.map((cmd) => (
-                <div key={cmd.id} className="p-3.5 flex items-center justify-between hover:bg-emerald-50/40 transition-colors">
-                  <div>
-                    <span className="font-bold text-slate-900 text-xs">{cmd.client_nom}</span>
-                    <p className="text-[11px] text-slate-500">{cmd.modele || 'Commande sur mesure'}</p>
+
+            <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl mb-4">
+              {filteredCommandesToImport.map((cmd) => {
+                const isSelected = selectedCommandesIds.includes(cmd.id);
+                const isSoldee = cmd.statut === 'Soldée' || cmd.statut === 'Livrée';
+                let total = cmd.montant_total || 0;
+                if (total > 0 && total < 1000) total *= 1000;
+
+                return (
+                  <div 
+                    key={cmd.id} 
+                    onClick={() => !isSoldee && toggleSelectCommande(cmd.id)}
+                    className={`p-3.5 flex items-center justify-between transition-colors cursor-pointer ${
+                      isSelected ? 'bg-emerald-50/80 border-l-4 border-emerald-600' : 'hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="text-emerald-600 shrink-0">
+                        {isSelected ? <CheckSquare size={20} /> : <Square size={20} className="text-slate-300" />}
+                      </div>
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900 text-xs">{cmd.client_nom}</span>
+                          {isSoldee && (
+                            <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                              Déjà Soldée
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-700 font-medium">
+                          {getCommandeDetails(cmd)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="font-bold text-slate-900 text-xs">{formatAmount(total)} FCFA</span>
+                      <p className="text-[10px] text-slate-400">Tel: {cmd.client_tel || '-'}</p>
+                    </div>
                   </div>
-                  <button onClick={() => handleSelectCommandeToImport(cmd)} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3 py-2 rounded-lg cursor-pointer">
-                    Solder
-                  </button>
-                </div>
-              ))}
+                );
+              })}
+            </div>
+
+            <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+              <span className="text-xs font-bold text-slate-600">
+                {selectedCommandesIds.length} article(s) sélectionné(s)
+              </span>
+
+              <div className="flex gap-2">
+                <button 
+                  type="button" 
+                  onClick={() => setShowImportModal(false)} 
+                  className="px-4 py-2 rounded-lg bg-slate-200 font-bold text-xs cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button 
+                  type="button" 
+                  onClick={handleConfirmImportCommandes}
+                  disabled={selectedCommandesIds.length === 0}
+                  className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold text-xs cursor-pointer"
+                >
+                  Solder & Générer Facture ({selectedCommandesIds.length})
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
+      {/* MODAL FORMULAIRE DE VENTE */}
       {showAddModal && (
         <div onClick={() => setShowAddModal(false)} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
           <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl relative border border-slate-200 text-slate-900">
             <div className="flex justify-between items-center mb-4 border-b pb-3">
               <h2 className="text-lg font-bold text-slate-900">
-                {formData.commande_id ? 'Solder & Générer Facture' : formData.mode_commande === 'Vente Libérale' ? 'Nouvelle Vente Libérale' : 'Vente Catalogue'}
+                {formData.commande_ids.length > 0 ? 'Solder & Générer Facture' : formData.mode_commande === 'Vente Libérale' ? 'Nouvelle Vente Libérale' : 'Vente Catalogue'}
               </h2>
               <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X size={20} /></button>
             </div>
@@ -802,7 +932,7 @@ export default function VentesPage() {
               </div>
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Désignation / Article *</label>
-                <input type="text" required value={formData.designation} onChange={(e) => setFormData({ ...formData, designation: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 outline-none" />
+                <textarea required rows={2} value={formData.designation} onChange={(e) => setFormData({ ...formData, designation: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 outline-none" />
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
@@ -830,7 +960,7 @@ export default function VentesPage() {
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 rounded-lg bg-slate-200 font-bold cursor-pointer">Annuler</button>
-                <button type="submit" className="px-4 py-2 rounded-lg bg-amber-700 hover:bg-amber-800 text-white font-bold cursor-pointer">Enregistrer</button>
+                <button type="submit" className="px-4 py-2 rounded-lg bg-amber-700 hover:bg-amber-800 text-white font-bold cursor-pointer">Enregistrer & Solder</button>
               </div>
             </form>
           </div>
