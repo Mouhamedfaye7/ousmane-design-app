@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   ArrowLeft, Search, Printer, Share2, MapPin, Phone, Mail, 
-  X, CheckCircle2, Download, Trash2, Package, ShoppingBag 
+  X, CheckCircle2, Download, Trash2, Package, ShoppingBag, PlusCircle 
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -72,7 +72,7 @@ export default function VentesPage() {
     article_id: '',
     client_nom: '',
     client_tel: '',
-    mode_commande: 'Prêt-à-porter',
+    mode_commande: 'Vente Libérale',
     mode_paiement: 'Espèces',
     designation: '',
     quantite: '1',
@@ -116,6 +116,24 @@ export default function VentesPage() {
   const avanceNum = Number(formData.avance) || 0;
   const resteCalcul = montantTotalCalcul - avanceNum;
 
+  // Ouvrir la modal Vente Libérale
+  const handleOpenVenteLiberale = () => {
+    setFormData({
+      commande_id: '',
+      article_id: '',
+      client_nom: '',
+      client_tel: '',
+      mode_commande: 'Vente Libérale',
+      mode_paiement: 'Espèces',
+      designation: '',
+      quantite: '1',
+      prix_unitaire: '',
+      avance: '',
+      observations: ''
+    });
+    setShowAddModal(true);
+  };
+
   // Sélectionner une commande sur-mesure à solder
   const handleSelectCommandeToImport = (cmd: Commande) => {
     let total = Number(cmd.montant_total) || 0;
@@ -147,7 +165,6 @@ export default function VentesPage() {
   const handleSelectCatalogueItem = (item: CatalogueItem) => {
     let price = Number(item.prix) || 0;
     
-    // Correction automatique si le prix est saisi en milliers (ex: 50 au lieu de 50000 FCFA)
     if (price > 0 && price < 1000) {
       price = price * 1000;
     }
@@ -245,7 +262,7 @@ export default function VentesPage() {
       article_id: '',
       client_nom: '',
       client_tel: '',
-      mode_commande: 'Prêt-à-porter',
+      mode_commande: 'Vente Libérale',
       mode_paiement: 'Espèces',
       designation: '',
       quantite: '1',
@@ -498,6 +515,13 @@ export default function VentesPage() {
 
         <div className="flex flex-wrap items-center gap-3">
           <button
+            onClick={handleOpenVenteLiberale}
+            className="bg-slate-900 hover:bg-slate-800 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-sm transition-colors cursor-pointer text-xs"
+          >
+            <PlusCircle size={18} /> Vente Libérale
+          </button>
+
+          <button
             onClick={() => setShowCatalogueModal(true)}
             className="bg-amber-700 hover:bg-amber-800 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-sm transition-colors cursor-pointer text-xs"
           >
@@ -723,7 +747,7 @@ export default function VentesPage() {
         </div>
       )}
 
-      {/* MODAL ENREGISTREMENT VENTE */}
+      {/* MODAL ENREGISTREMENT VENTE (LIBÉRALE, CATALOGUE OU SOLDE) */}
       {showAddModal && (
         <div
           onClick={() => setShowAddModal(false)}
@@ -735,7 +759,7 @@ export default function VentesPage() {
           >
             <div className="flex justify-between items-center mb-4 border-b pb-3">
               <h2 className="text-lg font-bold text-slate-900">
-                {formData.commande_id ? 'Solder & Générer Facture' : 'Vente Catalogue'}
+                {formData.commande_id ? 'Solder & Générer Facture' : formData.mode_commande === 'Vente Libérale' ? 'Nouvelle Vente Libérale' : 'Vente Catalogue'}
               </h2>
               <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
                 <X size={20} />
@@ -770,7 +794,7 @@ export default function VentesPage() {
                 <input
                   type="text"
                   required
-                  placeholder="Ex: Diaspora (Homme)..."
+                  placeholder="Ex: Tissu Grand Boubou, Retouche, Accessoire..."
                   value={formData.designation}
                   onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
                   className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none"
@@ -839,7 +863,7 @@ export default function VentesPage() {
                   rows={2}
                   value={formData.observations}
                   onChange={(e) => setFormData({ ...formData, observations: e.target.value })}
-                  placeholder="Notes..."
+                  placeholder="Notes ou détails supplémentaires..."
                   className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 focus:ring-2 focus:ring-amber-500 outline-none"
                 ></textarea>
               </div>
@@ -931,7 +955,7 @@ export default function VentesPage() {
                   <p><strong className="text-slate-900">Date :</strong> <span className="font-bold text-slate-800">{selectedVente.created_at ? new Date(selectedVente.created_at).toLocaleDateString('fr-FR') : new Date().toLocaleDateString('fr-FR')}</span></p>
                 </div>
                 <div className="space-y-1.5">
-                  <p><strong className="text-slate-900">Mode de commande :</strong> <span className="font-bold text-slate-800">{selectedVente.mode_commande || 'Prêt-à-porter'}</span></p>
+                  <p><strong className="text-slate-900">Mode de commande :</strong> <span className="font-bold text-slate-800">{selectedVente.mode_commande || 'Vente Libérale'}</span></p>
                   <p><strong className="text-slate-900">Mode de paiement :</strong> <span className="font-bold text-slate-800">{selectedVente.mode_paiement || 'Espèces'}</span></p>
                 </div>
               </div>
