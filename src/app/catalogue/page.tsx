@@ -63,6 +63,9 @@ export default function CataloguePretAPorterPage() {
 
   const optionsTailles = ['S', 'M', 'L', 'XL', 'XXL', '3XL', 'Sur Mesure'];
 
+  // Calcul du nombre total de produits en stock disponibles
+  const totalStock = produits.reduce((sum, p) => sum + (p.quantiteStock || 0), 0);
+
   // Chargement des données depuis Supabase
   const chargerProduits = async () => {
     setLoading(true);
@@ -396,7 +399,7 @@ export default function CataloguePretAPorterPage() {
           <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4">
             <div className="flex justify-between items-center pb-2 border-b border-slate-200">
               <h2 className="text-lg font-bold text-slate-900">
-                Articles Prêt-à-Porter ({produits.length})
+                Articles Prêt-à-Porter ({totalStock} en stock)
               </h2>
             </div>
 
