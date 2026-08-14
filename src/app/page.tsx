@@ -127,7 +127,7 @@ export default function Dashboard() {
               <Plus size={18} /> Nouvelle Vente
             </Link>
             <Link
-              href="/clients"
+              href="/commandes"
               className="bg-amber-700 hover:bg-amber-800 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-xs transition-colors cursor-pointer text-sm"
             >
               <Plus size={18} /> Nouvelle Commande
