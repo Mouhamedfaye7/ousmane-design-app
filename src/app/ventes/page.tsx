@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   ArrowLeft, Search, Printer, Share2, MapPin, Phone, Mail, 
-  X, CheckCircle2, Download, Trash2, Package, ShoppingBag, PlusCircle, Receipt, CheckSquare, Square, Tag
+  X, CheckCircle2, Download, Trash2, Package, ShoppingBag, PlusCircle, CheckSquare, Square, Tag
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -62,11 +62,6 @@ export default function VentesPage() {
   
   const [search, setSearch] = useState('');
   const [selectedVente, setSelectedVente] = useState<Vente | null>(null);
-  
-  // États pour la Facture Regroupée par Client
-  const [showGroupModal, setShowGroupModal] = useState(false);
-  const [selectedClientName, setSelectedClientName] = useState<string>('');
-  const [clientVentes, setClientVentes] = useState<Vente[]>([]);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -84,7 +79,6 @@ export default function VentesPage() {
   const [catalogueSearch, setCatalogueSearch] = useState('');
   
   const [loading, setLoading] = useState(true);
-  const [exporting, setExporting] = useState(false);
 
   const [formData, setFormData] = useState({
     commande_ids: [] as string[],
@@ -371,168 +365,6 @@ export default function VentesPage() {
     return v.designation || v.article || v.description || v.modele || 'Article sur mesure';
   };
 
-  const uniqueClients = Array.from(new Set(ventes.map(v => (v.client_nom || '').trim()).filter(Boolean)));
-
-  const handleGenerateGroupedInvoice = (clientNom: string) => {
-    const items = ventes.filter(v => (v.client_nom || '').trim().toLowerCase() === clientNom.trim().toLowerCase());
-    if (items.length === 0) return;
-    
-    setClientVentes(items);
-    setSelectedClientName(clientNom);
-    setShowGroupModal(true);
-  };
-
-  const handleShareGroupedPDFWhatsApp = async () => {
-    if (clientVentes.length === 0) return;
-    setExporting(true);
-
-    try {
-      if (typeof window !== 'undefined') {
-        const jsPDFModule = await import('jspdf');
-        const autoTableModule = await import('jspdf-autotable');
-        const jsPDF = jsPDFModule.jsPDF || jsPDFModule.default;
-        const autoTable = autoTableModule.default || autoTableModule;
-
-        const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-
-        let totalGeneral = 0;
-        let totalAvance = 0;
-
-        const tableBody = clientVentes.map(v => {
-          let tot = v.montant_total || 0;
-          let av = v.avance || 0;
-          if (tot > 0 && tot < 1000) tot *= 1000;
-          if (av > 0 && av < 1000) av *= 1000;
-          totalGeneral += tot;
-          totalAvance += av;
-
-          return [
-            getItemName(v),
-            v.quantite || 1,
-            `${formatAmount(v.prix_unitaire || tot)} FCFA`,
-            `${formatAmount(tot)} FCFA`
-          ];
-        });
-
-        const totalReste = Math.max(0, totalGeneral - totalAvance);
-        const clientTel = clientVentes[0]?.client_tel || '-';
-        const formattedDate = new Date().toLocaleDateString('fr-FR');
-
-        doc.setLineWidth(0.8);
-        doc.setDrawColor(217, 119, 6);
-        doc.roundedRect(10, 10, 190, 277, 3, 3, 'S');
-
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(22);
-        doc.setTextColor(120, 53, 15);
-        doc.text('Ousmane Design', 16, 25);
-
-        doc.setFontSize(8);
-        doc.setTextColor(217, 119, 6);
-        doc.text('CREATION & COUTURE CONTEMPORAINE (FACTURE REGROUPEE)', 16, 30);
-
-        doc.setDrawColor(254, 215, 170);
-        doc.setFillColor(255, 251, 235);
-        doc.roundedRect(118, 15, 77, 24, 2, 2, 'FD');
-
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8);
-        doc.setTextColor(30, 41, 59);
-        doc.text('Hann Maristes, Dakar, Senegal', 127, 21.5);
-        doc.text('77 646 21 02 / 70 348 26 82', 127, 27.5);
-        doc.text('@ousmanedesign.sn', 127, 33.5);
-
-        doc.setDrawColor(254, 215, 170);
-        doc.setFillColor(255, 251, 235);
-        doc.roundedRect(16, 45, 179, 22, 2, 2, 'FD');
-
-        doc.setFontSize(9);
-        doc.setTextColor(30, 41, 59);
-        doc.text('Client :', 20, 52);
-        doc.text(`${selectedClientName}`, 40, 52);
-
-        doc.text('Telephone :', 20, 58);
-        doc.setTextColor(217, 119, 6);
-        doc.text(`${clientTel}`, 40, 58);
-
-        doc.setTextColor(30, 41, 59);
-        doc.text('Date :', 120, 52);
-        doc.text(`${formattedDate}`, 140, 52);
-        doc.text('Nombre d\'articles :', 120, 58);
-        doc.text(`${clientVentes.length}`, 155, 58);
-
-        autoTable(doc, {
-          startY: 72,
-          margin: { left: 16, right: 15 },
-          head: [['DESIGNATION ARTICLE', 'QTE', 'PRIX UNITAIRE', 'TOTAL']],
-          body: tableBody,
-          headStyles: { fillColor: [217, 119, 6], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
-          columnStyles: {
-            0: { halign: 'left' },
-            1: { halign: 'center', cellWidth: 20 },
-            2: { halign: 'right', cellWidth: 40 },
-            3: { halign: 'right', cellWidth: 45, fontStyle: 'bold' }
-          },
-          bodyStyles: { fontSize: 8.5, textColor: [30, 41, 59], fontStyle: 'bold' },
-          theme: 'plain',
-        });
-
-        // @ts-ignore
-        const finalY = (doc as any).lastAutoTable?.finalY || 110;
-
-        const totalX = 110;
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(9);
-
-        doc.setTextColor(51, 65, 85);
-        doc.text('TOTAL GLOBAL :', totalX, finalY + 14);
-        doc.setTextColor(15, 23, 42);
-        doc.text(`${formatAmount(totalGeneral)} FCFA`, 190, finalY + 14, { align: 'right' });
-
-        doc.setTextColor(51, 65, 85);
-        doc.text('TOTAL REGLÉ :', totalX, finalY + 23);
-        doc.setTextColor(16, 185, 129);
-        doc.text(`${formatAmount(totalAvance)} FCFA`, 190, finalY + 23, { align: 'right' });
-
-        doc.setFillColor(217, 119, 6);
-        doc.roundedRect(totalX - 2, finalY + 29, 83, 10, 1.5, 1.5, 'F');
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(255, 255, 255);
-        doc.text('NET A PAYER :', totalX + 2, finalY + 35.5);
-        doc.text(`${formatAmount(totalReste)} FCFA`, 188, finalY + 35.5, { align: 'right' });
-
-        const safeName = selectedClientName.replace(/\s+/g, '_');
-        doc.save(`Facture_Groupée_${safeName}.pdf`);
-      }
-
-      let cleanPhone = (clientVentes[0]?.client_tel || '').replace(/\s+/g, '').replace(/[^0-9]/g, '');
-      if (cleanPhone.length === 9) cleanPhone = '221' + cleanPhone;
-
-      let totalGeneral = clientVentes.reduce((acc, v) => acc + (v.montant_total || 0), 0);
-      let totalAvance = clientVentes.reduce((acc, v) => acc + (v.avance || 0), 0);
-      if (totalGeneral > 0 && totalGeneral < 1000) totalGeneral *= 1000;
-      if (totalAvance > 0 && totalAvance < 1000) totalAvance *= 1000;
-      const totalReste = Math.max(0, totalGeneral - totalAvance);
-
-      const textMsg = `Bonjour ${selectedClientName},\n\nVoici le récapitulatif global de vos achats chez *Ousmane Design* (${clientVentes.length} article(s)) :\n` +
-        `- Total Global : ${formatAmount(totalGeneral)} FCFA\n` +
-        `- Total Encaissé : ${formatAmount(totalAvance)} FCFA\n` +
-        `- Reste Global à Payer : ${formatAmount(totalReste)} FCFA\n\n` +
-        `Votre facture regroupée en PDF a été générée. Merci pour votre confiance !`;
-
-      const waUrl = cleanPhone
-        ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(textMsg)}`
-        : `https://wa.me/?text=${encodeURIComponent(textMsg)}`;
-
-      window.open(waUrl, '_blank');
-
-    } catch (err: any) {
-      alert('Erreur génération PDF : ' + err.message);
-    } finally {
-      setExporting(false);
-    }
-  };
-
   const filteredVentes = ventes.filter(v =>
     (v.client_nom || '').toLowerCase().includes(search.toLowerCase()) ||
     (v.client_tel || '').includes(search) ||
@@ -583,40 +415,6 @@ export default function VentesPage() {
             className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-2.5 rounded-lg flex items-center gap-2 shadow-sm transition-colors cursor-pointer text-xs"
           >
             <Download size={16} /> Solder une Commande
-          </button>
-        </div>
-      </div>
-
-      {/* FACTURE REGROUPÉE PAR CLIENT */}
-      <div className="max-w-7xl mx-auto bg-amber-900/5 border border-amber-200 p-4 rounded-xl mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="flex items-center gap-3">
-          <div className="bg-amber-600 text-white p-2.5 rounded-lg">
-            <Receipt size={22} />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-slate-900">Facture Regroupée par Client (Multi-articles)</h3>
-            <p className="text-xs text-slate-500">Sélectionnez un client pour regrouper l'ensemble de ses achats sur une seule facture globale.</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <select
-            value={selectedClientName}
-            onChange={(e) => setSelectedClientName(e.target.value)}
-            className="p-2 border border-slate-300 rounded-lg bg-white text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-amber-500 w-full sm:w-64"
-          >
-            <option value="">-- Choisir un Client ({uniqueClients.length}) --</option>
-            {uniqueClients.map((client, idx) => (
-              <option key={idx} value={client}>{client}</option>
-            ))}
-          </select>
-
-          <button
-            onClick={() => handleGenerateGroupedInvoice(selectedClientName)}
-            disabled={!selectedClientName}
-            className="bg-amber-700 hover:bg-amber-800 disabled:opacity-40 text-white font-bold text-xs px-4 py-2 rounded-lg shrink-0 cursor-pointer shadow-xs transition-colors"
-          >
-            Facture Globale
           </button>
         </div>
       </div>
@@ -693,7 +491,7 @@ export default function VentesPage() {
         </div>
       </div>
 
-      {/* MODAL CATALOGUE AMÉLIORÉE (DÉTAILS TAILLE/COULEUR ET MENTION VENDU) */}
+      {/* MODAL CATALOGUE AMÉLIORÉE */}
       {showCatalogueModal && (
         <div onClick={() => { setShowCatalogueModal(false); setSelectedCatItem(null); }} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
           <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative border border-slate-200">
@@ -710,7 +508,6 @@ export default function VentesPage() {
               <input type="text" placeholder="Rechercher par nom, catégorie, taille ou couleur..." value={catalogueSearch} onChange={(e) => setCatalogueSearch(e.target.value)} className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-amber-500 text-slate-900" />
             </div>
 
-            {/* SI AUCUN ARTICLE SELECTIONNE : LISTE DES ARTICLES */}
             {!selectedCatItem ? (
               <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl">
                 {filteredCatalogue.length === 0 ? (
@@ -758,7 +555,6 @@ export default function VentesPage() {
                 })}
               </div>
             ) : (
-              /* SOUS-PANNEAU DE SELECTION DE LA DECLINAISON (TAILLE / COULEUR) */
               <div className="bg-amber-50/60 border border-amber-200 p-4 rounded-xl space-y-4">
                 <div className="flex justify-between items-start">
                   <div>
@@ -769,7 +565,6 @@ export default function VentesPage() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 text-xs">
-                  {/* SELECTION TAILLE */}
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">Taille sélectionnée :</label>
                     {Array.isArray(selectedCatItem.tailles) && selectedCatItem.tailles.length > 0 ? (
@@ -783,7 +578,6 @@ export default function VentesPage() {
                     )}
                   </div>
 
-                  {/* SELECTION COULEUR */}
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">Couleur sélectionnée :</label>
                     {Array.isArray(selectedCatItem.couleurs) && selectedCatItem.couleurs.length > 0 ? (
@@ -955,74 +749,6 @@ export default function VentesPage() {
                 <button type="submit" className="px-4 py-2 rounded-lg bg-amber-700 hover:bg-amber-800 text-white font-bold cursor-pointer">Enregistrer la vente</button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL FACTURE REGROUPÉE */}
-      {showGroupModal && (
-        <div onClick={() => setShowGroupModal(false)} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl relative border border-slate-200 my-8">
-            <div className="flex justify-between items-center mb-6 border-b pb-4">
-              <div className="flex items-center gap-2">
-                <button onClick={() => window.print()} className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer">
-                  <Printer size={15} /> Imprimer
-                </button>
-                <button onClick={handleShareGroupedPDFWhatsApp} disabled={exporting} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 disabled:opacity-50 cursor-pointer">
-                  <Share2 size={15} /> {exporting ? 'Génération...' : 'WhatsApp (PDF)'}
-                </button>
-              </div>
-              <button onClick={() => setShowGroupModal(false)} className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 cursor-pointer"><X size={20} /></button>
-            </div>
-
-            <div className="p-6 border-2 border-amber-600/80 rounded-xl bg-white space-y-6">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="text-2xl font-serif font-bold text-amber-900 tracking-wide">Ousmane Design</h2>
-                  <p className="text-[10px] uppercase font-bold text-amber-700 tracking-widest mt-0.5">Création & Couture Contemporaine</p>
-                </div>
-                <div className="border border-amber-200 bg-amber-50/50 p-3 rounded-lg text-xs text-slate-800 space-y-1 font-medium">
-                  <div className="flex items-center gap-2"><MapPin size={14} className="text-amber-600" /> Hann Maristes, Dakar</div>
-                  <div className="flex items-center gap-2"><Phone size={14} className="text-amber-600" /> 77 646 21 02 / 70 348 26 82</div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 border border-amber-200 rounded-lg p-3 bg-amber-50/30 text-xs">
-                <div>
-                  <p><strong>Client :</strong> {selectedClientName}</p>
-                  <p><strong>Tél :</strong> {clientVentes[0]?.client_tel || '-'}</p>
-                </div>
-                <div>
-                  <p><strong>Date :</strong> {new Date().toLocaleDateString('fr-FR')}</p>
-                  <p><strong>Articles :</strong> {clientVentes.length}</p>
-                </div>
-              </div>
-
-              <table className="w-full text-xs text-left border-collapse">
-                <thead>
-                  <tr className="bg-amber-600 text-white font-bold uppercase">
-                    <th className="p-2.5">Article / Désignation</th>
-                    <th className="p-2.5 text-center">Qté</th>
-                    <th className="p-2.5 text-right">P.U</th>
-                    <th className="p-2.5 text-right">Total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-amber-100 border-b border-amber-200">
-                  {clientVentes.map((v, i) => {
-                    let tot = v.montant_total || 0;
-                    if (tot > 0 && tot < 1000) tot *= 1000;
-                    return (
-                      <tr key={i}>
-                        <td className="p-2.5 font-bold text-slate-900">{getItemName(v)}</td>
-                        <td className="p-2.5 text-center font-bold">{v.quantite || 1}</td>
-                        <td className="p-2.5 text-right font-semibold">{formatAmount(v.prix_unitaire || tot)} F</td>
-                        <td className="p-2.5 text-right font-bold text-slate-900">{formatAmount(tot)} FCFA</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
           </div>
         </div>
       )}
