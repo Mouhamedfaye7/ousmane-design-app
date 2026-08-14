@@ -2,13 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import {
-  ArrowLeft,
-  TrendingUp,
-  DollarSign,
-  ShoppingBag,
-  Clock,
-  CheckCircle2,
+import { 
+  ArrowLeft, 
+  TrendingUp, 
+  DollarSign, 
+  ShoppingBag, 
+  Clock, 
+  CheckCircle2, 
   AlertCircle,
   RefreshCw,
   PieChart
@@ -23,7 +23,6 @@ interface Commande {
   designation?: string;
   montant_total?: number;
   avance?: number;
-  acompte?: number;
   reste?: number;
   created_at?: string;
 }
@@ -49,23 +48,17 @@ export default function StatistiquesPage() {
     return (Number(val) || 0).toLocaleString('fr-FR').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ');
   };
 
-  // --- HELPER : CALCUL FINANCIER PRÉCIS ---
-  // Prend en compte le cas où la commande est intégralement payée à la commande (acompte/avance = montant_total)
-  // sans changer prématurément son statut de fabrication.
+  // --- HELPER : CALCUL DE L'AVANCE RÉELLE ET DU RESTE ---
+  // Si la commande est "Livrée", elle est considérée comme payée en totalité (avance = montant_total, reste = 0)
   const getCalculatedFinancials = (c: Commande) => {
     const tot = Number(c.montant_total) || 0;
-    
-    // Supporte la colonne 'avance' ou 'acompte' selon le schéma DB
-    let av = Number(c.avance ?? c.acompte) || 0;
+    let av = Number(c.avance) || 0;
 
-    // Si la commande est enregistrée comme Livrée OU que le reste est explicitement 0
-    if (c.statut === 'Livrée' || (c.reste !== undefined && Number(c.reste) === 0 && tot > 0)) {
-      av = tot;
+    if (c.statut === 'Livrée') {
+      av = tot; // Une commande livrée est intégralement réglée
     }
 
-    // Le reste ne peut pas être négatif
-    const reste = c.reste !== undefined ? Math.max(0, Number(c.reste)) : Math.max(0, tot - av);
-    
+    const reste = Math.max(0, tot - av);
     return { tot, av, reste };
   };
 
@@ -97,7 +90,7 @@ export default function StatistiquesPage() {
       {/* HEADER */}
       <div className="max-w-7xl mx-auto mb-6 flex flex-col md:flex-row justify-between md:items-center gap-4">
         <div>
-          <Link href="/" className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1 mb-2 font-semibold">
+          <Link href="/" className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1 mb-2">
             <ArrowLeft size={16} /> Retour au tableau de bord
           </Link>
           <h1 className="text-2xl font-bold text-slate-900">Rapport Statistique & Performance</h1>
@@ -131,7 +124,7 @@ export default function StatistiquesPage() {
           <div>
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Encaissements / Avances</p>
             <h2 className="text-xl font-bold text-emerald-600">{formatAmount(totalAvances)} FCFA</h2>
-            <p className="text-xs text-emerald-600/80 mt-1 font-semibold">
+            <p className="text-xs text-emerald-600/80 mt-1">
               {caTotal > 0 ? Math.round((totalAvances / caTotal) * 100) : 0}% du total encaissé
             </p>
           </div>
@@ -144,7 +137,7 @@ export default function StatistiquesPage() {
           <div>
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Reste à Recouvrer</p>
             <h2 className="text-xl font-bold text-rose-600">{formatAmount(totalReste)} FCFA</h2>
-            <p className="text-xs text-rose-600/80 mt-1 font-semibold">Créances clients en attente</p>
+            <p className="text-xs text-rose-600/80 mt-1">Créances clients en attente</p>
           </div>
           <div className="bg-rose-100 text-rose-700 p-3 rounded-lg">
             <AlertCircle size={22} />
@@ -155,7 +148,7 @@ export default function StatistiquesPage() {
           <div>
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Commandes Livrées</p>
             <h2 className="text-xl font-bold text-slate-900">{nbLivrees} / {totalCommandes}</h2>
-            <p className="text-xs text-blue-600 mt-1 font-semibold">{pctLivrees}% de taux de finalisation</p>
+            <p className="text-xs text-blue-600 mt-1">{pctLivrees}% de taux de finalisation</p>
           </div>
           <div className="bg-blue-100 text-blue-700 p-3 rounded-lg">
             <CheckCircle2 size={22} />
@@ -165,6 +158,7 @@ export default function StatistiquesPage() {
 
       {/* SECTION RÉPARTITION PAR STATUT ET FINANCES */}
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        
         {/* STATUT DE PRODUCTION */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-4">
           <div className="flex justify-between items-center border-b pb-3">
@@ -235,7 +229,7 @@ export default function StatistiquesPage() {
                 <p className="text-lg font-bold text-slate-800 mt-1">{formatAmount(caTotal)} F</p>
               </div>
               <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-100">
-                <p className="text-xs text-emerald-700 font-medium">Total Perçu (Encaissements)</p>
+                <p className="text-xs text-emerald-700 font-medium">Total Perçu (Avances)</p>
                 <p className="text-lg font-bold text-emerald-700 mt-1">{formatAmount(totalAvances)} F</p>
               </div>
               <div className="bg-amber-50 p-4 rounded-lg border border-amber-100">
@@ -257,6 +251,7 @@ export default function StatistiquesPage() {
             </div>
           </div>
         </div>
+
       </div>
 
       {/* TABLEAU DES DERNIÈRES COMMANDES SYNCHRONISÉES */}
@@ -265,7 +260,7 @@ export default function StatistiquesPage() {
           <h2 className="font-bold text-slate-900 text-base flex items-center gap-2">
             <Clock size={18} className="text-amber-600" /> Historique Dynamique des Commandes
           </h2>
-          <span className="text-xs text-slate-400">{commandes.slice(0, 10).length} dernières entrées</span>
+          <span className="text-xs text-slate-400">{commandes.slice(0, 8).length} dernières entrées</span>
         </div>
 
         <div className="overflow-x-auto">
@@ -275,9 +270,9 @@ export default function StatistiquesPage() {
                 <th className="p-3">Code</th>
                 <th className="p-3">Client</th>
                 <th className="p-3">Article</th>
-                <th className="p-3">Statut Fabrication</th>
+                <th className="p-3">Statut</th>
                 <th className="p-3 text-right">Montant Total</th>
-                <th className="p-3 text-right">Réglé / Avance</th>
+                <th className="p-3 text-right">Avance</th>
                 <th className="p-3 text-right">Reste</th>
               </tr>
             </thead>
