@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Search, Send, X, CheckCircle, CreditCard } from 'lucide-react';
+import { ArrowLeft, Plus, Search, Send, X, CheckCircle, CreditCard, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 interface Commande {
@@ -117,7 +117,7 @@ export default function CommandesPage() {
   const handleSolderCommande = async (c: Commande) => {
     if (!c.id) return;
     const tot = Number(c.montant_total) || 0;
-    
+
     const { error } = await supabase.from('commandes').update({
       avance: tot,
       reste: 0
@@ -147,6 +147,25 @@ export default function CommandesPage() {
       setSelectedCommandeForPay(null);
     } else {
       alert('Erreur : ' + error.message);
+    }
+  };
+
+  // --- ACTION : SUPPRIMER UNE COMMANDE ---
+  const handleDeleteCommande = async (c: Commande) => {
+    if (!c.id) return;
+
+    const confirmDelete = confirm(
+      `Voulez-vous vraiment supprimer la commande ${c.code_commande || ''} de ${c.client_nom} ?`
+    );
+
+    if (!confirmDelete) return;
+
+    const { error } = await supabase.from('commandes').delete().eq('id', c.id);
+
+    if (!error) {
+      setCommandes(prev => prev.filter(item => item.id !== c.id));
+    } else {
+      alert('Erreur lors de la suppression : ' + error.message);
     }
   };
 
@@ -276,11 +295,20 @@ export default function CommandesPage() {
                             <h3 className="font-bold text-slate-900 text-sm">{c.client_nom || 'Client sans nom'}</h3>
                             <p className="text-xs text-slate-500">({c.client_tel || '-'})</p>
                           </div>
-                          {c.code_commande && (
-                            <span className="text-[10px] bg-slate-100 border border-slate-300 font-mono font-semibold px-1.5 py-0.5 rounded text-slate-600">
-                              {c.code_commande}
-                            </span>
-                          )}
+                          <div className="flex items-center gap-1.5">
+                            {c.code_commande && (
+                              <span className="text-[10px] bg-slate-100 border border-slate-300 font-mono font-semibold px-1.5 py-0.5 rounded text-slate-600">
+                                {c.code_commande}
+                              </span>
+                            )}
+                            <button
+                              onClick={() => handleDeleteCommande(c)}
+                              className="text-slate-400 hover:text-red-600 p-1 rounded-md transition-colors cursor-pointer"
+                              title="Supprimer la commande"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
                         </div>
 
                         <p className="text-xs text-slate-700 font-medium">{getItemName(c)}</p>
