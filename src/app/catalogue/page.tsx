@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Trash2, Plus, ArrowLeft, Package, Loader2 } from 'lucide-react';
+import { Trash2, Plus, ArrowLeft, Package, Loader2, Edit3, X, Check } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 interface Produit {
@@ -16,10 +16,41 @@ interface Produit {
   description: string;
 }
 
+// Fonction utilitaire pour associer les noms de couleurs en français aux valeurs CSS
+const getCouleurHex = (couleur: string): string => {
+  const c = couleur.trim().toLowerCase();
+  const dictionary: Record<string, string> = {
+    noir: '#000000',
+    blanc: '#ffffff',
+    rouge: '#ef4444',
+    bleu: '#3b82f6',
+    'bleu marine': '#1e3a8a',
+    marine: '#1e3a8a',
+    vert: '#22c55e',
+    jaune: '#eab308',
+    'doré': '#d4af37',
+    dore: '#d4af37',
+    'argenté': '#c0c0c0',
+    argent: '#c0c0c0',
+    gris: '#6b7280',
+    marron: '#78350f',
+    bordeaux: '#800020',
+    violet: '#8b5cf6',
+    rose: '#ec4899',
+    orange: '#f97316',
+    beige: '#f5f5dc',
+    crème: '#fffdd0',
+    creme: '#fffdd0',
+  };
+
+  return dictionary[c] || c;
+};
+
 export default function CataloguePretAPorterPage() {
   const [produits, setProduits] = useState<Produit[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Formulaire
   const [nom, setNom] = useState('');
@@ -71,7 +102,32 @@ export default function CataloguePretAPorterPage() {
     }
   };
 
-  const ajouterProduit = async (e: React.FormEvent) => {
+  const reinitialiserFormulaire = () => {
+    setEditingId(null);
+    setNom('');
+    setCategorie('Homme');
+    setPrix('');
+    setQuantiteStock('');
+    setDescription('');
+    setTaillesSelectionnees([]);
+    setSaisieCouleurs('');
+  };
+
+  const editerProduit = (p: Produit) => {
+    setEditingId(p.id);
+    setNom(p.nom);
+    setCategorie(p.categorie);
+    setPrix(p.prix);
+    setQuantiteStock(p.quantiteStock);
+    setDescription(p.description);
+    setTaillesSelectionnees(p.tailles);
+    setSaisieCouleurs(p.couleurs.join(', '));
+
+    // Scroll vers le formulaire pour faciliter l'expérience sur mobile / petits écrans
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const enregistrerProduit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!nom || !prix || quantiteStock === '') {
@@ -86,7 +142,7 @@ export default function CataloguePretAPorterPage() {
       .map((c) => c.trim())
       .filter((c) => c.length > 0);
 
-    const nouveauProduitPayload = {
+    const payload = {
       nom,
       categorie,
       prix: Number(prix),
@@ -96,36 +152,61 @@ export default function CataloguePretAPorterPage() {
       description,
     };
 
-    const { data, error } = await supabase
-      .from('catalogue')
-      .insert([nouveauProduitPayload])
-      .select();
+    if (editingId) {
+      // --- MODE MODIFICATION ---
+      const { error } = await supabase
+        .from('catalogue')
+        .update(payload)
+        .eq('id', editingId);
 
-    if (error) {
-      console.error('Erreur lors de l’ajout :', error.message);
-      alert('Erreur lors de l’enregistrement dans la base de données.');
-    } else if (data && data[0]) {
-      const p = data[0];
-      const prodAjoute: Produit = {
-        id: p.id,
-        nom: p.nom,
-        categorie: p.categorie,
-        prix: Number(p.prix),
-        tailles: p.tailles || [],
-        couleurs: p.couleurs || [],
-        quantiteStock: Number(p.quantite_stock),
-        description: p.description || '',
-      };
+      if (error) {
+        console.error('Erreur lors de la modification :', error.message);
+        alert('Erreur lors de la mise à jour de l’article.');
+      } else {
+        setProduits(
+          produits.map((p) =>
+            p.id === editingId
+              ? {
+                  ...p,
+                  nom,
+                  categorie,
+                  prix: Number(prix),
+                  tailles: payload.tailles,
+                  couleurs: payload.couleurs,
+                  quantiteStock: Number(quantiteStock),
+                  description,
+                }
+              : p
+          )
+        );
+        reinitialiserFormulaire();
+      }
+    } else {
+      // --- MODE CREATION ---
+      const { data, error } = await supabase
+        .from('catalogue')
+        .insert([payload])
+        .select();
 
-      setProduits([prodAjoute, ...produits]);
+      if (error) {
+        console.error('Erreur lors de l’ajout :', error.message);
+        alert('Erreur lors de l’enregistrement dans la base de données.');
+      } else if (data && data[0]) {
+        const p = data[0];
+        const prodAjoute: Produit = {
+          id: p.id,
+          nom: p.nom,
+          categorie: p.categorie,
+          prix: Number(p.prix),
+          tailles: p.tailles || [],
+          couleurs: p.couleurs || [],
+          quantiteStock: Number(p.quantite_stock),
+          description: p.description || '',
+        };
 
-      // Réinitialisation du formulaire
-      setNom('');
-      setPrix('');
-      setQuantiteStock('');
-      setDescription('');
-      setTaillesSelectionnees([]);
-      setSaisieCouleurs('');
+        setProduits([prodAjoute, ...produits]);
+        reinitialiserFormulaire();
+      }
     }
 
     setIsSubmitting(false);
@@ -140,6 +221,9 @@ export default function CataloguePretAPorterPage() {
         alert('Erreur lors de la suppression de l’article.');
       } else {
         setProduits(produits.filter((p) => p.id !== id));
+        if (editingId === id) {
+          reinitialiserFormulaire();
+        }
       }
     }
   };
@@ -160,12 +244,24 @@ export default function CataloguePretAPorterPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* FORMULAIRE */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4">
-            <h2 className="text-lg font-bold text-slate-900 pb-2 border-b border-slate-200">
-              Ajouter un Article Prêt-à-Porter
-            </h2>
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4 self-start">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+              <h2 className="text-lg font-bold text-slate-900">
+                {editingId ? 'Modifier l’Article' : 'Ajouter un Article Prêt-à-Porter'}
+              </h2>
+              {editingId && (
+                <button
+                  type="button"
+                  onClick={reinitialiserFormulaire}
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-md"
+                  title="Annuler l'édition"
+                >
+                  <X size={18} />
+                </button>
+              )}
+            </div>
 
-            <form onSubmit={ajouterProduit} className="space-y-4">
+            <form onSubmit={enregistrerProduit} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Nom du modèle / Article</label>
                 <input
@@ -186,10 +282,10 @@ export default function CataloguePretAPorterPage() {
                     onChange={(e) => setCategorie(e.target.value)}
                     className="w-full bg-white border border-slate-300 text-slate-900 p-2.5 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-amber-600"
                   >
-                    <option value="Homme" className="bg-white text-slate-900">Homme</option>
-                    <option value="Femme" className="bg-white text-slate-900">Femme</option>
-                    <option value="Enfant" className="bg-white text-slate-900">Enfant</option>
-                    <option value="Accessoires" className="bg-white text-slate-900">Accessoires</option>
+                    <option value="Homme">Homme</option>
+                    <option value="Femme">Femme</option>
+                    <option value="Enfant">Enfant</option>
+                    <option value="Accessoires">Accessoires</option>
                   </select>
                 </div>
 
@@ -228,7 +324,7 @@ export default function CataloguePretAPorterPage() {
                         type="button"
                         key={t}
                         onClick={() => toggleTaille(t)}
-                        className={`px-2.5 py-1 text-xs rounded-md font-bold border transition-all ${
+                        className={`px-2.5 py-1 text-xs rounded-md font-bold border transition-all cursor-pointer ${
                           estSelectionne
                             ? 'bg-amber-700 text-white border-amber-700'
                             : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100'
@@ -247,7 +343,7 @@ export default function CataloguePretAPorterPage() {
                 </label>
                 <input
                   type="text"
-                  placeholder="Ex: Blanc, Bleu Marine, Doré"
+                  placeholder="Ex: Blanc, Bleu Marine, Doré, Noir"
                   value={saisieCouleurs}
                   onChange={(e) => setSaisieCouleurs(e.target.value)}
                   className="w-full bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
@@ -264,19 +360,35 @@ export default function CataloguePretAPorterPage() {
                 />
               </div>
 
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full bg-amber-700 hover:bg-amber-800 disabled:opacity-50 text-white py-2.5 rounded-lg font-bold text-sm shadow-sm transition-colors flex items-center justify-center gap-2 cursor-pointer"
-              >
-                {isSubmitting ? (
-                  <Loader2 size={18} className="animate-spin" />
-                ) : (
-                  <>
-                    <Plus size={18} /> Enregistrer le Modèle
-                  </>
+              <div className="space-y-2 pt-1">
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full bg-amber-700 hover:bg-amber-800 disabled:opacity-50 text-white py-2.5 rounded-lg font-bold text-sm shadow-sm transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {isSubmitting ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : editingId ? (
+                    <>
+                      <Check size={18} /> Enregistrer les Modifications
+                    </>
+                  ) : (
+                    <>
+                      <Plus size={18} /> Enregistrer le Modèle
+                    </>
+                  )}
+                </button>
+
+                {editingId && (
+                  <button
+                    type="button"
+                    onClick={reinitialiserFormulaire}
+                    className="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 py-2 rounded-lg font-semibold text-xs transition-colors cursor-pointer"
+                  >
+                    Annuler la modification
+                  </button>
                 )}
-              </button>
+              </div>
             </form>
           </div>
 
@@ -303,21 +415,35 @@ export default function CataloguePretAPorterPage() {
                 {produits.map((p) => (
                   <div
                     key={p.id}
-                    className="border border-slate-200 rounded-xl p-4 space-y-3 bg-slate-50/50 hover:border-amber-500/50 transition-all flex flex-col justify-between"
+                    className={`border rounded-xl p-4 space-y-3 transition-all flex flex-col justify-between ${
+                      editingId === p.id
+                        ? 'bg-amber-50/60 border-amber-500 ring-2 ring-amber-500/20'
+                        : 'bg-slate-50/50 border-slate-200 hover:border-amber-500/50'
+                    }`}
                   >
                     <div className="space-y-2">
                       <div className="flex justify-between items-start">
                         <span className="text-xs font-bold uppercase tracking-wide px-2 py-0.5 rounded bg-amber-100 text-amber-900">
                           {p.categorie}
                         </span>
-                        
-                        <button
-                          onClick={() => supprimerProduit(p.id)}
-                          className="text-slate-400 hover:text-red-600 transition-colors p-1.5 rounded-lg hover:bg-red-50 cursor-pointer"
-                          title="Supprimer cet article"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+
+                        {/* ACTIONS : MODIFIER & SUPPRIMER */}
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => editerProduit(p)}
+                            className="text-slate-400 hover:text-amber-600 transition-colors p-1.5 rounded-lg hover:bg-amber-100/60 cursor-pointer"
+                            title="Modifier cet article"
+                          >
+                            <Edit3 size={16} />
+                          </button>
+                          <button
+                            onClick={() => supprimerProduit(p.id)}
+                            className="text-slate-400 hover:text-red-600 transition-colors p-1.5 rounded-lg hover:bg-red-50 cursor-pointer"
+                            title="Supprimer cet article"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       </div>
 
                       <div>
@@ -330,8 +456,9 @@ export default function CataloguePretAPorterPage() {
                       <p className="text-xs text-slate-600 line-clamp-2">{p.description || 'Aucune description'}</p>
                     </div>
 
-                    <div className="space-y-1.5 pt-2 border-t border-slate-200 text-xs">
-                      <div className="flex items-center gap-1">
+                    <div className="space-y-2 pt-2 border-t border-slate-200 text-xs">
+                      {/* TAILLES */}
+                      <div className="flex items-center gap-1 flex-wrap">
                         <span className="font-bold text-slate-700">Tailles :</span>
                         <div className="flex flex-wrap gap-1">
                           {p.tailles.map((t) => (
@@ -342,11 +469,28 @@ export default function CataloguePretAPorterPage() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1">
+                      {/* COULEURS AVEC CERCLAGE COLORÉ */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-bold text-slate-700">Couleurs :</span>
-                        <span className="text-slate-800 font-medium">{p.couleurs.join(', ')}</span>
+                        {p.couleurs.length === 0 ? (
+                          <span className="text-slate-500 italic">Non spécifié</span>
+                        ) : (
+                          p.couleurs.map((couleur, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-flex items-center gap-1 bg-white border border-slate-200 px-2 py-0.5 rounded text-slate-800 text-xs font-medium shadow-2xs"
+                            >
+                              <span
+                                className="w-3 h-3 rounded-full border border-slate-300 shrink-0 inline-block"
+                                style={{ backgroundColor: getCouleurHex(couleur) }}
+                              />
+                              {couleur}
+                            </span>
+                          ))
+                        )}
                       </div>
 
+                      {/* QUANTITE EN STOCK */}
                       <div className="flex justify-between items-center pt-1 font-semibold">
                         <span className="text-slate-700">Quantité en Stock :</span>
                         <span
