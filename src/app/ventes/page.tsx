@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft, Search, Printer, Share2, MapPin, Phone, Mail,
-  X, CheckCircle2, Download, Trash2, Package, ShoppingBag, PlusCircle, CheckSquare, Square, Tag, Send
+  X, CheckCircle2, Download, Trash2, Package, ShoppingBag, PlusCircle, CheckSquare, Square, Tag, Send, FileText
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -74,6 +74,8 @@ export default function VentesPage() {
   const [importSearch, setImportSearch] = useState('');
   const [catalogueSearch, setCatalogueSearch] = useState('');
   const [loading, setLoading] = useState(true);
+
+  const invoiceRef = useRef<HTMLDivElement>(null);
 
   const [formData, setFormData] = useState({
     commande_ids: [] as string[],
@@ -346,7 +348,30 @@ export default function VentesPage() {
     return v.designation || v.article || v.description || v.modele || 'Article sur mesure';
   };
 
-  // ALERTE / ENVOI WHATSAPP FACTURE
+  // TÉLÉCHARGER LA FACTURE EN PDF
+  const handleDownloadPDF = async (v: Vente) => {
+    try {
+      // Import dynamique de html2pdf.js pour éviter les erreurs SSR
+      const html2pdf = (await import('html2pdf.js')).default;
+      const element = invoiceRef.current;
+      if (!element) return;
+
+      const opt = {
+        margin:       10,
+        filename:     `Facture_${(v.client_nom || 'Client').replace(/\s+/g, '_')}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2 },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      html2pdf().set(opt).from(element).save();
+    } catch (err) {
+      // Dégradation gracieuse : ouverture de la fenêtre d'impression native (Sauvegarder en PDF)
+      window.print();
+    }
+  };
+
+  // ENVOI WHATSAPP FACTURE
   const handleSendWhatsAppInvoice = (v: Vente) => {
     let cleanPhone = (v.client_tel || '').trim().replace(/[^0-9]/g, '');
     if (cleanPhone.length === 9) {
@@ -774,7 +799,7 @@ export default function VentesPage() {
         </div>
       )}
 
-      {/* MODAL FACTURE COMPLÈTE STYLE PROFESSIONNEL */}
+      {/* MODAL FACTURE COMPLÈTE AVEC IMPRESSION & TÉLÉCHARGEMENT PDF */}
       {selectedVente && (() => {
         let total = selectedVente.montant_total || 0;
         let avance = selectedVente.avance || 0;
@@ -789,15 +814,24 @@ export default function VentesPage() {
           <div onClick={() => setSelectedVente(null)} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
             <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative border border-slate-200 my-8">
               
-              {/* BOUTONS ACTIONS DES FACTURES */}
+              {/* BARRE D'ACTIONS FACTURE */}
               <div className="flex justify-between items-center mb-4 border-b pb-3 print:hidden">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => handleDownloadPDF(selectedVente)}
+                    className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    title="Télécharger la facture en document PDF"
+                  >
+                    <FileText size={15} /> Télécharger PDF
+                  </button>
+
                   <button
                     onClick={() => window.print()}
                     className="bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-xs"
                   >
                     <Printer size={15} /> Imprimer
                   </button>
+
                   <button
                     onClick={() => handleSendWhatsAppInvoice(selectedVente)}
                     className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-xs"
@@ -805,13 +839,14 @@ export default function VentesPage() {
                     <Send size={15} /> WhatsApp
                   </button>
                 </div>
+
                 <button onClick={() => setSelectedVente(null)} className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 cursor-pointer">
                   <X size={20} />
                 </button>
               </div>
 
-              {/* CONTENU FACTURE DESIGN OUSMANE DESIGN */}
-              <div className="p-6 border-2 border-amber-800/20 rounded-xl bg-white space-y-5 text-slate-900 font-sans">
+              {/* FACTURE IMPRIMABLE ET CIBLÉE POUR LE PDF */}
+              <div ref={invoiceRef} className="p-6 border-2 border-amber-800/20 rounded-xl bg-white space-y-5 text-slate-900 font-sans">
                 {/* EN-TÊTE ATELIER */}
                 <div className="flex justify-between items-start border-b border-amber-900/20 pb-4">
                   <div>
