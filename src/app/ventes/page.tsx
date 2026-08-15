@@ -351,29 +351,51 @@ export default function VentesPage() {
     return v.designation || v.article || v.description || v.modele || 'Article sur mesure';
   };
 
-  // Génère et télécharge le PDF de la facture (fonction réutilisable)
+  // Génère et télécharge le PDF de la facture (html2canvas-pro supporte oklch/Tailwind v4)
   const downloadInvoicePDF = async (v: Vente) => {
-    const html2pdf = (await import('html2pdf.js')).default;
+    const { default: html2canvas } = await import('html2canvas-pro');
+    const { default: jsPDF } = await import('jspdf');
     const element = invoiceRef.current;
     if (!element) return;
 
-    const opt = {
-      margin:       10,
-      filename:     `Facture_${(v.client_nom || 'Client').replace(/\s+/g, '_')}.pdf`,
-      image:        { type: 'jpeg' as const, quality: 0.98 },
-      html2canvas:  { scale: 2 },
-      jsPDF:        { unit: 'mm' as const, format: 'a4', orientation: 'portrait' as const }
-    };
+    const canvas = await html2canvas(element, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      useCORS: true
+    });
 
-    await html2pdf().set(opt).from(element).save();
+    const imgData = canvas.toDataURL('image/jpeg', 0.98);
+
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 10;
+    const usableWidth = pageWidth - margin * 2;
+    const usableHeight = pageHeight - margin * 2;
+    const imgHeight = (canvas.height * usableWidth) / canvas.width;
+
+    let heightLeft = imgHeight;
+    let position = margin;
+
+    pdf.addImage(imgData, 'JPEG', margin, position, usableWidth, imgHeight);
+    heightLeft -= usableHeight;
+
+    while (heightLeft > 0) {
+      position = margin - (imgHeight - heightLeft);
+      pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', margin, position, usableWidth, imgHeight);
+      heightLeft -= usableHeight;
+    }
+
+    pdf.save(`Facture_${(v.client_nom || 'Client').replace(/\s+/g, '_')}.pdf`);
   };
 
   const handleDownloadPDF = async (v: Vente) => {
     try {
       await downloadInvoicePDF(v);
     } catch (err) {
-      console.warn('Fallback impression PDF :', err);
-      window.print();
+      console.error('Erreur génération PDF :', err);
+      alert('Erreur lors de la génération du PDF. Veuillez réessayer.');
     }
   };
 
@@ -424,7 +446,7 @@ export default function VentesPage() {
       try {
         await downloadInvoicePDF(pendingWhatsApp);
       } catch (err) {
-        console.warn('Erreur génération PDF avant WhatsApp :', err);
+        console.error('Erreur génération PDF avant WhatsApp :', err);
       }
       openWhatsAppMessage(pendingWhatsApp);
       setPendingWhatsApp(null);
