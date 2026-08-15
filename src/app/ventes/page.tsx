@@ -75,7 +75,7 @@ export default function VentesPage() {
   const [catalogueSearch, setCatalogueSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // Nouveau: état pour piloter la séquence "PDF -> WhatsApp"
+  // État pour piloter la séquence "PDF -> WhatsApp"
   const [pendingWhatsApp, setPendingWhatsApp] = useState<Vente | null>(null);
 
   const invoiceRef = useRef<HTMLDivElement>(null);
@@ -360,9 +360,9 @@ export default function VentesPage() {
     const opt = {
       margin:       10,
       filename:     `Facture_${(v.client_nom || 'Client').replace(/\s+/g, '_')}.pdf`,
-      image:        { type: 'jpeg', quality: 0.98 },
+      image:        { type: 'jpeg' as const, quality: 0.98 },
       html2canvas:  { scale: 2 },
-      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      jsPDF:        { unit: 'mm' as const, format: 'a4', orientation: 'portrait' as const }
     };
 
     await html2pdf().set(opt).from(element).save();
