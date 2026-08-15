@@ -30,6 +30,14 @@ interface Commande {
   created_at?: string;
 }
 
+interface VenteRow {
+  id?: string;
+  mode_commande?: string;
+  montant_total?: number;
+  avance?: number;
+  reste?: number;
+}
+
 export default function Dashboard() {
   const [totalClients, setTotalClients] = useState<number>(0);
   const [enCoursCount, setEnCoursCount] = useState<number>(0);
@@ -39,16 +47,30 @@ export default function Dashboard() {
   const [totalReste, setTotalReste] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Helper : Alignement strict avec la page statistiques pour le calcul des finances
+  // Helper : Alignement strict avec la page statistiques pour le calcul des finances (commandes)
   const getCalculatedFinancials = (c: Commande) => {
     const tot = Number(c.montant_total) || 0;
     let av = Number(c.avance) || 0;
 
     if (c.statut === 'Livrée') {
-      av = tot; // Une commande livrée est totalement réglée
+      av = tot;
     }
 
     const reste = Math.max(0, tot - av);
+    return { tot, av, reste };
+  };
+
+  // Normalise les montants stockés en "milliers" (ex: 25 -> 25 000), même logique que la page Ventes
+  const normalizeAmount = (val: number | undefined | null) => {
+    let num = Number(val) || 0;
+    if (num > 0 && num < 1000) num = num * 1000;
+    return num;
+  };
+
+  const getVenteFinancials = (v: VenteRow) => {
+    const tot = normalizeAmount(v.montant_total);
+    const av = normalizeAmount(v.avance);
+    const reste = v.reste !== undefined ? Math.max(0, normalizeAmount(v.reste)) : Math.max(0, tot - av);
     return { tot, av, reste };
   };
 
@@ -56,11 +78,15 @@ export default function Dashboard() {
     async function loadDashboardStats() {
       setLoading(true);
 
-      const { data: commandes, error } = await supabase
-        .from('commandes')
-        .select('*');
+      const [cmdRes, venteRes] = await Promise.all([
+        supabase.from('commandes').select('*'),
+        supabase.from('ventes').select('*')
+      ]);
 
-      if (!error && commandes) {
+      const commandes = cmdRes.data;
+      const ventes = venteRes.data;
+
+      if (!cmdRes.error && commandes) {
         // Total des clients uniques
         const clientsUniques = new Set(
           commandes.map(c => (c.client_nom || '').trim().toLowerCase()).filter(Boolean)
@@ -77,23 +103,31 @@ export default function Dashboard() {
         const pretes = commandes.filter(c => c.statut === 'Prête').length;
         setPretesCount(pretes);
 
-        // Chiffre d'affaires global
-        const caTotal = commandes.reduce((acc, c) => acc + (Number(c.montant_total) || 0), 0);
-        setChiffreAffaires(caTotal);
+        // Ventes boutique/catalogue NON liées à une commande sur-mesure (déjà comptées via commandes)
+        const ventesBoutique = (!venteRes.error && ventes)
+          ? ventes.filter(v => !(v.mode_commande || '').startsWith('Sur Mesure'))
+          : [];
 
-        // Cumul des Avances / Encaissements réels
-        const avancesTotales = commandes.reduce((acc, c) => {
+        // Chiffre d'affaires global : commandes + ventes boutique
+        const caCommandes = commandes.reduce((acc, c) => acc + (Number(c.montant_total) || 0), 0);
+        const caBoutique = ventesBoutique.reduce((acc, v) => acc + getVenteFinancials(v).tot, 0);
+        setChiffreAffaires(caCommandes + caBoutique);
+
+        // Cumul des Avances / Encaissements réels : commandes + ventes boutique
+        const avancesCommandes = commandes.reduce((acc, c) => {
           const { av } = getCalculatedFinancials(c);
           return acc + av;
         }, 0);
-        setTotalAvances(avancesTotales);
+        const avancesBoutique = ventesBoutique.reduce((acc, v) => acc + getVenteFinancials(v).av, 0);
+        setTotalAvances(avancesCommandes + avancesBoutique);
 
-        // Cumul des Solde / Créances clients
-        const resteTotal = commandes.reduce((acc, c) => {
+        // Cumul des Solde / Créances clients : commandes + ventes boutique
+        const resteCommandes = commandes.reduce((acc, c) => {
           const { reste } = getCalculatedFinancials(c);
           return acc + reste;
         }, 0);
-        setTotalReste(resteTotal);
+        const resteBoutique = ventesBoutique.reduce((acc, v) => acc + getVenteFinancials(v).reste, 0);
+        setTotalReste(resteCommandes + resteBoutique);
       }
 
       setLoading(false);
