@@ -23,20 +23,32 @@ interface Commande {
   designation?: string;
   montant_total?: number;
   avance?: number;
+  acompte?: number;
   reste?: number;
   created_at?: string;
 }
 
+interface VenteRow {
+  id?: string;
+  mode_commande?: string;
+  montant_total?: number;
+  avance?: number;
+  reste?: number;
+}
+
 export default function StatistiquesPage() {
   const [commandes, setCommandes] = useState<Commande[]>([]);
+  const [ventes, setVentes] = useState<VenteRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchStatsData = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('commandes').select('*').order('created_at', { ascending: false });
-    if (!error && data) {
-      setCommandes(data);
-    }
+    const [cmdRes, venteRes] = await Promise.all([
+      supabase.from('commandes').select('*').order('created_at', { ascending: false }),
+      supabase.from('ventes').select('*')
+    ]);
+    if (!cmdRes.error && cmdRes.data) setCommandes(cmdRes.data);
+    if (!venteRes.error && venteRes.data) setVentes(venteRes.data);
     setLoading(false);
   };
 
@@ -48,39 +60,65 @@ export default function StatistiquesPage() {
     return (Number(val) || 0).toLocaleString('fr-FR').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ');
   };
 
-  // --- HELPER : CALCUL DE L'AVANCE RÉELLE ET DU RESTE ---
-  // Gère le cas où la commande est "Livrée" OU si le client a payé 100% dès la commande (avance >= montant_total)
+  // Normalise les montants stockés en "milliers" (ex: 25 -> 25 000), même logique que la page Ventes
+  const normalizeAmount = (val: number | undefined | null) => {
+    let num = Number(val) || 0;
+    if (num > 0 && num < 1000) num = num * 1000;
+    return num;
+  };
+
+  // --- HELPER : CALCUL FINANCIER PRÉCIS (commandes sur-mesure) ---
+  // 'Livrée' est le statut normal pour une commande payée/remise au client.
+  // 'Soldée' est conservé ici en garde-fou pour d'éventuelles anciennes données
+  // non migrées — mais le workflow normal ne produit plus ce statut.
   const getCalculatedFinancials = (c: Commande) => {
     const tot = Number(c.montant_total) || 0;
-    let av = Number(c.avance) || 0;
+    let av = Number(c.avance ?? c.acompte) || 0;
 
-    // Si livrée OU si l'avance saisie couvre/dépasse le montant total
-    if (c.statut === 'Livrée' || av >= tot) {
-      av = tot; // Entièrement réglée
+    if (
+      c.statut === 'Livrée' ||
+      c.statut === 'Soldée' ||
+      (c.reste !== undefined && Number(c.reste) === 0 && tot > 0)
+    ) {
+      av = tot;
     }
 
-    const reste = Math.max(0, tot - av);
+    const reste = c.reste !== undefined ? Math.max(0, Number(c.reste)) : Math.max(0, tot - av);
     return { tot, av, reste };
   };
 
-  // --- CALCULS DYNAMIQUES EN TEMPS RÉEL ---
+  // Ventes boutique/catalogue NON liées à une commande sur-mesure soldée
+  // (celles-ci sont déjà comptabilisées via la commande elle-même)
+  const ventesBoutique = ventes.filter(v => !(v.mode_commande || '').startsWith('Sur Mesure'));
+
+  const getVenteFinancials = (v: VenteRow) => {
+    const tot = normalizeAmount(v.montant_total);
+    const av = normalizeAmount(v.avance);
+    const reste = v.reste !== undefined ? Math.max(0, normalizeAmount(v.reste)) : Math.max(0, tot - av);
+    return { tot, av, reste };
+  };
+
+  // --- CALCULS DYNAMIQUES EN TEMPS RÉEL (combinés commandes + ventes boutique) ---
   const totalCommandes = commandes.length;
+  const totalVentesBoutique = ventesBoutique.length;
 
-  const caTotal = commandes.reduce((acc, c) => acc + (Number(c.montant_total) || 0), 0);
-  const totalAvances = commandes.reduce((acc, c) => {
-    const { av } = getCalculatedFinancials(c);
-    return acc + av;
-  }, 0);
+  const caCommandes = commandes.reduce((acc, c) => acc + (Number(c.montant_total) || 0), 0);
+  const caBoutique = ventesBoutique.reduce((acc, v) => acc + getVenteFinancials(v).tot, 0);
+  const caTotal = caCommandes + caBoutique;
 
-  const totalReste = commandes.reduce((acc, c) => {
-    const { reste } = getCalculatedFinancials(c);
-    return acc + reste;
-  }, 0);
+  const avanceCommandes = commandes.reduce((acc, c) => acc + getCalculatedFinancials(c).av, 0);
+  const avanceBoutique = ventesBoutique.reduce((acc, v) => acc + getVenteFinancials(v).av, 0);
+  const totalAvances = avanceCommandes + avanceBoutique;
 
+  const resteCommandes = commandes.reduce((acc, c) => acc + getCalculatedFinancials(c).reste, 0);
+  const resteBoutique = ventesBoutique.reduce((acc, v) => acc + getVenteFinancials(v).reste, 0);
+  const totalReste = resteCommandes + resteBoutique;
+
+  // 'Soldée' compte comme livrée : la commande a été remise et payée intégralement.
   const nbRecues = commandes.filter(c => (c.statut || 'Reçue') === 'Reçue').length;
   const nbEnCoupe = commandes.filter(c => c.statut === 'En Coupe').length;
   const nbPretes = commandes.filter(c => c.statut === 'Prête').length;
-  const nbLivrees = commandes.filter(c => c.statut === 'Livrée').length;
+  const nbLivrees = commandes.filter(c => c.statut === 'Livrée' || c.statut === 'Soldée').length;
 
   const pctLivrees = totalCommandes > 0 ? Math.round((nbLivrees / totalCommandes) * 100) : 0;
   const pctEnCours = totalCommandes > 0 ? Math.round(((nbRecues + nbEnCoupe + nbPretes) / totalCommandes) * 100) : 0;
@@ -90,7 +128,7 @@ export default function StatistiquesPage() {
       {/* HEADER */}
       <div className="max-w-7xl mx-auto mb-6 flex flex-col md:flex-row justify-between md:items-center gap-4">
         <div>
-          <Link href="/" className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1 mb-2">
+          <Link href="/" className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1 mb-2 font-semibold">
             <ArrowLeft size={16} /> Retour au tableau de bord
           </Link>
           <h1 className="text-2xl font-bold text-slate-900">Rapport Statistique & Performance</h1>
@@ -113,7 +151,7 @@ export default function StatistiquesPage() {
           <div>
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Chiffre d'Affaires Total</p>
             <h2 className="text-xl font-bold text-slate-900">{formatAmount(caTotal)} FCFA</h2>
-            <p className="text-xs text-slate-400 mt-1">{totalCommandes} commande(s) au total</p>
+            <p className="text-xs text-slate-400 mt-1">{totalCommandes} commande(s) + {totalVentesBoutique} vente(s) boutique</p>
           </div>
           <div className="bg-amber-100 text-amber-700 p-3 rounded-lg">
             <TrendingUp size={22} />
@@ -124,7 +162,7 @@ export default function StatistiquesPage() {
           <div>
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Encaissements / Avances</p>
             <h2 className="text-xl font-bold text-emerald-600">{formatAmount(totalAvances)} FCFA</h2>
-            <p className="text-xs text-emerald-600/80 mt-1">
+            <p className="text-xs text-emerald-600/80 mt-1 font-semibold">
               {caTotal > 0 ? Math.round((totalAvances / caTotal) * 100) : 0}% du total encaissé
             </p>
           </div>
@@ -137,7 +175,7 @@ export default function StatistiquesPage() {
           <div>
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Reste à Recouvrer</p>
             <h2 className="text-xl font-bold text-rose-600">{formatAmount(totalReste)} FCFA</h2>
-            <p className="text-xs text-rose-600/80 mt-1">Créances clients en attente</p>
+            <p className="text-xs text-rose-600/80 mt-1 font-semibold">Créances clients en attente</p>
           </div>
           <div className="bg-rose-100 text-rose-700 p-3 rounded-lg">
             <AlertCircle size={22} />
@@ -148,7 +186,7 @@ export default function StatistiquesPage() {
           <div>
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Commandes Livrées</p>
             <h2 className="text-xl font-bold text-slate-900">{nbLivrees} / {totalCommandes}</h2>
-            <p className="text-xs text-blue-600 mt-1">{pctLivrees}% de taux de finalisation</p>
+            <p className="text-xs text-blue-600 mt-1 font-semibold">{pctLivrees}% de taux de finalisation</p>
           </div>
           <div className="bg-blue-100 text-blue-700 p-3 rounded-lg">
             <CheckCircle2 size={22} />
@@ -224,11 +262,11 @@ export default function StatistiquesPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
               <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                <p className="text-xs text-slate-500 font-medium">Valeur globale des commandes</p>
+                <p className="text-xs text-slate-500 font-medium">Valeur globale (commandes + boutique)</p>
                 <p className="text-lg font-bold text-slate-800 mt-1">{formatAmount(caTotal)} F</p>
               </div>
               <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-100">
-                <p className="text-xs text-emerald-700 font-medium">Total Perçu (Avances)</p>
+                <p className="text-xs text-emerald-700 font-medium">Total Perçu (Encaissements)</p>
                 <p className="text-lg font-bold text-emerald-700 mt-1">{formatAmount(totalAvances)} F</p>
               </div>
               <div className="bg-amber-50 p-4 rounded-lg border border-amber-100">
@@ -238,7 +276,7 @@ export default function StatistiquesPage() {
             </div>
 
             <div>
-              <p className="text-xs font-semibold text-slate-600 mb-2">Taux de réalisation de l'Atelier :</p>
+              <p className="text-xs font-semibold text-slate-600 mb-2">Taux de réalisation de l'Atelier (commandes sur-mesure) :</p>
               <div className="w-full bg-slate-100 h-4 rounded-full overflow-hidden flex">
                 <div className="bg-emerald-500 h-full" style={{ width: `${pctLivrees}%` }} title={`Livrées: ${pctLivrees}%`}></div>
                 <div className="bg-amber-400 h-full" style={{ width: `${pctEnCours}%` }} title={`En cours: ${pctEnCours}%`}></div>
@@ -250,7 +288,6 @@ export default function StatistiquesPage() {
             </div>
           </div>
         </div>
-
       </div>
 
       {/* TABLEAU DES DERNIÈRES COMMANDES SYNCHRONISÉES */}
@@ -259,7 +296,7 @@ export default function StatistiquesPage() {
           <h2 className="font-bold text-slate-900 text-base flex items-center gap-2">
             <Clock size={18} className="text-amber-600" /> Historique Dynamique des Commandes
           </h2>
-          <span className="text-xs text-slate-400">{commandes.slice(0, 8).length} dernières entrées</span>
+          <span className="text-xs text-slate-400">{commandes.slice(0, 10).length} dernières entrées</span>
         </div>
 
         <div className="overflow-x-auto">
@@ -269,9 +306,9 @@ export default function StatistiquesPage() {
                 <th className="p-3">Code</th>
                 <th className="p-3">Client</th>
                 <th className="p-3">Article</th>
-                <th className="p-3">Statut</th>
+                <th className="p-3">Statut Fabrication</th>
                 <th className="p-3 text-right">Montant Total</th>
-                <th className="p-3 text-right">Avance</th>
+                <th className="p-3 text-right">Réglé / Avance</th>
                 <th className="p-3 text-right">Reste</th>
               </tr>
             </thead>
@@ -291,7 +328,7 @@ export default function StatistiquesPage() {
                   let badgeColor = "bg-slate-100 text-slate-700 border-slate-300";
                   if (c.statut === 'En Coupe') badgeColor = "bg-amber-100 text-amber-800 border-amber-300";
                   if (c.statut === 'Prête') badgeColor = "bg-blue-100 text-blue-800 border-blue-300";
-                  if (c.statut === 'Livrée') badgeColor = "bg-emerald-100 text-emerald-800 border-emerald-300";
+                  if (c.statut === 'Livrée' || c.statut === 'Soldée') badgeColor = "bg-emerald-100 text-emerald-800 border-emerald-300";
 
                   return (
                     <tr key={c.id} className="hover:bg-slate-50/80 transition-colors">
