@@ -322,7 +322,15 @@ export default function VentesPage() {
 
     if (formData.commande_ids && formData.commande_ids.length > 0) {
       for (const cmdId of formData.commande_ids) {
-        await supabase.from('commandes').update({ statut: 'Soldée' }).eq('id', cmdId);
+        const cmdOriginal = commandesPending.find(c => c.id === cmdId);
+        const cmdTotal = Number(cmdOriginal?.montant_total) || 0;
+        // On marque la commande Livrée (payée intégralement) pour qu'elle
+        // reste visible et cohérente dans le Kanban et les statistiques.
+        await supabase.from('commandes').update({
+          statut: 'Livrée',
+          avance: cmdTotal,
+          reste: 0
+        }).eq('id', cmdId);
       }
     }
 
@@ -813,6 +821,21 @@ export default function VentesPage() {
                   <label className="block font-bold text-slate-700 mb-1">Téléphone</label>
                   <input type="text" value={formData.client_tel} onChange={(e) => setFormData({ ...formData, client_tel: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 outline-none" />
                 </div>
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Mode de paiement *</label>
+                <select
+                  required
+                  value={formData.mode_paiement}
+                  onChange={(e) => setFormData({ ...formData, mode_paiement: e.target.value })}
+                  className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 outline-none font-semibold"
+                >
+                  <option value="Espèces">Espèces</option>
+                  <option value="Wave">Wave</option>
+                  <option value="Orange Money">Orange Money</option>
+                  <option value="Carte Bancaire">Carte Bancaire</option>
+                  <option value="Virement Bancaire">Virement Bancaire</option>
+                </select>
               </div>
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Désignation / Article *</label>
