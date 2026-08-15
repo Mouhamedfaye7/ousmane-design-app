@@ -65,7 +65,7 @@ export default function VentesPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showCatalogueModal, setShowCatalogueModal] = useState(false);
-  
+
   const [selectedCatItem, setSelectedCatItem] = useState<CatalogueItem | null>(null);
   const [selectedTaille, setSelectedTaille] = useState<string>('');
   const [selectedCouleur, setSelectedCouleur] = useState<string>('');
@@ -74,6 +74,9 @@ export default function VentesPage() {
   const [importSearch, setImportSearch] = useState('');
   const [catalogueSearch, setCatalogueSearch] = useState('');
   const [loading, setLoading] = useState(true);
+
+  // Nouveau: état pour piloter la séquence "PDF -> WhatsApp"
+  const [pendingWhatsApp, setPendingWhatsApp] = useState<Vente | null>(null);
 
   const invoiceRef = useRef<HTMLDivElement>(null);
 
@@ -348,28 +351,34 @@ export default function VentesPage() {
     return v.designation || v.article || v.description || v.modele || 'Article sur mesure';
   };
 
+  // Génère et télécharge le PDF de la facture (fonction réutilisable)
+  const downloadInvoicePDF = async (v: Vente) => {
+    const html2pdf = (await import('html2pdf.js')).default;
+    const element = invoiceRef.current;
+    if (!element) return;
+
+    const opt = {
+      margin:       10,
+      filename:     `Facture_${(v.client_nom || 'Client').replace(/\s+/g, '_')}.pdf`,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2 },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    await html2pdf().set(opt).from(element).save();
+  };
+
   const handleDownloadPDF = async (v: Vente) => {
     try {
-      const html2pdf = (await import('html2pdf.js')).default;
-      const element = invoiceRef.current;
-      if (!element) return;
-
-      const opt = {
-        margin:       10,
-        filename:     `Facture_${(v.client_nom || 'Client').replace(/\s+/g, '_')}.pdf`,
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2 },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      };
-
-      await html2pdf().set(opt).from(element).save();
+      await downloadInvoicePDF(v);
     } catch (err) {
       console.warn('Fallback impression PDF :', err);
       window.print();
     }
   };
 
-  const handleSendWhatsAppInvoice = (v: Vente) => {
+  // Ouvre uniquement la conversation WhatsApp avec le message pré-rempli
+  const openWhatsAppMessage = (v: Vente) => {
     let cleanPhone = (v.client_tel || '').trim().replace(/[^0-9]/g, '');
     if (cleanPhone.length === 9) {
       cleanPhone = '221' + cleanPhone;
@@ -384,7 +393,7 @@ export default function VentesPage() {
 
     const textMsg = `*OUSMANE DESIGN - FACTURE DE VENTE*\n\n` +
       `Bonjour ${clientName},\n` +
-      `Voici le récapitulatif de votre facture :\n\n` +
+      `Voici le récapitulatif de votre facture (le PDF a été téléchargé, merci de le joindre ci-dessous 📎) :\n\n` +
       `📌 *Article / Désignation* : ${getItemName(v)}\n` +
       `💳 *Mode de règlement* : ${v.mode_paiement || 'Espèces'}\n\n` +
       `💰 *Montant Total* : ${formatAmount(total)} FCFA\n` +
@@ -400,6 +409,30 @@ export default function VentesPage() {
 
     window.open(waUrl, '_blank');
   };
+
+  // Déclenche la séquence: ouvrir la facture -> télécharger le PDF -> ouvrir WhatsApp
+  const handleSendWhatsAppInvoice = (v: Vente) => {
+    setSelectedVente(v);
+    setPendingWhatsApp(v);
+  };
+
+  // Une fois la modal facture montée dans le DOM, on génère le PDF puis on ouvre WhatsApp
+  useEffect(() => {
+    if (!pendingWhatsApp || !selectedVente || selectedVente.id !== pendingWhatsApp.id) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        await downloadInvoicePDF(pendingWhatsApp);
+      } catch (err) {
+        console.warn('Erreur génération PDF avant WhatsApp :', err);
+      }
+      openWhatsAppMessage(pendingWhatsApp);
+      setPendingWhatsApp(null);
+    }, 400);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingWhatsApp, selectedVente]);
 
   const filteredVentes = ventes.filter(v =>
     (v.client_nom || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -513,7 +546,7 @@ export default function VentesPage() {
                         <button
                           onClick={() => handleSendWhatsAppInvoice(v)}
                           className="bg-emerald-600 hover:bg-emerald-700 text-white p-1.5 rounded-md transition-colors cursor-pointer"
-                          title="Envoyer sur WhatsApp"
+                          title="Télécharger le PDF et envoyer sur WhatsApp"
                         >
                           <Send size={15} />
                         </button>
