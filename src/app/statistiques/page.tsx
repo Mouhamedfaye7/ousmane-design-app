@@ -67,6 +67,20 @@ const PERIODS: PeriodDef[] = [
   { key: 'annee', label: 'Annuel', sublabel: '12 derniers mois', days: 365 },
 ];
 
+// Nombre de lignes de tableau par "bloc" capturé pour la génération PDF.
+// Un bloc de cette taille tient toujours confortablement sur une page A4,
+// ce qui évite qu'une ligne soit coupée entre deux pages.
+const ROWS_PER_CHUNK = 18;
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  if (arr.length === 0) return [];
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    out.push(arr.slice(i, i + size));
+  }
+  return out;
+}
+
 export default function StatistiquesPage() {
   const [commandes, setCommandes] = useState<Commande[]>([]);
   const [ventes, setVentes] = useState<VenteRow[]>([]);
@@ -199,20 +213,15 @@ export default function StatistiquesPage() {
     return { count: cmds.length + vts.length, ca };
   };
 
-  // --- GÉNÉRATION DU PDF DE BILAN ---
+  // --- GÉNÉRATION DU PDF DE BILAN (par blocs, pour ne jamais couper une ligne) ---
   const downloadBilanPDF = async () => {
     const { default: html2canvas } = await import('html2canvas-pro');
     const { default: jsPDF } = await import('jspdf');
-    const element = bilanRef.current;
-    if (!element) return;
+    const container = bilanRef.current;
+    if (!container) return;
 
-    const canvas = await html2canvas(element, {
-      scale: 2,
-      backgroundColor: '#ffffff',
-      useCORS: true
-    });
-
-    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    const blocks = Array.from(container.querySelectorAll<HTMLElement>('.pdf-block'));
+    if (blocks.length === 0) return;
 
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
     const pageWidth = pdf.internal.pageSize.getWidth();
@@ -220,19 +229,48 @@ export default function StatistiquesPage() {
     const margin = 10;
     const usableWidth = pageWidth - margin * 2;
     const usableHeight = pageHeight - margin * 2;
-    const imgHeight = (canvas.height * usableWidth) / canvas.width;
+    const gap = 3;
 
-    let heightLeft = imgHeight;
-    let position = margin;
+    let cursorY = margin;
 
-    pdf.addImage(imgData, 'JPEG', margin, position, usableWidth, imgHeight);
-    heightLeft -= usableHeight;
+    for (const block of blocks) {
+      const canvas = await html2canvas(block, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true
+      });
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const imgHeight = (canvas.height * usableWidth) / canvas.width;
 
-    while (heightLeft > 0) {
-      position = margin - (imgHeight - heightLeft);
-      pdf.addPage();
-      pdf.addImage(imgData, 'JPEG', margin, position, usableWidth, imgHeight);
-      heightLeft -= usableHeight;
+      // Cas extrême : un bloc individuel est plus grand qu'une page entière.
+      // On le découpe alors classiquement, mais ceci n'arrive jamais en pratique
+      // puisque chaque bloc est limité à ROWS_PER_CHUNK lignes.
+      if (imgHeight > usableHeight) {
+        if (cursorY !== margin) {
+          pdf.addPage();
+        }
+        let heightLeft = imgHeight;
+        let position = margin;
+        pdf.addImage(imgData, 'JPEG', margin, position, usableWidth, imgHeight);
+        heightLeft -= usableHeight;
+        while (heightLeft > 0) {
+          pdf.addPage();
+          position = margin - (imgHeight - heightLeft);
+          pdf.addImage(imgData, 'JPEG', margin, position, usableWidth, imgHeight);
+          heightLeft -= usableHeight;
+        }
+        cursorY = pageHeight; // force le bloc suivant à démarrer une nouvelle page
+        continue;
+      }
+
+      // Cas normal : si le bloc ne tient pas dans l'espace restant, nouvelle page.
+      if (cursorY + imgHeight > pageHeight - margin) {
+        pdf.addPage();
+        cursorY = margin;
+      }
+
+      pdf.addImage(imgData, 'JPEG', margin, cursorY, usableWidth, imgHeight);
+      cursorY += imgHeight + gap;
     }
 
     const dateStr = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-');
@@ -263,6 +301,10 @@ export default function StatistiquesPage() {
   });
   const dateDebutPeriode = getPeriodStartDate(activePeriodDef.days).toLocaleDateString('fr-FR');
   const dateFinPeriode = new Date().toLocaleDateString('fr-FR');
+
+  const commandesChunks = chunkArray(bilanCommandes, ROWS_PER_CHUNK);
+  const ventesChunks = chunkArray(bilanVentesBoutique, ROWS_PER_CHUNK);
+  const catalogueChunks = chunkArray(catalogue, ROWS_PER_CHUNK);
 
   return (
     <div className="min-h-screen bg-slate-100 p-6 text-slate-800">
@@ -538,156 +580,197 @@ export default function StatistiquesPage() {
         </div>
       </div>
 
-      {/* CONTENU CACHÉ POUR GÉNÉRATION DU PDF DE BILAN */}
+      {/* CONTENU CACHÉ POUR GÉNÉRATION DU PDF DE BILAN (capturé bloc par bloc) */}
       <div
         ref={bilanRef}
-        className="fixed top-0 left-[-10000px] w-[800px] bg-white p-8 text-slate-900 font-sans space-y-6"
+        className="fixed top-0 left-[-10000px] w-[800px] bg-white text-slate-900 font-sans space-y-3"
       >
-        {/* En-tête */}
-        <div className="flex justify-between items-start border-b-2 border-amber-900/20 pb-4">
-          <div>
-            <h1 className="text-2xl font-serif font-extrabold text-amber-900 tracking-wide">Ousmane Design</h1>
-            <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Création & Couture Contemporaine</p>
-            <p className="text-xs text-slate-600 mt-1">Hann Maristes, Dakar, Sénégal · 77 646 21 02 / 70 348 26 82</p>
+        {/* Bloc En-tête + KPI de la période */}
+        <div className="pdf-block bg-white p-6 space-y-4">
+          <div className="flex justify-between items-start border-b-2 border-amber-900/20 pb-4">
+            <div>
+              <h1 className="text-2xl font-serif font-extrabold text-amber-900 tracking-wide">Ousmane Design</h1>
+              <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Création & Couture Contemporaine</p>
+              <p className="text-xs text-slate-600 mt-1">Hann Maristes, Dakar, Sénégal · 77 646 21 02 / 70 348 26 82</p>
+            </div>
+            <div className="text-right">
+              <span className="inline-block bg-amber-900 text-white text-xs font-bold px-3 py-1 rounded-md uppercase tracking-wider">
+                Bilan {activePeriodDef.label}
+              </span>
+              <p className="text-xs font-semibold text-slate-500 mt-2">Période : {dateDebutPeriode} au {dateFinPeriode}</p>
+              <p className="text-[10px] text-slate-400">Généré le {dateGeneration}</p>
+            </div>
           </div>
-          <div className="text-right">
-            <span className="inline-block bg-amber-900 text-white text-xs font-bold px-3 py-1 rounded-md uppercase tracking-wider">
-              Bilan {activePeriodDef.label}
-            </span>
-            <p className="text-xs font-semibold text-slate-500 mt-2">Période : {dateDebutPeriode} au {dateFinPeriode}</p>
-            <p className="text-[10px] text-slate-400">Généré le {dateGeneration}</p>
+
+          <div className="grid grid-cols-3 gap-3 text-xs">
+            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+              <p className="text-slate-500 font-medium">Chiffre d'Affaires</p>
+              <p className="text-base font-bold text-slate-900 mt-1">{formatAmount(bilanCaTotal)} F</p>
+            </div>
+            <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
+              <p className="text-emerald-700 font-medium">Total Encaissé</p>
+              <p className="text-base font-bold text-emerald-700 mt-1">{formatAmount(bilanAvanceTotal)} F</p>
+            </div>
+            <div className="bg-amber-50 p-3 rounded-lg border border-amber-100">
+              <p className="text-amber-800 font-medium">Reste à Recouvrer</p>
+              <p className="text-base font-bold text-amber-800 mt-1">{formatAmount(bilanResteTotal)} F</p>
+            </div>
           </div>
         </div>
 
-        {/* KPI de la période */}
-        <div className="grid grid-cols-3 gap-3 text-xs">
-          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-            <p className="text-slate-500 font-medium">Chiffre d'Affaires</p>
-            <p className="text-base font-bold text-slate-900 mt-1">{formatAmount(bilanCaTotal)} F</p>
+        {/* Blocs Commandes de la période */}
+        {commandesChunks.length === 0 ? (
+          <div className="pdf-block bg-white p-6">
+            <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2">
+              Commandes Sur-Mesure de la Période (0)
+            </h2>
+            <p className="text-[10px] text-slate-400 italic">Aucune commande sur cette période.</p>
           </div>
-          <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
-            <p className="text-emerald-700 font-medium">Total Encaissé</p>
-            <p className="text-base font-bold text-emerald-700 mt-1">{formatAmount(bilanAvanceTotal)} F</p>
-          </div>
-          <div className="bg-amber-50 p-3 rounded-lg border border-amber-100">
-            <p className="text-amber-800 font-medium">Reste à Recouvrer</p>
-            <p className="text-base font-bold text-amber-800 mt-1">{formatAmount(bilanResteTotal)} F</p>
-          </div>
-        </div>
-
-        {/* Détail Commandes de la période */}
-        <div>
-          <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2">
-            Commandes Sur-Mesure de la Période ({bilanCommandes.length})
-          </h2>
-          <table className="w-full text-left text-[10px]">
-            <thead className="bg-amber-900 text-white font-bold uppercase">
-              <tr>
-                <th className="p-1.5">Code</th>
-                <th className="p-1.5">Client</th>
-                <th className="p-1.5">Article</th>
-                <th className="p-1.5">Statut</th>
-                <th className="p-1.5 text-right">Total</th>
-                <th className="p-1.5 text-right">Avance</th>
-                <th className="p-1.5 text-right">Reste</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {bilanCommandes.length === 0 ? (
-                <tr><td colSpan={7} className="p-2 text-center text-slate-400 italic">Aucune commande sur cette période.</td></tr>
-              ) : bilanCommandes.map((c) => {
-                const { tot, av, reste } = getCalculatedFinancials(c);
-                return (
-                  <tr key={c.id}>
-                    <td className="p-1.5 font-mono">{c.code_commande || '-'}</td>
-                    <td className="p-1.5 font-semibold">{c.client_nom || 'Anonyme'}</td>
-                    <td className="p-1.5">{c.designation || '-'}</td>
-                    <td className="p-1.5">{c.statut || 'Reçue'}</td>
-                    <td className="p-1.5 text-right">{formatAmount(tot)} F</td>
-                    <td className="p-1.5 text-right text-emerald-700">{formatAmount(av)} F</td>
-                    <td className="p-1.5 text-right text-amber-700">{formatAmount(reste)} F</td>
+        ) : (
+          commandesChunks.map((chunk, idx) => (
+            <div key={`cmd-chunk-${idx}`} className="pdf-block bg-white p-6">
+              {idx === 0 && (
+                <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2">
+                  Commandes Sur-Mesure de la Période ({bilanCommandes.length})
+                </h2>
+              )}
+              <table className="w-full text-left text-[10px]">
+                <thead className="bg-amber-900 text-white font-bold uppercase">
+                  <tr>
+                    <th className="p-1.5">Code</th>
+                    <th className="p-1.5">Client</th>
+                    <th className="p-1.5">Article</th>
+                    <th className="p-1.5">Statut</th>
+                    <th className="p-1.5 text-right">Total</th>
+                    <th className="p-1.5 text-right">Avance</th>
+                    <th className="p-1.5 text-right">Reste</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {chunk.map((c) => {
+                    const { tot, av, reste } = getCalculatedFinancials(c);
+                    return (
+                      <tr key={c.id}>
+                        <td className="p-1.5 font-mono">{c.code_commande || '-'}</td>
+                        <td className="p-1.5 font-semibold">{c.client_nom || 'Anonyme'}</td>
+                        <td className="p-1.5">{c.designation || '-'}</td>
+                        <td className="p-1.5">{c.statut || 'Reçue'}</td>
+                        <td className="p-1.5 text-right">{formatAmount(tot)} F</td>
+                        <td className="p-1.5 text-right text-emerald-700">{formatAmount(av)} F</td>
+                        <td className="p-1.5 text-right text-amber-700">{formatAmount(reste)} F</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ))
+        )}
 
-        {/* Détail Ventes Boutique de la période */}
-        <div>
-          <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2">
-            Ventes Boutique & Catalogue de la Période ({bilanVentesBoutique.length})
-          </h2>
-          <table className="w-full text-left text-[10px]">
-            <thead className="bg-amber-900 text-white font-bold uppercase">
-              <tr>
-                <th className="p-1.5">Client</th>
-                <th className="p-1.5">Désignation</th>
-                <th className="p-1.5">Paiement</th>
-                <th className="p-1.5 text-right">Total</th>
-                <th className="p-1.5 text-right">Réglé</th>
-                <th className="p-1.5 text-right">Reste</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {bilanVentesBoutique.length === 0 ? (
-                <tr><td colSpan={6} className="p-2 text-center text-slate-400 italic">Aucune vente boutique sur cette période.</td></tr>
-              ) : bilanVentesBoutique.map((v) => {
-                const { tot, av, reste } = getVenteFinancials(v);
-                return (
-                  <tr key={v.id}>
-                    <td className="p-1.5 font-semibold">{v.client_nom || 'Client'}</td>
-                    <td className="p-1.5">{v.designation || '-'}</td>
-                    <td className="p-1.5">{v.mode_paiement || 'Espèces'}</td>
-                    <td className="p-1.5 text-right">{formatAmount(tot)} F</td>
-                    <td className="p-1.5 text-right text-emerald-700">{formatAmount(av)} F</td>
-                    <td className="p-1.5 text-right text-amber-700">{formatAmount(reste)} F</td>
+        {/* Blocs Ventes Boutique de la période */}
+        {ventesChunks.length === 0 ? (
+          <div className="pdf-block bg-white p-6">
+            <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2">
+              Ventes Boutique & Catalogue de la Période (0)
+            </h2>
+            <p className="text-[10px] text-slate-400 italic">Aucune vente boutique sur cette période.</p>
+          </div>
+        ) : (
+          ventesChunks.map((chunk, idx) => (
+            <div key={`vte-chunk-${idx}`} className="pdf-block bg-white p-6">
+              {idx === 0 && (
+                <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2">
+                  Ventes Boutique & Catalogue de la Période ({bilanVentesBoutique.length})
+                </h2>
+              )}
+              <table className="w-full text-left text-[10px]">
+                <thead className="bg-amber-900 text-white font-bold uppercase">
+                  <tr>
+                    <th className="p-1.5">Client</th>
+                    <th className="p-1.5">Désignation</th>
+                    <th className="p-1.5">Paiement</th>
+                    <th className="p-1.5 text-right">Total</th>
+                    <th className="p-1.5 text-right">Réglé</th>
+                    <th className="p-1.5 text-right">Reste</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {chunk.map((v) => {
+                    const { tot, av, reste } = getVenteFinancials(v);
+                    return (
+                      <tr key={v.id}>
+                        <td className="p-1.5 font-semibold">{v.client_nom || 'Client'}</td>
+                        <td className="p-1.5">{v.designation || '-'}</td>
+                        <td className="p-1.5">{v.mode_paiement || 'Espèces'}</td>
+                        <td className="p-1.5 text-right">{formatAmount(tot)} F</td>
+                        <td className="p-1.5 text-right text-emerald-700">{formatAmount(av)} F</td>
+                        <td className="p-1.5 text-right text-amber-700">{formatAmount(reste)} F</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ))
+        )}
 
-        {/* Inventaire du catalogue (snapshot actuel) */}
-        <div>
-          <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2">
-            Inventaire du Catalogue — État Actuel ({catalogue.length} article(s), {inventoryTotalStock} unité(s))
-          </h2>
-          <table className="w-full text-left text-[10px]">
-            <thead className="bg-amber-900 text-white font-bold uppercase">
-              <tr>
-                <th className="p-1.5">Article</th>
-                <th className="p-1.5">Catégorie</th>
-                <th className="p-1.5 text-right">Prix Unitaire</th>
-                <th className="p-1.5 text-right">Stock</th>
-                <th className="p-1.5 text-right">Valeur Stock</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {catalogue.length === 0 ? (
-                <tr><td colSpan={5} className="p-2 text-center text-slate-400 italic">Aucun article dans le catalogue.</td></tr>
-              ) : catalogue.map((item) => (
-                <tr key={item.id}>
-                  <td className="p-1.5 font-semibold">{item.nom}</td>
-                  <td className="p-1.5">{item.categorie || '-'}</td>
-                  <td className="p-1.5 text-right">{formatAmount(item.prix)} F</td>
-                  <td className="p-1.5 text-right">{item.quantite_stock ?? 0}</td>
-                  <td className="p-1.5 text-right font-semibold">{formatAmount((Number(item.prix) || 0) * (Number(item.quantite_stock) || 0))} F</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t-2 border-amber-900/20 font-bold">
-                <td colSpan={4} className="p-1.5 text-right text-slate-700">Valeur totale du stock :</td>
-                <td className="p-1.5 text-right text-amber-800">{formatAmount(inventoryTotalValue)} F</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+        {/* Blocs Inventaire du Catalogue (état actuel) */}
+        {catalogueChunks.length === 0 ? (
+          <div className="pdf-block bg-white p-6">
+            <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2">
+              Inventaire du Catalogue — État Actuel (0)
+            </h2>
+            <p className="text-[10px] text-slate-400 italic">Aucun article dans le catalogue.</p>
+          </div>
+        ) : (
+          catalogueChunks.map((chunk, idx) => (
+            <div key={`cat-chunk-${idx}`} className="pdf-block bg-white p-6">
+              {idx === 0 && (
+                <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2">
+                  Inventaire du Catalogue — État Actuel ({catalogue.length} article(s), {inventoryTotalStock} unité(s))
+                </h2>
+              )}
+              <table className="w-full text-left text-[10px]">
+                <thead className="bg-amber-900 text-white font-bold uppercase">
+                  <tr>
+                    <th className="p-1.5">Article</th>
+                    <th className="p-1.5">Catégorie</th>
+                    <th className="p-1.5 text-right">Prix Unitaire</th>
+                    <th className="p-1.5 text-right">Stock</th>
+                    <th className="p-1.5 text-right">Valeur Stock</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {chunk.map((item) => (
+                    <tr key={item.id}>
+                      <td className="p-1.5 font-semibold">{item.nom}</td>
+                      <td className="p-1.5">{item.categorie || '-'}</td>
+                      <td className="p-1.5 text-right">{formatAmount(item.prix)} F</td>
+                      <td className="p-1.5 text-right">{item.quantite_stock ?? 0}</td>
+                      <td className="p-1.5 text-right font-semibold">{formatAmount((Number(item.prix) || 0) * (Number(item.quantite_stock) || 0))} F</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))
+        )}
 
-        <div className="text-[9px] text-slate-400 text-center pt-4 border-t border-slate-200">
-          Document généré automatiquement par l'outil de gestion Ousmane Design — {dateGeneration}
+        {/* Bloc Total du stock */}
+        {catalogueChunks.length > 0 && (
+          <div className="pdf-block bg-white p-6">
+            <div className="flex justify-end items-center gap-3 text-xs font-bold pt-2 border-t-2 border-amber-900/20">
+              <span className="text-slate-700">Valeur totale du stock :</span>
+              <span className="text-amber-800">{formatAmount(inventoryTotalValue)} F</span>
+            </div>
+          </div>
+        )}
+
+        {/* Bloc Pied de page */}
+        <div className="pdf-block bg-white p-6">
+          <div className="text-[9px] text-slate-400 text-center pt-2 border-t border-slate-200">
+            Document généré automatiquement par l'outil de gestion Ousmane Design — {dateGeneration}
+          </div>
         </div>
       </div>
     </div>
