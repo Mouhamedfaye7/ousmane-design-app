@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -11,7 +11,10 @@ import {
   CheckCircle2,
   AlertCircle,
   RefreshCw,
-  PieChart
+  PieChart,
+  FileDown,
+  CalendarRange,
+  Loader2
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -30,25 +33,60 @@ interface Commande {
 
 interface VenteRow {
   id?: string;
+  client_nom?: string;
   mode_commande?: string;
+  mode_paiement?: string;
+  designation?: string;
   montant_total?: number;
   avance?: number;
   reste?: number;
+  created_at?: string;
 }
+
+interface CatalogueItem {
+  id?: string;
+  nom: string;
+  categorie?: string;
+  prix?: number;
+  quantite_stock?: number;
+}
+
+type PeriodKey = 'semaine' | 'mois' | 'semestre' | 'annee';
+
+interface PeriodDef {
+  key: PeriodKey;
+  label: string;
+  sublabel: string;
+  days: number;
+}
+
+const PERIODS: PeriodDef[] = [
+  { key: 'semaine', label: 'Hebdomadaire', sublabel: '7 derniers jours', days: 7 },
+  { key: 'mois', label: 'Mensuel', sublabel: '30 derniers jours', days: 30 },
+  { key: 'semestre', label: 'Semestriel', sublabel: '6 derniers mois', days: 182 },
+  { key: 'annee', label: 'Annuel', sublabel: '12 derniers mois', days: 365 },
+];
 
 export default function StatistiquesPage() {
   const [commandes, setCommandes] = useState<Commande[]>([]);
   const [ventes, setVentes] = useState<VenteRow[]>([]);
+  const [catalogue, setCatalogue] = useState<CatalogueItem[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Bilan périodique téléchargeable
+  const [bilanPeriod, setBilanPeriod] = useState<PeriodKey | null>(null);
+  const bilanRef = useRef<HTMLDivElement>(null);
 
   const fetchStatsData = async () => {
     setLoading(true);
-    const [cmdRes, venteRes] = await Promise.all([
+    const [cmdRes, venteRes, catRes] = await Promise.all([
       supabase.from('commandes').select('*').order('created_at', { ascending: false }),
-      supabase.from('ventes').select('*')
+      supabase.from('ventes').select('*').order('created_at', { ascending: false }),
+      supabase.from('catalogue').select('*').order('nom', { ascending: true })
     ]);
     if (!cmdRes.error && cmdRes.data) setCommandes(cmdRes.data);
     if (!venteRes.error && venteRes.data) setVentes(venteRes.data);
+    if (!catRes.error && catRes.data) setCatalogue(catRes.data);
     setLoading(false);
   };
 
@@ -68,9 +106,6 @@ export default function StatistiquesPage() {
   };
 
   // --- HELPER : CALCUL FINANCIER PRÉCIS (commandes sur-mesure) ---
-  // 'Livrée' est le statut normal pour une commande payée/remise au client.
-  // 'Soldée' est conservé ici en garde-fou pour d'éventuelles anciennes données
-  // non migrées — mais le workflow normal ne produit plus ce statut.
   const getCalculatedFinancials = (c: Commande) => {
     const tot = Number(c.montant_total) || 0;
     let av = Number(c.avance ?? c.acompte) || 0;
@@ -88,7 +123,6 @@ export default function StatistiquesPage() {
   };
 
   // Ventes boutique/catalogue NON liées à une commande sur-mesure soldée
-  // (celles-ci sont déjà comptabilisées via la commande elle-même)
   const ventesBoutique = ventes.filter(v => !(v.mode_commande || '').startsWith('Sur Mesure'));
 
   const getVenteFinancials = (v: VenteRow) => {
@@ -114,7 +148,6 @@ export default function StatistiquesPage() {
   const resteBoutique = ventesBoutique.reduce((acc, v) => acc + getVenteFinancials(v).reste, 0);
   const totalReste = resteCommandes + resteBoutique;
 
-  // 'Soldée' compte comme livrée : la commande a été remise et payée intégralement.
   const nbRecues = commandes.filter(c => (c.statut || 'Reçue') === 'Reçue').length;
   const nbEnCoupe = commandes.filter(c => c.statut === 'En Coupe').length;
   const nbPretes = commandes.filter(c => c.statut === 'Prête').length;
@@ -122,6 +155,114 @@ export default function StatistiquesPage() {
 
   const pctLivrees = totalCommandes > 0 ? Math.round((nbLivrees / totalCommandes) * 100) : 0;
   const pctEnCours = totalCommandes > 0 ? Math.round(((nbRecues + nbEnCoupe + nbPretes) / totalCommandes) * 100) : 0;
+
+  // --- BILAN PÉRIODIQUE ---
+  const getPeriodStartDate = (days: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() - days);
+    return d;
+  };
+
+  const filterByPeriod = <T extends { created_at?: string }>(list: T[], days: number): T[] => {
+    const start = getPeriodStartDate(days);
+    return list.filter(item => item.created_at && new Date(item.created_at) >= start);
+  };
+
+  const activePeriodDef = PERIODS.find(p => p.key === bilanPeriod) || PERIODS[1];
+  const bilanCommandes = filterByPeriod(commandes, activePeriodDef.days);
+  const bilanVentesBoutique = filterByPeriod(ventesBoutique, activePeriodDef.days);
+
+  const bilanCaCommandes = bilanCommandes.reduce((acc, c) => acc + (Number(c.montant_total) || 0), 0);
+  const bilanCaBoutique = bilanVentesBoutique.reduce((acc, v) => acc + getVenteFinancials(v).tot, 0);
+  const bilanCaTotal = bilanCaCommandes + bilanCaBoutique;
+
+  const bilanAvanceCommandes = bilanCommandes.reduce((acc, c) => acc + getCalculatedFinancials(c).av, 0);
+  const bilanAvanceBoutique = bilanVentesBoutique.reduce((acc, v) => acc + getVenteFinancials(v).av, 0);
+  const bilanAvanceTotal = bilanAvanceCommandes + bilanAvanceBoutique;
+
+  const bilanResteCommandes = bilanCommandes.reduce((acc, c) => acc + getCalculatedFinancials(c).reste, 0);
+  const bilanResteBoutique = bilanVentesBoutique.reduce((acc, v) => acc + getVenteFinancials(v).reste, 0);
+  const bilanResteTotal = bilanResteCommandes + bilanResteBoutique;
+
+  const inventoryTotalStock = catalogue.reduce((acc, item) => acc + (Number(item.quantite_stock) || 0), 0);
+  const inventoryTotalValue = catalogue.reduce(
+    (acc, item) => acc + (Number(item.prix) || 0) * (Number(item.quantite_stock) || 0),
+    0
+  );
+
+  // Compteurs rapides par période (affichés sous chaque bouton, avant génération)
+  const getQuickCounts = (days: number) => {
+    const cmds = filterByPeriod(commandes, days);
+    const vts = filterByPeriod(ventesBoutique, days);
+    const ca = cmds.reduce((acc, c) => acc + (Number(c.montant_total) || 0), 0) +
+      vts.reduce((acc, v) => acc + getVenteFinancials(v).tot, 0);
+    return { count: cmds.length + vts.length, ca };
+  };
+
+  // --- GÉNÉRATION DU PDF DE BILAN ---
+  const downloadBilanPDF = async () => {
+    const { default: html2canvas } = await import('html2canvas-pro');
+    const { default: jsPDF } = await import('jspdf');
+    const element = bilanRef.current;
+    if (!element) return;
+
+    const canvas = await html2canvas(element, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      useCORS: true
+    });
+
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 10;
+    const usableWidth = pageWidth - margin * 2;
+    const usableHeight = pageHeight - margin * 2;
+    const imgHeight = (canvas.height * usableWidth) / canvas.width;
+
+    let heightLeft = imgHeight;
+    let position = margin;
+
+    pdf.addImage(imgData, 'JPEG', margin, position, usableWidth, imgHeight);
+    heightLeft -= usableHeight;
+
+    while (heightLeft > 0) {
+      position = margin - (imgHeight - heightLeft);
+      pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', margin, position, usableWidth, imgHeight);
+      heightLeft -= usableHeight;
+    }
+
+    const dateStr = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-');
+    pdf.save(`Bilan_${activePeriodDef.label}_OusmaneDesign_${dateStr}.pdf`);
+  };
+
+  const handleDownloadBilan = (period: PeriodKey) => {
+    setBilanPeriod(period);
+  };
+
+  useEffect(() => {
+    if (!bilanPeriod) return;
+    const timer = setTimeout(async () => {
+      try {
+        await downloadBilanPDF();
+      } catch (err) {
+        console.error('Erreur génération du bilan PDF :', err);
+        alert('Erreur lors de la génération du bilan PDF. Veuillez réessayer.');
+      }
+      setBilanPeriod(null);
+    }, 350);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bilanPeriod]);
+
+  const dateGeneration = new Date().toLocaleDateString('fr-FR', {
+    day: '2-digit', month: 'long', year: 'numeric'
+  });
+  const dateDebutPeriode = getPeriodStartDate(activePeriodDef.days).toLocaleDateString('fr-FR');
+  const dateFinPeriode = new Date().toLocaleDateString('fr-FR');
 
   return (
     <div className="min-h-screen bg-slate-100 p-6 text-slate-800">
@@ -290,6 +431,51 @@ export default function StatistiquesPage() {
         </div>
       </div>
 
+      {/* SECTION BILAN PÉRIODIQUE TÉLÉCHARGEABLE */}
+      <div className="max-w-7xl mx-auto bg-white rounded-xl border border-slate-200 shadow-2xs p-6 mb-6">
+        <div className="flex justify-between items-center mb-1">
+          <h2 className="font-bold text-slate-900 text-base flex items-center gap-2">
+            <CalendarRange size={18} className="text-amber-600" /> Bilan Périodique Téléchargeable
+          </h2>
+        </div>
+        <p className="text-xs text-slate-500 mb-4">
+          Génère un PDF complet : chiffre d'affaires, encaissements, détail des commandes, des ventes boutique et l'inventaire actuel du catalogue.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {PERIODS.map((p) => {
+            const quick = getQuickCounts(p.days);
+            const isGenerating = bilanPeriod === p.key;
+            return (
+              <div key={p.key} className="border border-slate-200 rounded-xl p-4 bg-slate-50/60 flex flex-col justify-between gap-3">
+                <div>
+                  <h3 className="font-bold text-slate-800 text-sm">{p.label}</h3>
+                  <p className="text-[11px] text-slate-500">{p.sublabel}</p>
+                  <p className="text-xs text-slate-600 mt-2">
+                    {quick.count} mouvement(s) · <strong className="text-slate-800">{formatAmount(quick.ca)} F</strong>
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleDownloadBilan(p.key)}
+                  disabled={bilanPeriod !== null}
+                  className="w-full bg-amber-700 hover:bg-amber-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs px-3 py-2 rounded-lg flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" /> Génération...
+                    </>
+                  ) : (
+                    <>
+                      <FileDown size={14} /> Télécharger PDF
+                    </>
+                  )}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* TABLEAU DES DERNIÈRES COMMANDES SYNCHRONISÉES */}
       <div className="max-w-7xl mx-auto bg-white rounded-xl border border-slate-200 shadow-2xs p-6">
         <div className="flex justify-between items-center mb-4">
@@ -349,6 +535,159 @@ export default function StatistiquesPage() {
               )}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* CONTENU CACHÉ POUR GÉNÉRATION DU PDF DE BILAN */}
+      <div
+        ref={bilanRef}
+        className="fixed top-0 left-[-10000px] w-[800px] bg-white p-8 text-slate-900 font-sans space-y-6"
+      >
+        {/* En-tête */}
+        <div className="flex justify-between items-start border-b-2 border-amber-900/20 pb-4">
+          <div>
+            <h1 className="text-2xl font-serif font-extrabold text-amber-900 tracking-wide">Ousmane Design</h1>
+            <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Création & Couture Contemporaine</p>
+            <p className="text-xs text-slate-600 mt-1">Hann Maristes, Dakar, Sénégal · 77 646 21 02 / 70 348 26 82</p>
+          </div>
+          <div className="text-right">
+            <span className="inline-block bg-amber-900 text-white text-xs font-bold px-3 py-1 rounded-md uppercase tracking-wider">
+              Bilan {activePeriodDef.label}
+            </span>
+            <p className="text-xs font-semibold text-slate-500 mt-2">Période : {dateDebutPeriode} au {dateFinPeriode}</p>
+            <p className="text-[10px] text-slate-400">Généré le {dateGeneration}</p>
+          </div>
+        </div>
+
+        {/* KPI de la période */}
+        <div className="grid grid-cols-3 gap-3 text-xs">
+          <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+            <p className="text-slate-500 font-medium">Chiffre d'Affaires</p>
+            <p className="text-base font-bold text-slate-900 mt-1">{formatAmount(bilanCaTotal)} F</p>
+          </div>
+          <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
+            <p className="text-emerald-700 font-medium">Total Encaissé</p>
+            <p className="text-base font-bold text-emerald-700 mt-1">{formatAmount(bilanAvanceTotal)} F</p>
+          </div>
+          <div className="bg-amber-50 p-3 rounded-lg border border-amber-100">
+            <p className="text-amber-800 font-medium">Reste à Recouvrer</p>
+            <p className="text-base font-bold text-amber-800 mt-1">{formatAmount(bilanResteTotal)} F</p>
+          </div>
+        </div>
+
+        {/* Détail Commandes de la période */}
+        <div>
+          <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2">
+            Commandes Sur-Mesure de la Période ({bilanCommandes.length})
+          </h2>
+          <table className="w-full text-left text-[10px]">
+            <thead className="bg-amber-900 text-white font-bold uppercase">
+              <tr>
+                <th className="p-1.5">Code</th>
+                <th className="p-1.5">Client</th>
+                <th className="p-1.5">Article</th>
+                <th className="p-1.5">Statut</th>
+                <th className="p-1.5 text-right">Total</th>
+                <th className="p-1.5 text-right">Avance</th>
+                <th className="p-1.5 text-right">Reste</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {bilanCommandes.length === 0 ? (
+                <tr><td colSpan={7} className="p-2 text-center text-slate-400 italic">Aucune commande sur cette période.</td></tr>
+              ) : bilanCommandes.map((c) => {
+                const { tot, av, reste } = getCalculatedFinancials(c);
+                return (
+                  <tr key={c.id}>
+                    <td className="p-1.5 font-mono">{c.code_commande || '-'}</td>
+                    <td className="p-1.5 font-semibold">{c.client_nom || 'Anonyme'}</td>
+                    <td className="p-1.5">{c.designation || '-'}</td>
+                    <td className="p-1.5">{c.statut || 'Reçue'}</td>
+                    <td className="p-1.5 text-right">{formatAmount(tot)} F</td>
+                    <td className="p-1.5 text-right text-emerald-700">{formatAmount(av)} F</td>
+                    <td className="p-1.5 text-right text-amber-700">{formatAmount(reste)} F</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Détail Ventes Boutique de la période */}
+        <div>
+          <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2">
+            Ventes Boutique & Catalogue de la Période ({bilanVentesBoutique.length})
+          </h2>
+          <table className="w-full text-left text-[10px]">
+            <thead className="bg-amber-900 text-white font-bold uppercase">
+              <tr>
+                <th className="p-1.5">Client</th>
+                <th className="p-1.5">Désignation</th>
+                <th className="p-1.5">Paiement</th>
+                <th className="p-1.5 text-right">Total</th>
+                <th className="p-1.5 text-right">Réglé</th>
+                <th className="p-1.5 text-right">Reste</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {bilanVentesBoutique.length === 0 ? (
+                <tr><td colSpan={6} className="p-2 text-center text-slate-400 italic">Aucune vente boutique sur cette période.</td></tr>
+              ) : bilanVentesBoutique.map((v) => {
+                const { tot, av, reste } = getVenteFinancials(v);
+                return (
+                  <tr key={v.id}>
+                    <td className="p-1.5 font-semibold">{v.client_nom || 'Client'}</td>
+                    <td className="p-1.5">{v.designation || '-'}</td>
+                    <td className="p-1.5">{v.mode_paiement || 'Espèces'}</td>
+                    <td className="p-1.5 text-right">{formatAmount(tot)} F</td>
+                    <td className="p-1.5 text-right text-emerald-700">{formatAmount(av)} F</td>
+                    <td className="p-1.5 text-right text-amber-700">{formatAmount(reste)} F</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Inventaire du catalogue (snapshot actuel) */}
+        <div>
+          <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2">
+            Inventaire du Catalogue — État Actuel ({catalogue.length} article(s), {inventoryTotalStock} unité(s))
+          </h2>
+          <table className="w-full text-left text-[10px]">
+            <thead className="bg-amber-900 text-white font-bold uppercase">
+              <tr>
+                <th className="p-1.5">Article</th>
+                <th className="p-1.5">Catégorie</th>
+                <th className="p-1.5 text-right">Prix Unitaire</th>
+                <th className="p-1.5 text-right">Stock</th>
+                <th className="p-1.5 text-right">Valeur Stock</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {catalogue.length === 0 ? (
+                <tr><td colSpan={5} className="p-2 text-center text-slate-400 italic">Aucun article dans le catalogue.</td></tr>
+              ) : catalogue.map((item) => (
+                <tr key={item.id}>
+                  <td className="p-1.5 font-semibold">{item.nom}</td>
+                  <td className="p-1.5">{item.categorie || '-'}</td>
+                  <td className="p-1.5 text-right">{formatAmount(item.prix)} F</td>
+                  <td className="p-1.5 text-right">{item.quantite_stock ?? 0}</td>
+                  <td className="p-1.5 text-right font-semibold">{formatAmount((Number(item.prix) || 0) * (Number(item.quantite_stock) || 0))} F</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-amber-900/20 font-bold">
+                <td colSpan={4} className="p-1.5 text-right text-slate-700">Valeur totale du stock :</td>
+                <td className="p-1.5 text-right text-amber-800">{formatAmount(inventoryTotalValue)} F</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <div className="text-[9px] text-slate-400 text-center pt-4 border-t border-slate-200">
+          Document généré automatiquement par l'outil de gestion Ousmane Design — {dateGeneration}
         </div>
       </div>
     </div>
