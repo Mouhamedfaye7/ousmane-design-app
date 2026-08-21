@@ -138,7 +138,10 @@ export default function VentesPage() {
 
   const qtyNum = Number(formData.quantite) || 0;
   const puNum = Number(formData.prix_unitaire) || 0;
-  const montantTotalCalcul = qtyNum * puNum;
+  // Pour un solde de commande(s), le total réel est la somme des commandes
+  // sélectionnées (montants potentiellement différents), pas qty * prix unitaire.
+  const commandesTotalSum = selectedCommandesDetails.reduce((acc, d) => acc + d.total, 0);
+  const montantTotalCalcul = formData.commande_ids.length > 0 ? commandesTotalSum : qtyNum * puNum;
   const avanceNum = Number(formData.avance) || 0;
   const resteCalcul = Math.max(0, montantTotalCalcul - avanceNum);
 
@@ -923,20 +926,32 @@ export default function VentesPage() {
                 <label className="block font-bold text-slate-700 mb-1">Désignation / Article *</label>
                 <textarea required rows={2} value={formData.designation} onChange={(e) => setFormData({ ...formData, designation: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 outline-none" />
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              {formData.commande_ids.length > 0 ? (
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Quantité</label>
-                  <input type="number" min="1" value={formData.quantite} onChange={(e) => setFormData({ ...formData, quantite: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 outline-none" />
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Montant Total (somme des {formData.commande_ids.length} commande{formData.commande_ids.length > 1 ? 's' : ''})
+                  </label>
+                  <input type="text" readOnly value={`${formatAmount(montantTotalCalcul)} FCFA`} className="w-full p-2 border border-slate-200 rounded-md bg-slate-100 font-bold text-slate-900" />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Les commandes ayant des prix différents, le total est calculé automatiquement à partir du détail ci-dessus (pas de prix unitaire unique).
+                  </p>
                 </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Prix Unitaire</label>
-                  <input type="number" min="0" value={formData.prix_unitaire} onChange={(e) => setFormData({ ...formData, prix_unitaire: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 outline-none" />
+              ) : (
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Quantité</label>
+                    <input type="number" min="1" value={formData.quantite} onChange={(e) => setFormData({ ...formData, quantite: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 outline-none" />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Prix Unitaire</label>
+                    <input type="number" min="0" value={formData.prix_unitaire} onChange={(e) => setFormData({ ...formData, prix_unitaire: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 outline-none" />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Montant Total</label>
+                    <input type="text" readOnly value={`${formatAmount(montantTotalCalcul)} FCFA`} className="w-full p-2 border border-slate-200 rounded-md bg-slate-100 font-bold" />
+                  </div>
                 </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Montant Total</label>
-                  <input type="text" readOnly value={`${formatAmount(montantTotalCalcul)} FCFA`} className="w-full p-2 border border-slate-200 rounded-md bg-slate-100 font-bold" />
-                </div>
-              </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Montant Encaissé</label>
