@@ -56,6 +56,15 @@ interface CatalogueItem {
   statut?: string;
 }
 
+// Détail financier d'une commande sur-mesure retenu pour affichage dans le formulaire de solde
+interface SelectedCommandeDetail {
+  id: string;
+  label: string;
+  total: number;
+  acompte: number;
+  reste: number;
+}
+
 export default function VentesPage() {
   const [ventes, setVentes] = useState<Vente[]>([]);
   const [commandesPending, setCommandesPending] = useState<Commande[]>([]);
@@ -75,6 +84,9 @@ export default function VentesPage() {
   const [importSearch, setImportSearch] = useState('');
   const [catalogueSearch, setCatalogueSearch] = useState('');
   const [loading, setLoading] = useState(true);
+
+  // Détail des commandes retenues pour le solde, affiché dans le formulaire final
+  const [selectedCommandesDetails, setSelectedCommandesDetails] = useState<SelectedCommandeDetail[]>([]);
 
   // État pour piloter la séquence "PDF -> WhatsApp"
   const [pendingWhatsApp, setPendingWhatsApp] = useState<Vente | null>(null);
@@ -154,6 +166,7 @@ export default function VentesPage() {
   };
 
   const handleOpenVenteLiberale = () => {
+    setSelectedCommandesDetails([]);
     setFormData({
       commande_ids: [],
       article_id: '',
@@ -196,6 +209,13 @@ export default function VentesPage() {
   const handleConfirmImportCommandes = () => {
     const selectedCmds = commandesPending.filter(c => selectedCommandesIds.includes(c.id));
     if (selectedCmds.length === 0) return;
+
+    // Construction du détail par commande, affiché dans le formulaire final
+    const details: SelectedCommandeDetail[] = selectedCmds.map(cmd => {
+      const { total, acompte, reste } = getCommandeFinancials(cmd);
+      return { id: cmd.id, label: getCommandeDetails(cmd), total, acompte, reste };
+    });
+    setSelectedCommandesDetails(details);
 
     const firstClient = selectedCmds[0];
     if (selectedCmds.length === 1) {
@@ -268,6 +288,7 @@ export default function VentesPage() {
     if (selectedCouleur) specParts.push(`Couleur: ${selectedCouleur}`);
     const specsStr = specParts.length > 0 ? ` (${specParts.join(', ')})` : '';
 
+    setSelectedCommandesDetails([]);
     setFormData({
       commande_ids: [],
       article_id: item.id,
@@ -350,6 +371,7 @@ export default function VentesPage() {
 
     setShowAddModal(false);
     setSelectedCommandesIds([]);
+    setSelectedCommandesDetails([]);
     fetchVentes();
     fetchCommandesToImport();
     fetchCatalogue();
@@ -860,6 +882,28 @@ export default function VentesPage() {
                   <input type="text" value={formData.client_tel} onChange={(e) => setFormData({ ...formData, client_tel: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 outline-none" />
                 </div>
               </div>
+
+              {/* DÉTAIL DES COMMANDES SOLDÉES (visible uniquement quand cette vente provient d'un solde de commande(s)) */}
+              {formData.commande_ids.length > 0 && selectedCommandesDetails.length > 0 && (
+                <div className="border border-amber-200 bg-amber-50/60 rounded-lg p-3 space-y-2">
+                  <p className="font-bold text-slate-700 text-[11px] uppercase tracking-wide">
+                    Détail des commandes incluses dans ce solde
+                  </p>
+                  <div className="space-y-1.5">
+                    {selectedCommandesDetails.map((d) => (
+                      <div key={d.id} className="bg-white border border-slate-200 rounded-md p-2 flex flex-col gap-0.5">
+                        <p className="text-slate-800 font-semibold text-[11px]">{d.label}</p>
+                        <div className="flex flex-wrap gap-x-3 text-[10px]">
+                          <span className="text-slate-600">Total: <strong>{formatAmount(d.total)} FCFA</strong></span>
+                          <span className="text-emerald-600">Acompte versé: <strong>{formatAmount(d.acompte)} FCFA</strong></span>
+                          <span className="text-amber-600">Reste: <strong>{formatAmount(d.reste)} FCFA</strong></span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Mode de paiement *</label>
                 <select
