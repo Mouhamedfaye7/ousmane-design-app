@@ -36,6 +36,7 @@ interface Commande {
   couleur?: string;
   statut?: string;
   montant_total?: number;
+  avance?: number;
   acompte?: number;
   mode_paiement?: string;
   notes?: string;
@@ -177,6 +178,21 @@ export default function VentesPage() {
     }
   };
 
+  // Normalise un montant de commande (support du stockage en "milliers")
+  const normalizeCmdAmount = (val: number | undefined | null) => {
+    let num = Number(val) || 0;
+    if (num > 0 && num < 1000) num = num * 1000;
+    return num;
+  };
+
+  // Calcule total / acompte déjà versé / reste pour une commande sur-mesure
+  const getCommandeFinancials = (cmd: Commande) => {
+    const total = normalizeCmdAmount(cmd.montant_total);
+    const acompte = normalizeCmdAmount(cmd.avance ?? cmd.acompte);
+    const reste = Math.max(0, total - acompte);
+    return { total, acompte, reste };
+  };
+
   const handleConfirmImportCommandes = () => {
     const selectedCmds = commandesPending.filter(c => selectedCommandesIds.includes(c.id));
     if (selectedCmds.length === 0) return;
@@ -184,8 +200,7 @@ export default function VentesPage() {
     const firstClient = selectedCmds[0];
     if (selectedCmds.length === 1) {
       const cmd = selectedCmds[0];
-      let total = Number(cmd.montant_total) || 0;
-      if (total > 0 && total < 1000) total *= 1000;
+      const { total } = getCommandeFinancials(cmd);
 
       setFormData({
         commande_ids: [cmd.id],
@@ -205,9 +220,8 @@ export default function VentesPage() {
       const combinedDesignations: string[] = [];
 
       selectedCmds.forEach(cmd => {
-        let tot = Number(cmd.montant_total) || 0;
-        if (tot > 0 && tot < 1000) tot *= 1000;
-        totalSum += tot;
+        const { total } = getCommandeFinancials(cmd);
+        totalSum += total;
         combinedDesignations.push(getCommandeDetails(cmd));
       });
 
@@ -323,7 +337,7 @@ export default function VentesPage() {
     if (formData.commande_ids && formData.commande_ids.length > 0) {
       for (const cmdId of formData.commande_ids) {
         const cmdOriginal = commandesPending.find(c => c.id === cmdId);
-        const cmdTotal = Number(cmdOriginal?.montant_total) || 0;
+        const cmdTotal = normalizeCmdAmount(cmdOriginal?.montant_total);
         // On marque la commande Livrée (payée intégralement) pour qu'elle
         // reste visible et cohérente dans le Kanban et les statistiques.
         await supabase.from('commandes').update({
@@ -481,6 +495,20 @@ export default function VentesPage() {
     (item.categorie || '').toLowerCase().includes(catalogueSearch.toLowerCase()) ||
     formatCatalogueDetails(item).toLowerCase().includes(catalogueSearch.toLowerCase())
   );
+
+  // Récapitulatif (total / acompte déjà versé / reste) des commandes actuellement sélectionnées
+  const selectedCommandesSummary = commandesPending
+    .filter(c => selectedCommandesIds.includes(c.id))
+    .reduce(
+      (acc, c) => {
+        const { total, acompte, reste } = getCommandeFinancials(c);
+        acc.total += total;
+        acc.acompte += acompte;
+        acc.reste += reste;
+        return acc;
+      },
+      { total: 0, acompte: 0, reste: 0 }
+    );
 
   return (
     <div className="min-h-screen bg-slate-100 p-6 text-slate-800">
@@ -735,8 +763,7 @@ export default function VentesPage() {
               {filteredCommandesToImport.map((cmd) => {
                 const isSelected = selectedCommandesIds.includes(cmd.id);
                 const isSoldee = cmd.statut === 'Soldée' || cmd.statut === 'Livrée';
-                let total = cmd.montant_total || 0;
-                if (total > 0 && total < 1000) total *= 1000;
+                const { total, acompte, reste } = getCommandeFinancials(cmd);
 
                 return (
                   <div
@@ -762,24 +789,35 @@ export default function VentesPage() {
                         <p className="text-[11px] text-slate-700 font-medium">
                           {getCommandeDetails(cmd)}
                         </p>
+                        <p className="text-[10px] text-slate-400">Tel: {cmd.client_tel || '-'}</p>
                       </div>
                     </div>
 
-                    <div className="text-right">
-                      <span className="font-bold text-slate-900 text-xs">{formatAmount(total)} FCFA</span>
-                      <p className="text-[10px] text-slate-400">Tel: {cmd.client_tel || '-'}</p>
+                    <div className="text-right space-y-0.5 shrink-0">
+                      <p className="font-bold text-slate-900 text-xs">Total: {formatAmount(total)} FCFA</p>
+                      <p className="text-[11px] text-emerald-600 font-semibold">Acompte versé: {formatAmount(acompte)} FCFA</p>
+                      <p className="text-[11px] text-amber-600 font-bold">Reste: {formatAmount(reste)} FCFA</p>
                     </div>
                   </div>
                 );
               })}
             </div>
 
-            <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-              <span className="text-xs font-bold text-slate-600">
-                {selectedCommandesIds.length} article(s) sélectionné(s)
-              </span>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pt-2 border-t border-slate-100">
+              <div className="text-xs">
+                <span className="font-bold text-slate-600">
+                  {selectedCommandesIds.length} article(s) sélectionné(s)
+                </span>
+                {selectedCommandesIds.length > 0 && (
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Total: <strong className="text-slate-800">{formatAmount(selectedCommandesSummary.total)} FCFA</strong>
+                    {' · '}Acompte déjà versé: <strong className="text-emerald-600">{formatAmount(selectedCommandesSummary.acompte)} FCFA</strong>
+                    {' · '}Reste à percevoir: <strong className="text-amber-600">{formatAmount(selectedCommandesSummary.reste)} FCFA</strong>
+                  </p>
+                )}
+              </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowImportModal(false)}
