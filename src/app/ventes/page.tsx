@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft, Search, Printer, MapPin, Phone,
-  X, Download, Trash2, Package, PlusCircle, CheckSquare, Square, Tag, Send, FileText
+  X, Download, Trash2, Package, PlusCircle, CheckSquare, Square, Tag, Send, FileText, Pencil
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -91,6 +91,9 @@ export default function VentesPage() {
   // État pour piloter la séquence "PDF -> WhatsApp"
   const [pendingWhatsApp, setPendingWhatsApp] = useState<Vente | null>(null);
 
+  // Id de la vente en cours de correction (mode édition). Null = création d'une nouvelle vente.
+  const [editingVenteId, setEditingVenteId] = useState<string | null>(null);
+
   const invoiceRef = useRef<HTMLDivElement>(null);
 
   const [formData, setFormData] = useState({
@@ -169,6 +172,7 @@ export default function VentesPage() {
   };
 
   const handleOpenVenteLiberale = () => {
+    setEditingVenteId(null);
     setSelectedCommandesDetails([]);
     setFormData({
       commande_ids: [],
@@ -212,6 +216,8 @@ export default function VentesPage() {
   const handleConfirmImportCommandes = () => {
     const selectedCmds = commandesPending.filter(c => selectedCommandesIds.includes(c.id));
     if (selectedCmds.length === 0) return;
+
+    setEditingVenteId(null);
 
     // Construction du détail par commande, affiché dans le formulaire final
     const details: SelectedCommandeDetail[] = selectedCmds.map(cmd => {
@@ -282,6 +288,8 @@ export default function VentesPage() {
     if (!selectedCatItem) return;
     const item = selectedCatItem;
 
+    setEditingVenteId(null);
+
     let price = Number(item.prix) || 0;
     if (price > 0 && price < 1000) price = price * 1000;
     const priceStr = price > 0 ? price.toString() : '';
@@ -311,6 +319,40 @@ export default function VentesPage() {
     setShowAddModal(true);
   };
 
+  // Ouvre le formulaire en mode "correction" pour une vente déjà enregistrée
+  // (ex: le client revient régler le reste de sa facture).
+  const handleOpenEditVente = (v: Vente) => {
+    let total = v.montant_total || 0;
+    let avance = v.avance || 0;
+    if (total > 0 && total < 1000) total *= 1000;
+    if (avance > 0 && avance < 1000) avance *= 1000;
+    const qte = v.quantite || 1;
+    const pu = v.prix_unitaire && v.prix_unitaire > 0 ? v.prix_unitaire : (qte > 0 ? total / qte : total);
+
+    setEditingVenteId(v.id || null);
+    setSelectedCommandesIds([]);
+    setSelectedCommandesDetails([]);
+    setFormData({
+      commande_ids: [],
+      article_id: '',
+      client_nom: v.client_nom || '',
+      client_tel: v.client_tel || '',
+      mode_commande: v.mode_commande || 'Vente Libérale',
+      mode_paiement: v.mode_paiement || 'Espèces',
+      designation: getItemName(v),
+      quantite: qte.toString(),
+      prix_unitaire: pu.toString(),
+      avance: avance.toString(),
+      observations: v.observations || ''
+    });
+    setShowAddModal(true);
+  };
+
+  const closeAddModal = () => {
+    setShowAddModal(false);
+    setEditingVenteId(null);
+  };
+
   const handleCreateVente = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.client_nom || !formData.designation) {
@@ -332,47 +374,59 @@ export default function VentesPage() {
       observations: formData.observations
     };
 
-    const { error } = await supabase.from('ventes').insert([payload]);
-
-    if (error) {
-      console.error('Erreur Supabase Ventes:', error);
-      const fallbackPayload = {
-        client_nom: formData.client_nom,
-        client_tel: formData.client_tel,
-        montant_total: montantTotalCalcul,
-        avance: avanceNum,
-        observations: `[${formData.designation}] Qté: ${qtyNum} x ${puNum} FCFA - Reste: ${resteCalcul} FCFA | ${formData.observations}`.trim()
-      };
-      await supabase.from('ventes').insert([fallbackPayload]);
-    }
-
-    if (formData.article_id) {
-      const { data: catItem } = await supabase.from('catalogue').select('quantite_stock').eq('id', formData.article_id).single();
-      if (catItem) {
-        const nouveauStock = Math.max(0, Number(catItem.quantite_stock) - qtyNum);
-        const updatePayload: { quantite_stock: number; statut?: string } = { quantite_stock: nouveauStock };
-        if (nouveauStock === 0) {
-          updatePayload.statut = 'Vendu';
-        }
-        await supabase.from('catalogue').update(updatePayload).eq('id', formData.article_id);
+    if (editingVenteId) {
+      // MODE CORRECTION : on met à jour la vente existante (ex: encaissement du reste)
+      // sans toucher au stock du catalogue ni au statut des commandes.
+      const { error } = await supabase.from('ventes').update(payload).eq('id', editingVenteId);
+      if (error) {
+        console.error('Erreur Supabase mise à jour Vente:', error);
+        alert('Erreur lors de la mise à jour de la facture. Veuillez réessayer.');
+        return;
       }
-    }
+    } else {
+      const { error } = await supabase.from('ventes').insert([payload]);
 
-    if (formData.commande_ids && formData.commande_ids.length > 0) {
-      for (const cmdId of formData.commande_ids) {
-        const cmdOriginal = commandesPending.find(c => c.id === cmdId);
-        const cmdTotal = normalizeCmdAmount(cmdOriginal?.montant_total);
-        // On marque la commande Livrée (payée intégralement) pour qu'elle
-        // reste visible et cohérente dans le Kanban et les statistiques.
-        await supabase.from('commandes').update({
-          statut: 'Livrée',
-          avance: cmdTotal,
-          reste: 0
-        }).eq('id', cmdId);
+      if (error) {
+        console.error('Erreur Supabase Ventes:', error);
+        const fallbackPayload = {
+          client_nom: formData.client_nom,
+          client_tel: formData.client_tel,
+          montant_total: montantTotalCalcul,
+          avance: avanceNum,
+          observations: `[${formData.designation}] Qté: ${qtyNum} x ${puNum} FCFA - Reste: ${resteCalcul} FCFA | ${formData.observations}`.trim()
+        };
+        await supabase.from('ventes').insert([fallbackPayload]);
+      }
+
+      if (formData.article_id) {
+        const { data: catItem } = await supabase.from('catalogue').select('quantite_stock').eq('id', formData.article_id).single();
+        if (catItem) {
+          const nouveauStock = Math.max(0, Number(catItem.quantite_stock) - qtyNum);
+          const updatePayload: { quantite_stock: number; statut?: string } = { quantite_stock: nouveauStock };
+          if (nouveauStock === 0) {
+            updatePayload.statut = 'Vendu';
+          }
+          await supabase.from('catalogue').update(updatePayload).eq('id', formData.article_id);
+        }
+      }
+
+      if (formData.commande_ids && formData.commande_ids.length > 0) {
+        for (const cmdId of formData.commande_ids) {
+          const cmdOriginal = commandesPending.find(c => c.id === cmdId);
+          const cmdTotal = normalizeCmdAmount(cmdOriginal?.montant_total);
+          // On marque la commande Livrée (payée intégralement) pour qu'elle
+          // reste visible et cohérente dans le Kanban et les statistiques.
+          await supabase.from('commandes').update({
+            statut: 'Livrée',
+            avance: cmdTotal,
+            reste: 0
+          }).eq('id', cmdId);
+        }
       }
     }
 
     setShowAddModal(false);
+    setEditingVenteId(null);
     setSelectedCommandesIds([]);
     setSelectedCommandesDetails([]);
     fetchVentes();
@@ -571,7 +625,7 @@ export default function VentesPage() {
         </div>
       </div>
 
-      {/* TABLEAU DES VENTRES */}
+      {/* TABLEAU DES VENTES */}
       <div className="max-w-7xl mx-auto bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-3 text-slate-400" size={16} />
@@ -608,6 +662,7 @@ export default function VentesPage() {
                 if (total > 0 && total < 1000) total = total * 1000;
                 if (avance > 0 && avance < 1000) avance = avance * 1000;
                 const reste = v.reste !== undefined ? v.reste : (total - avance);
+                const hasReste = reste > 0;
 
                 return (
                   <tr key={v.id} className="hover:bg-amber-50/30 transition-colors">
@@ -625,6 +680,15 @@ export default function VentesPage() {
                           title="Voir / Imprimer Facture"
                         >
                           Facture
+                        </button>
+                        <button
+                          onClick={() => handleOpenEditVente(v)}
+                          className={`p-1.5 rounded-md transition-colors cursor-pointer text-white ${
+                            hasReste ? 'bg-rose-500 hover:bg-rose-600' : 'bg-sky-600 hover:bg-sky-700'
+                          }`}
+                          title={hasReste ? 'Corriger la facture / Encaisser le reste' : 'Corriger la facture'}
+                        >
+                          <Pencil size={15} />
                         </button>
                         <button
                           onClick={() => handleSendWhatsAppInvoice(v)}
@@ -864,16 +928,29 @@ export default function VentesPage() {
         </div>
       )}
 
-      {/* MODAL FORMULAIRE DE VENTE */}
+      {/* MODAL FORMULAIRE DE VENTE / CORRECTION */}
       {showAddModal && (
-        <div onClick={() => setShowAddModal(false)} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+        <div onClick={closeAddModal} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
           <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl relative border border-slate-200 text-slate-900">
             <div className="flex justify-between items-center mb-4 border-b pb-3">
               <h2 className="text-lg font-bold text-slate-900">
-                {formData.commande_ids.length > 0 ? 'Solder & Générer Facture' : formData.mode_commande === 'Vente Libérale' ? 'Nouvelle Vente Libérale' : 'Vente Catalogue'}
+                {editingVenteId
+                  ? 'Corriger la Facture / Encaisser un Paiement'
+                  : formData.commande_ids.length > 0
+                    ? 'Solder & Générer Facture'
+                    : formData.mode_commande === 'Vente Libérale'
+                      ? 'Nouvelle Vente Libérale'
+                      : 'Vente Catalogue'}
               </h2>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X size={20} /></button>
+              <button onClick={closeAddModal} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X size={20} /></button>
             </div>
+
+            {editingVenteId && (
+              <div className="mb-4 bg-sky-50 border border-sky-200 text-sky-800 text-[11px] font-semibold rounded-lg p-2.5">
+                Mode correction : modifiez le montant encaissé (ou tout autre champ) puis validez pour mettre à jour cette facture existante.
+              </div>
+            )}
+
             <form onSubmit={handleCreateVente} className="space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -926,6 +1003,7 @@ export default function VentesPage() {
                 <label className="block font-bold text-slate-700 mb-1">Désignation / Article *</label>
                 <textarea required rows={2} value={formData.designation} onChange={(e) => setFormData({ ...formData, designation: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 outline-none" />
               </div>
+
               {formData.commande_ids.length > 0 ? (
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
@@ -952,6 +1030,7 @@ export default function VentesPage() {
                   </div>
                 </div>
               )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Montant Encaissé</label>
@@ -963,8 +1042,10 @@ export default function VentesPage() {
                 </div>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 rounded-lg bg-slate-200 font-bold cursor-pointer">Annuler</button>
-                <button type="submit" className="px-4 py-2 rounded-lg bg-amber-700 hover:bg-amber-800 text-white font-bold cursor-pointer">Enregistrer la vente</button>
+                <button type="button" onClick={closeAddModal} className="px-4 py-2 rounded-lg bg-slate-200 font-bold cursor-pointer">Annuler</button>
+                <button type="submit" className="px-4 py-2 rounded-lg bg-amber-700 hover:bg-amber-800 text-white font-bold cursor-pointer">
+                  {editingVenteId ? 'Enregistrer les modifications' : 'Enregistrer la vente'}
+                </button>
               </div>
             </form>
           </div>
@@ -1007,6 +1088,17 @@ export default function VentesPage() {
                     className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-xs"
                   >
                     <Send size={15} /> WhatsApp
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const v = selectedVente;
+                      setSelectedVente(null);
+                      if (v) handleOpenEditVente(v);
+                    }}
+                    className="bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    <Pencil size={15} /> Corriger
                   </button>
                 </div>
 
