@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   Users,
@@ -30,14 +30,6 @@ interface Commande {
   created_at?: string;
 }
 
-interface VenteRow {
-  id?: string;
-  mode_commande?: string;
-  montant_total?: number;
-  avance?: number;
-  reste?: number;
-}
-
 export default function Dashboard() {
   const [totalClients, setTotalClients] = useState<number>(0);
   const [enCoursCount, setEnCoursCount] = useState<number>(0);
@@ -47,30 +39,16 @@ export default function Dashboard() {
   const [totalReste, setTotalReste] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Helper : Alignement strict avec la page statistiques pour le calcul des finances (commandes)
+  // Helper : Alignement strict avec la page statistiques pour le calcul des finances
   const getCalculatedFinancials = (c: Commande) => {
     const tot = Number(c.montant_total) || 0;
     let av = Number(c.avance) || 0;
 
     if (c.statut === 'Livrée') {
-      av = tot;
+      av = tot; // Une commande livrée est totalement réglée
     }
 
     const reste = Math.max(0, tot - av);
-    return { tot, av, reste };
-  };
-
-  // Normalise les montants stockés en "milliers" (ex: 25 -> 25 000), même logique que la page Ventes
-  const normalizeAmount = (val: number | undefined | null) => {
-    let num = Number(val) || 0;
-    if (num > 0 && num < 1000) num = num * 1000;
-    return num;
-  };
-
-  const getVenteFinancials = (v: VenteRow) => {
-    const tot = normalizeAmount(v.montant_total);
-    const av = normalizeAmount(v.avance);
-    const reste = v.reste !== undefined ? Math.max(0, normalizeAmount(v.reste)) : Math.max(0, tot - av);
     return { tot, av, reste };
   };
 
@@ -78,15 +56,11 @@ export default function Dashboard() {
     async function loadDashboardStats() {
       setLoading(true);
 
-      const [cmdRes, venteRes] = await Promise.all([
-        supabase.from('commandes').select('*'),
-        supabase.from('ventes').select('*')
-      ]);
+      const { data: commandes, error } = await supabase
+        .from('commandes')
+        .select('*');
 
-      const commandes = cmdRes.data;
-      const ventes = venteRes.data;
-
-      if (!cmdRes.error && commandes) {
+      if (!error && commandes) {
         // Total des clients uniques
         const clientsUniques = new Set(
           commandes.map(c => (c.client_nom || '').trim().toLowerCase()).filter(Boolean)
@@ -103,31 +77,23 @@ export default function Dashboard() {
         const pretes = commandes.filter(c => c.statut === 'Prête').length;
         setPretesCount(pretes);
 
-        // Ventes boutique/catalogue NON liées à une commande sur-mesure (déjà comptées via commandes)
-        const ventesBoutique = (!venteRes.error && ventes)
-          ? ventes.filter(v => !(v.mode_commande || '').startsWith('Sur Mesure'))
-          : [];
+        // Chiffre d'affaires global
+        const caTotal = commandes.reduce((acc, c) => acc + (Number(c.montant_total) || 0), 0);
+        setChiffreAffaires(caTotal);
 
-        // Chiffre d'affaires global : commandes + ventes boutique
-        const caCommandes = commandes.reduce((acc, c) => acc + (Number(c.montant_total) || 0), 0);
-        const caBoutique = ventesBoutique.reduce((acc, v) => acc + getVenteFinancials(v).tot, 0);
-        setChiffreAffaires(caCommandes + caBoutique);
-
-        // Cumul des Avances / Encaissements réels : commandes + ventes boutique
-        const avancesCommandes = commandes.reduce((acc, c) => {
+        // Cumul des Avances / Encaissements réels
+        const avancesTotales = commandes.reduce((acc, c) => {
           const { av } = getCalculatedFinancials(c);
           return acc + av;
         }, 0);
-        const avancesBoutique = ventesBoutique.reduce((acc, v) => acc + getVenteFinancials(v).av, 0);
-        setTotalAvances(avancesCommandes + avancesBoutique);
+        setTotalAvances(avancesTotales);
 
-        // Cumul des Solde / Créances clients : commandes + ventes boutique
-        const resteCommandes = commandes.reduce((acc, c) => {
+        // Cumul des Solde / Créances clients
+        const resteTotal = commandes.reduce((acc, c) => {
           const { reste } = getCalculatedFinancials(c);
           return acc + reste;
         }, 0);
-        const resteBoutique = ventesBoutique.reduce((acc, v) => acc + getVenteFinancials(v).reste, 0);
-        setTotalReste(resteCommandes + resteBoutique);
+        setTotalReste(resteTotal);
       }
 
       setLoading(false);
@@ -140,197 +106,294 @@ export default function Dashboard() {
     return val.toLocaleString('fr-FR').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ');
   };
 
+  const kpis = [
+    {
+      label: 'Total Clients',
+      value: loading ? '-' : String(totalClients),
+      icon: Users,
+      accent: '#6C8CD5',
+      bg: '#EEF2FC'
+    },
+    {
+      label: "En Cours d'Atelier",
+      value: loading ? '-' : String(enCoursCount),
+      icon: Clock,
+      accent: '#C9A24B',
+      bg: '#FBF3E2'
+    },
+    {
+      label: 'Prêtes à Livrer',
+      value: loading ? '-' : String(pretesCount),
+      icon: CheckCircle2,
+      accent: '#2F8F6F',
+      bg: '#E8F5EF'
+    },
+    {
+      label: "Chiffre d'Affaires",
+      value: loading ? '-' : `${formatAmount(chiffreAffaires)} F`,
+      icon: TrendingUp,
+      accent: '#171B2E',
+      bg: '#ECEDF3'
+    },
+    {
+      label: 'Total Encaissé',
+      value: loading ? '-' : `${formatAmount(totalAvances)} F`,
+      icon: DollarSign,
+      accent: '#2F8F6F',
+      bg: '#E8F5EF'
+    },
+    {
+      label: 'Reste à Recouvrer',
+      value: loading ? '-' : `${formatAmount(totalReste)} F`,
+      icon: AlertCircle,
+      accent: '#B5502E',
+      bg: '#FBEAE3'
+    }
+  ];
+
+  const modules = [
+    {
+      href: '/ventes',
+      icon: ShoppingBag,
+      title: 'Ventes & Caisse Directe',
+      desc: 'Enregistrement des ventes boutique, encaissement Wave / Espèces et facturation client.',
+      accent: '#2F8F6F',
+      bg: '#E8F5EF'
+    },
+    {
+      href: '/clients',
+      icon: Users,
+      title: 'Gestion des Clients',
+      desc: 'Répertoire client, numéros WhatsApp et carnet de mesures personnalisées.',
+      accent: '#6C8CD5',
+      bg: '#EEF2FC'
+    },
+    {
+      href: '/commandes',
+      icon: Scissors,
+      title: "Suivi d'Atelier & Commandes",
+      desc: 'Kanban de production, statuts de fabrication et notifications clients.',
+      accent: '#C9A24B',
+      bg: '#FBF3E2'
+    },
+    {
+      href: '/stock',
+      icon: Layers,
+      title: 'Stock de Tissus',
+      desc: 'Inventaire des étoffes (Gezner, Bazin, Soie), métrage disponible et valeur estimée.',
+      accent: '#8B6BC9',
+      bg: '#F1ECFB'
+    },
+    {
+      href: '/catalogue',
+      icon: BookOpen,
+      title: 'Catalogue & Modèles',
+      desc: "Galerie des modèles de l'atelier, grille tarifaire indicative et book photo client.",
+      accent: '#B5502E',
+      bg: '#FBEAE3'
+    },
+    {
+      href: '/statistiques',
+      icon: BarChart3,
+      title: 'Statistiques & Revenus',
+      desc: "Suivi des acomptes, chiffre d'affaires global et reste à recouvrer.",
+      accent: '#171B2E',
+      bg: '#ECEDF3'
+    }
+  ];
+
   return (
-    <div className="min-h-screen bg-slate-50 p-6 text-slate-800">
-      <div className="max-w-7xl mx-auto space-y-8">
-        
-        {/* HEADER */}
-        <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-extrabold text-amber-900 tracking-tight">OUSMANE DESIGN</h1>
-            <p className="text-sm font-medium text-slate-500 mt-1">
-              Tableau de bord — <span className="text-amber-700 font-semibold">Création & Couture Contemporaine</span>
-            </p>
+    <div className="min-h-screen" style={{ backgroundColor: '#F6F1E4' }}>
+      <style jsx global>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
+
+        .font-display { font-family: 'Fraunces', ui-serif, Georgia, serif; }
+        .font-body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+        .font-mono-tape { font-family: 'Space Mono', ui-monospace, monospace; }
+
+        .stitch-line {
+          height: 1px;
+          background-image: repeating-linear-gradient(
+            to right,
+            #C9A24B 0px,
+            #C9A24B 8px,
+            transparent 8px,
+            transparent 16px
+          );
+        }
+
+        .swatch-card {
+          position: relative;
+        }
+        .swatch-card::before {
+          content: '';
+          position: absolute;
+          top: 16px;
+          left: 16px;
+          width: 10px;
+          height: 10px;
+          border-radius: 9999px;
+          border: 2px solid #C9A24B;
+          background: #F6F1E4;
+          z-index: 2;
+        }
+
+        @keyframes riseIn {
+          from { opacity: 0; transform: translateY(14px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .rise-in {
+          animation: riseIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .rise-in { animation: none !important; }
+        }
+      `}</style>
+
+      {/* HERO - bandeau indigo facon tissu teint, fil dore */}
+      <div
+        className="relative overflow-hidden"
+        style={{ backgroundColor: '#171B2E' }}
+      >
+        <div
+          className="pointer-events-none absolute -top-24 -right-24 h-80 w-80 rounded-full opacity-20 blur-3xl"
+          style={{ background: 'radial-gradient(circle, #C9A24B, transparent 70%)' }}
+        />
+        <div className="max-w-7xl mx-auto px-6 pt-14 pb-24 md:pt-16 md:pb-28 relative">
+          <div className="rise-in flex flex-col md:flex-row md:items-end md:justify-between gap-8">
+            <div>
+              <p
+                className="font-body text-[11px] font-bold tracking-[0.28em] uppercase mb-3"
+                style={{ color: '#C9A24B' }}
+              >
+                Atelier de Haute Couture — Hann Maristes, Dakar
+              </p>
+              <h1
+                className="font-display italic font-semibold leading-[0.95] tracking-tight"
+                style={{ color: '#F6F1E4', fontSize: 'clamp(2.6rem, 6vw, 4.5rem)' }}
+              >
+                Ousmane Design
+              </h1>
+              <p
+                className="font-body text-sm md:text-base mt-4 max-w-md"
+                style={{ color: '#F6F1E4', opacity: 0.65 }}
+              >
+                Tableau de bord de l'atelier - chaque commande, chaque mesure,
+                chaque paiement, cousu au fil pres.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 shrink-0">
+              <Link
+                href="/ventes"
+                className="font-body font-bold text-sm px-5 py-3 rounded-full flex items-center gap-2 transition-all hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                style={{ backgroundColor: '#C9A24B', color: '#171B2E', outlineColor: '#C9A24B' }}
+              >
+                <Plus size={17} strokeWidth={2.5} /> Nouvelle Vente
+              </Link>
+              <Link
+                href="/commandes"
+                className="font-body font-bold text-sm px-5 py-3 rounded-full flex items-center gap-2 border transition-all hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                style={{ borderColor: 'rgba(246,241,228,0.35)', color: '#F6F1E4', outlineColor: '#C9A24B' }}
+              >
+                <Plus size={17} strokeWidth={2.5} /> Nouvelle Commande
+              </Link>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <Link
-              href="/ventes"
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-xs transition-colors cursor-pointer text-sm"
-            >
-              <Plus size={18} /> Nouvelle Vente
-            </Link>
-            <Link
-              href="/commandes"
-              className="bg-amber-700 hover:bg-amber-800 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-xs transition-colors cursor-pointer text-sm"
-            >
-              <Plus size={18} /> Nouvelle Commande
-            </Link>
-          </div>
+          <div className="stitch-line mt-10" />
         </div>
+      </div>
 
-        {/* INDICATEURS DYNAMIQUES SYNCHRONISÉS */}
+      {/* KPI - cartes ivoire qui remontent sur le bandeau indigo */}
+      <div className="max-w-7xl mx-auto px-6 -mt-14 relative z-10">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          
-          {/* Total Clients */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex justify-between items-center">
-            <div>
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Clients</p>
-              <h2 className="text-xl font-bold text-slate-900 mt-1">
-                {loading ? '...' : totalClients}
-              </h2>
-            </div>
-            <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">
-              <Users size={20} />
-            </div>
-          </div>
+          {kpis.map((kpi, i) => {
+            const Icon = kpi.icon;
+            return (
+              <div
+                key={kpi.label}
+                className="rise-in bg-white p-5 rounded-2xl shadow-[0_10px_30px_-15px_rgba(23,27,46,0.25)] border border-black/5 flex flex-col gap-3"
+                style={{ animationDelay: `${80 + i * 60}ms` }}
+              >
+                <div
+                  className="w-9 h-9 rounded-full flex items-center justify-center"
+                  style={{ backgroundColor: kpi.bg, color: kpi.accent }}
+                >
+                  <Icon size={17} />
+                </div>
+                <div>
+                  <p
+                    className="font-body text-[10px] font-bold uppercase tracking-wider"
+                    style={{ color: '#171B2E', opacity: 0.45 }}
+                  >
+                    {kpi.label}
+                  </p>
+                  <h2
+                    className="font-mono-tape text-lg font-bold mt-1"
+                    style={{ color: '#171B2E' }}
+                  >
+                    {kpi.value}
+                  </h2>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
-          {/* En Cours Atelier */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex justify-between items-center">
-            <div>
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">En Cours</p>
-              <h2 className="text-xl font-bold text-amber-600 mt-1">
-                {loading ? '...' : enCoursCount}
-              </h2>
-            </div>
-            <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl">
-              <Clock size={20} />
-            </div>
-          </div>
-
-          {/* Commandes Prêtes */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex justify-between items-center">
-            <div>
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Prêtes</p>
-              <h2 className="text-xl font-bold text-emerald-600 mt-1">
-                {loading ? '...' : pretesCount}
-              </h2>
-            </div>
-            <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
-              <CheckCircle2 size={20} />
-            </div>
-          </div>
-
-          {/* Chiffre d'Affaires */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex justify-between items-center">
-            <div>
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">CA Total</p>
-              <h2 className="text-xl font-bold text-slate-900 mt-1">
-                {loading ? '...' : `${formatAmount(chiffreAffaires)} F`}
-              </h2>
-            </div>
-            <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl">
-              <TrendingUp size={20} />
-            </div>
-          </div>
-
-          {/* Avances Perçues */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex justify-between items-center">
-            <div>
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Encaissé</p>
-              <h2 className="text-xl font-bold text-emerald-600 mt-1">
-                {loading ? '...' : `${formatAmount(totalAvances)} F`}
-              </h2>
-            </div>
-            <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
-              <DollarSign size={20} />
-            </div>
-          </div>
-
-          {/* Reste à Recouvrer */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex justify-between items-center">
-            <div>
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Reste à Recouvrer</p>
-              <h2 className="text-xl font-bold text-rose-600 mt-1">
-                {loading ? '...' : `${formatAmount(totalReste)} F`}
-              </h2>
-            </div>
-            <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl">
-              <AlertCircle size={20} />
-            </div>
-          </div>
-
+      {/* MODULES - fiches facon echantillons de tissu */}
+      <div className="max-w-7xl mx-auto px-6 py-16 space-y-8">
+        <div className="rise-in" style={{ animationDelay: '260ms' }}>
+          <p
+            className="font-body text-[11px] font-bold tracking-[0.28em] uppercase mb-2"
+            style={{ color: '#B5502E' }}
+          >
+            Modules
+          </p>
+          <h2
+            className="font-display italic font-semibold text-2xl md:text-3xl"
+            style={{ color: '#171B2E' }}
+          >
+            Piloter l'atelier, d'un seul point de vue
+          </h2>
         </div>
 
-        {/* MODULES DE GESTION */}
-        <div className="space-y-4">
-          <h2 className="text-base font-bold text-slate-800">Modules de Gestion</h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <Link href="/ventes" className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all group flex items-start gap-4">
-              <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl group-hover:scale-105 transition-transform shrink-0">
-                <ShoppingBag size={24} />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-sm group-hover:text-emerald-600 transition-colors">Ventes & Caisse Directe</h3>
-                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  Enregistrement des ventes boutique, encaissement Wave/Espèces et impression de tickets.
-                </p>
-              </div>
-            </Link>
-
-            <Link href="/clients" className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all group flex items-start gap-4">
-              <div className="p-3 bg-blue-50 text-blue-600 rounded-xl group-hover:scale-105 transition-transform shrink-0">
-                <Users size={24} />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-sm group-hover:text-blue-600 transition-colors">Gestion des Clients</h3>
-                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  Répertoire client, numéros WhatsApp et carnet de mesures personnalisées.
-                </p>
-              </div>
-            </Link>
-
-            <Link href="/commandes" className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all group flex items-start gap-4">
-              <div className="p-3 bg-amber-50 text-amber-600 rounded-xl group-hover:scale-105 transition-transform shrink-0">
-                <Scissors size={24} />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-sm group-hover:text-amber-600 transition-colors">Suivi d'Atelier & Commandes</h3>
-                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  Kanban de production, statuts de fabrication et notifications clients.
-                </p>
-              </div>
-            </Link>
-
-            <Link href="/stock" className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all group flex items-start gap-4">
-              <div className="p-3 bg-purple-50 text-purple-600 rounded-xl group-hover:scale-105 transition-transform shrink-0">
-                <Layers size={24} />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-sm group-hover:text-purple-600 transition-colors">Stock de Tissus</h3>
-                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  Inventaire des étoffes (Gezner, Bazin, Soie), métrage disponible et valeur estimée.
-                </p>
-              </div>
-            </Link>
-
-            <Link href="/catalogue" className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all group flex items-start gap-4">
-              <div className="p-3 bg-rose-50 text-rose-600 rounded-xl group-hover:scale-105 transition-transform shrink-0">
-                <BookOpen size={24} />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-sm group-hover:text-rose-600 transition-colors">Catalogue & Modèles</h3>
-                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  Galerie des modèles de l'atelier, grille tarifaire indicative et book photo pour les clients.
-                </p>
-              </div>
-            </Link>
-
-            <Link href="/statistiques" className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-all group flex items-start gap-4">
-              <div className="p-3 bg-slate-100 text-slate-700 rounded-xl group-hover:scale-105 transition-transform shrink-0">
-                <BarChart3 size={24} />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-sm group-hover:text-slate-800 transition-colors">Statistiques & Revenus</h3>
-                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  Suivi des acomptes, chiffre d'affaires global et reste à recouvrer auprès des clients.
-                </p>
-              </div>
-            </Link>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {modules.map((m, i) => {
+            const Icon = m.icon;
+            return (
+              <Link
+                key={m.href}
+                href={m.href}
+                className="swatch-card rise-in bg-white rounded-2xl border border-black/5 p-6 pt-7 shadow-[0_10px_30px_-18px_rgba(23,27,46,0.2)] hover:shadow-[0_18px_40px_-18px_rgba(23,27,46,0.3)] hover:-translate-y-1 transition-all group flex flex-col gap-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                style={{ animationDelay: `${320 + i * 70}ms`, outlineColor: '#C9A24B' }}
+              >
+                <div
+                  className="w-11 h-11 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105"
+                  style={{ backgroundColor: m.bg, color: m.accent }}
+                >
+                  <Icon size={22} />
+                </div>
+                <div>
+                  <h3
+                    className="font-display font-semibold text-base"
+                    style={{ color: '#171B2E' }}
+                  >
+                    {m.title}
+                  </h3>
+                  <p
+                    className="font-body text-xs mt-1.5 leading-relaxed"
+                    style={{ color: '#171B2E', opacity: 0.55 }}
+                  >
+                    {m.desc}
+                  </p>
+                </div>
+              </Link>
+            );
+          })}
         </div>
-
       </div>
     </div>
   );
