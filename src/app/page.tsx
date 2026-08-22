@@ -147,43 +147,43 @@ export default function Dashboard() {
       label: 'Total Clients',
       value: loading ? '-' : String(totalClients),
       icon: Users,
-      accent: '#6C8CD5',
-      bg: '#EEF2FC'
+      accent: '#2F5FA8',
+      bg: '#E9F0FB'
     },
     {
       label: "En Cours d'Atelier",
       value: loading ? '-' : String(enCoursCount),
       icon: Clock,
-      accent: '#C9A24B',
-      bg: '#FBF3E2'
+      accent: '#C1611A',
+      bg: '#FCEAD9'
     },
     {
       label: 'Prêtes à Livrer',
       value: loading ? '-' : String(pretesCount),
       icon: CheckCircle2,
-      accent: '#2F8F6F',
-      bg: '#E8F5EF'
+      accent: '#0F2A52',
+      bg: '#E7ECF5'
     },
     {
       label: "Chiffre d'Affaires",
       value: loading ? '-' : `${formatAmount(chiffreAffaires)} F`,
       icon: TrendingUp,
-      accent: '#171B2E',
-      bg: '#ECEDF3'
+      accent: '#A87A1E',
+      bg: '#FAF1DA'
     },
     {
       label: 'Total Encaissé',
       value: loading ? '-' : `${formatAmount(totalAvances)} F`,
       icon: DollarSign,
-      accent: '#2F8F6F',
-      bg: '#E8F5EF'
+      accent: '#1D4E89',
+      bg: '#E4EDFB'
     },
     {
       label: 'Reste à Recouvrer',
       value: loading ? '-' : `${formatAmount(totalReste)} F`,
       icon: AlertCircle,
-      accent: '#B5502E',
-      bg: '#FBEAE3'
+      accent: '#B5471A',
+      bg: '#FBE6D8'
     }
   ];
 
@@ -193,53 +193,53 @@ export default function Dashboard() {
       icon: ShoppingBag,
       title: 'Ventes & Caisse Directe',
       desc: 'Enregistrement des ventes boutique, encaissement Wave / Espèces et facturation client.',
-      accent: '#2F8F6F',
-      bg: '#E8F5EF'
+      accent: '#2F5FA8',
+      bg: '#E9F0FB'
     },
     {
       href: '/clients',
       icon: Users,
       title: 'Gestion des Clients',
       desc: 'Répertoire client, numéros WhatsApp et carnet de mesures personnalisées.',
-      accent: '#6C8CD5',
-      bg: '#EEF2FC'
+      accent: '#A87A1E',
+      bg: '#FAF1DA'
     },
     {
       href: '/commandes',
       icon: Scissors,
       title: "Suivi d'Atelier & Commandes",
       desc: 'Kanban de production, statuts de fabrication et notifications clients.',
-      accent: '#C9A24B',
-      bg: '#FBF3E2'
+      accent: '#C1611A',
+      bg: '#FCEAD9'
     },
     {
       href: '/stock',
       icon: Layers,
       title: 'Stock de Tissus',
       desc: 'Inventaire des étoffes (Gezner, Bazin, Soie), métrage disponible et valeur estimée.',
-      accent: '#8B6BC9',
-      bg: '#F1ECFB'
+      accent: '#0F2A52',
+      bg: '#E7ECF5'
     },
     {
       href: '/catalogue',
       icon: BookOpen,
       title: 'Catalogue & Modèles',
       desc: "Galerie des modèles de l'atelier, grille tarifaire indicative et book photo client.",
-      accent: '#B5502E',
-      bg: '#FBEAE3'
+      accent: '#1D4E89',
+      bg: '#E4EDFB'
     },
     {
       href: '/statistiques',
       icon: BarChart3,
       title: 'Statistiques & Revenus',
       desc: "Suivi des acomptes, chiffre d'affaires global et reste à recouvrer.",
-      accent: '#171B2E',
-      bg: '#ECEDF3'
+      accent: '#B5471A',
+      bg: '#FBE6D8'
     }
   ];
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#F6F1E4' }}>
+    <div className="min-h-screen" style={{ backgroundColor: '#F5F8FC' }}>
       <style jsx global>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
 
@@ -251,8 +251,8 @@ export default function Dashboard() {
           height: 1px;
           background-image: repeating-linear-gradient(
             to right,
-            #C9A24B 0px,
-            #C9A24B 8px,
+            #C69A2E 0px,
+            #C69A2E 8px,
             transparent 8px,
             transparent 16px
           );
@@ -269,8 +269,8 @@ export default function Dashboard() {
           width: 10px;
           height: 10px;
           border-radius: 9999px;
-          border: 2px solid #C9A24B;
-          background: #F6F1E4;
+          border: 2px solid #C69A2E;
+          background: #FFFFFF;
           z-index: 2;
         }
 
@@ -287,33 +287,37 @@ export default function Dashboard() {
         }
       `}</style>
 
-      {/* HERO - bandeau indigo facon tissu teint, fil dore */}
+      {/* HERO - bandeau bleu marine, fil dore */}
       <div
         className="relative overflow-hidden"
-        style={{ backgroundColor: '#171B2E' }}
+        style={{ backgroundColor: '#0F2A52' }}
       >
         <div
-          className="pointer-events-none absolute -top-24 -right-24 h-80 w-80 rounded-full opacity-20 blur-3xl"
-          style={{ background: 'radial-gradient(circle, #C9A24B, transparent 70%)' }}
+          className="pointer-events-none absolute -top-24 -right-24 h-80 w-80 rounded-full opacity-25 blur-3xl"
+          style={{ background: 'radial-gradient(circle, #C69A2E, transparent 70%)' }}
+        />
+        <div
+          className="pointer-events-none absolute -bottom-28 -left-16 h-72 w-72 rounded-full opacity-20 blur-3xl"
+          style={{ background: 'radial-gradient(circle, #D9721F, transparent 70%)' }}
         />
         <div className="max-w-7xl mx-auto px-6 pt-14 pb-24 md:pt-16 md:pb-28 relative">
           <div className="rise-in flex flex-col md:flex-row md:items-end md:justify-between gap-8">
             <div>
               <p
                 className="font-body text-[11px] font-bold tracking-[0.28em] uppercase mb-3"
-                style={{ color: '#C9A24B' }}
+                style={{ color: '#E8B84B' }}
               >
                 Atelier de Haute Couture — Hann Maristes, Dakar
               </p>
               <h1
                 className="font-display italic font-semibold leading-[0.95] tracking-tight"
-                style={{ color: '#F6F1E4', fontSize: 'clamp(2.6rem, 6vw, 4.5rem)' }}
+                style={{ color: '#FFFFFF', fontSize: 'clamp(2.6rem, 6vw, 4.5rem)' }}
               >
                 Ousmane Design
               </h1>
               <p
                 className="font-body text-sm md:text-base mt-4 max-w-md"
-                style={{ color: '#F6F1E4', opacity: 0.65 }}
+                style={{ color: '#FFFFFF', opacity: 0.88 }}
               >
                 Tableau de bord de l'atelier - chaque commande, chaque mesure,
                 chaque paiement, cousu au fil pres.
@@ -324,14 +328,14 @@ export default function Dashboard() {
               <Link
                 href="/ventes"
                 className="font-body font-bold text-sm px-5 py-3 rounded-full flex items-center gap-2 transition-all hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-                style={{ backgroundColor: '#C9A24B', color: '#171B2E', outlineColor: '#C9A24B' }}
+                style={{ backgroundColor: '#D9721F', color: '#FFFFFF', outlineColor: '#E8B84B' }}
               >
                 <Plus size={17} strokeWidth={2.5} /> Nouvelle Vente
               </Link>
               <Link
                 href="/commandes"
-                className="font-body font-bold text-sm px-5 py-3 rounded-full flex items-center gap-2 border transition-all hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-                style={{ borderColor: 'rgba(246,241,228,0.35)', color: '#F6F1E4', outlineColor: '#C9A24B' }}
+                className="font-body font-bold text-sm px-5 py-3 rounded-full flex items-center gap-2 border-2 transition-all hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                style={{ borderColor: 'rgba(255,255,255,0.55)', color: '#FFFFFF', outlineColor: '#E8B84B' }}
               >
                 <Plus size={17} strokeWidth={2.5} /> Nouvelle Commande
               </Link>
@@ -342,7 +346,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* KPI - cartes ivoire qui remontent sur le bandeau indigo */}
+      {/* KPI - cartes blanches qui remontent sur le bandeau bleu marine */}
       <div className="max-w-7xl mx-auto px-6 -mt-14 relative z-10">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           {kpis.map((kpi, i) => {
@@ -350,7 +354,7 @@ export default function Dashboard() {
             return (
               <div
                 key={kpi.label}
-                className="rise-in bg-white p-5 rounded-2xl shadow-[0_10px_30px_-15px_rgba(23,27,46,0.25)] border border-black/5 flex flex-col gap-3"
+                className="rise-in bg-white p-5 rounded-2xl shadow-[0_10px_30px_-15px_rgba(15,42,82,0.25)] border border-black/5 flex flex-col gap-3"
                 style={{ animationDelay: `${80 + i * 60}ms` }}
               >
                 <div
@@ -362,13 +366,13 @@ export default function Dashboard() {
                 <div>
                   <p
                     className="font-body text-[10px] font-bold uppercase tracking-wider"
-                    style={{ color: '#171B2E', opacity: 0.45 }}
+                    style={{ color: '#4B5975' }}
                   >
                     {kpi.label}
                   </p>
                   <h2
                     className="font-mono-tape text-lg font-bold mt-1"
-                    style={{ color: '#171B2E' }}
+                    style={{ color: '#0F2A52' }}
                   >
                     {kpi.value}
                   </h2>
@@ -384,13 +388,13 @@ export default function Dashboard() {
         <div className="rise-in" style={{ animationDelay: '260ms' }}>
           <p
             className="font-body text-[11px] font-bold tracking-[0.28em] uppercase mb-2"
-            style={{ color: '#B5502E' }}
+            style={{ color: '#C1611A' }}
           >
             Modules
           </p>
           <h2
             className="font-display italic font-semibold text-2xl md:text-3xl"
-            style={{ color: '#171B2E' }}
+            style={{ color: '#0F2A52' }}
           >
             Piloter l'atelier, d'un seul point de vue
           </h2>
@@ -403,8 +407,8 @@ export default function Dashboard() {
               <Link
                 key={m.href}
                 href={m.href}
-                className="swatch-card rise-in bg-white rounded-2xl border border-black/5 p-6 pt-7 shadow-[0_10px_30px_-18px_rgba(23,27,46,0.2)] hover:shadow-[0_18px_40px_-18px_rgba(23,27,46,0.3)] hover:-translate-y-1 transition-all group flex flex-col gap-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-                style={{ animationDelay: `${320 + i * 70}ms`, outlineColor: '#C9A24B' }}
+                className="swatch-card rise-in bg-white rounded-2xl border border-black/5 p-6 pt-7 shadow-[0_10px_30px_-18px_rgba(15,42,82,0.2)] hover:shadow-[0_18px_40px_-18px_rgba(15,42,82,0.3)] hover:-translate-y-1 transition-all group flex flex-col gap-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                style={{ animationDelay: `${320 + i * 70}ms`, outlineColor: '#C69A2E' }}
               >
                 <div
                   className="w-11 h-11 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105"
@@ -415,13 +419,13 @@ export default function Dashboard() {
                 <div>
                   <h3
                     className="font-display font-semibold text-base"
-                    style={{ color: '#171B2E' }}
+                    style={{ color: '#0F2A52' }}
                   >
                     {m.title}
                   </h3>
                   <p
                     className="font-body text-xs mt-1.5 leading-relaxed"
-                    style={{ color: '#171B2E', opacity: 0.55 }}
+                    style={{ color: '#4B5975' }}
                   >
                     {m.desc}
                   </p>
