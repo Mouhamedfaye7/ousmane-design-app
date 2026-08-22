@@ -33,6 +33,7 @@ interface Commande {
 interface Vente {
   id?: string;
   client_nom?: string;
+  mode_commande?: string;
   montant_total?: number;
   avance?: number;
   reste?: number;
@@ -46,6 +47,13 @@ const normalizeAmount = (val: number | undefined | null) => {
   if (num > 0 && num < 1000) num = num * 1000;
   return num;
 };
+
+// Une vente issue du solde d'une commande sur-mesure (bouton "Solder une Commande")
+// duplique volontairement les montants de la commande d'origine, pour la facturation.
+// Il ne faut donc JAMAIS l'additionner en plus de la commande dans les totaux globaux,
+// sous peine de double comptage. Seules les vraies ventes boutique / catalogue comptent ici.
+const isVenteBoutique = (v: Vente) =>
+  v.mode_commande !== 'Sur Mesure' && v.mode_commande !== 'Sur Mesure (Groupé)';
 
 export default function Dashboard() {
   const [totalClients, setTotalClients] = useState<number>(0);
@@ -82,8 +90,11 @@ export default function Dashboard() {
 
       const cmds: Commande[] = !errCmd && commandes ? commandes : [];
       const vts: Vente[] = !errVentes && ventes ? ventes : [];
+      // On ne garde que les ventes boutique / catalogue : les ventes "Sur Mesure" (solde
+      // d'une commande) ne doivent pas être réadditionnées, la commande les compte déjà.
+      const boutiqueVentes = vts.filter(isVenteBoutique);
 
-      // Total des clients uniques (commandes sur-mesure + ventes boutique)
+      // Total des clients uniques (commandes sur-mesure + ventes, tous types confondus)
       const clientsUniques = new Set(
         [...cmds, ...vts]
           .map(c => (c.client_nom || '').trim().toLowerCase())
@@ -101,19 +112,19 @@ export default function Dashboard() {
       const pretes = cmds.filter(c => c.statut === 'Prête').length;
       setPretesCount(pretes);
 
-      // Chiffre d'affaires : commandes sur-mesure + ventes boutique
+      // Chiffre d'affaires : commandes sur-mesure + ventes boutique (hors soldes de commandes)
       const caCommandes = cmds.reduce((acc, c) => acc + (Number(c.montant_total) || 0), 0);
-      const caVentes = vts.reduce((acc, v) => acc + normalizeAmount(v.montant_total), 0);
+      const caVentes = boutiqueVentes.reduce((acc, v) => acc + normalizeAmount(v.montant_total), 0);
       setChiffreAffaires(caCommandes + caVentes);
 
       // Total encaissé : commandes (Livrée = totalement réglée) + ventes boutique
       const avCommandes = cmds.reduce((acc, c) => acc + getCalculatedFinancials(c).av, 0);
-      const avVentes = vts.reduce((acc, v) => acc + normalizeAmount(v.avance), 0);
+      const avVentes = boutiqueVentes.reduce((acc, v) => acc + normalizeAmount(v.avance), 0);
       setTotalAvances(avCommandes + avVentes);
 
       // Reste à recouvrer : commandes + ventes boutique
       const resteCommandes = cmds.reduce((acc, c) => acc + getCalculatedFinancials(c).reste, 0);
-      const resteVentes = vts.reduce((acc, v) => {
+      const resteVentes = boutiqueVentes.reduce((acc, v) => {
         const tot = normalizeAmount(v.montant_total);
         const av = normalizeAmount(v.avance);
         const reste = v.reste !== undefined && v.reste !== null ? normalizeAmount(v.reste) : Math.max(0, tot - av);
