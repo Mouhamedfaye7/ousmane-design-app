@@ -30,6 +30,23 @@ interface Commande {
   created_at?: string;
 }
 
+interface Vente {
+  id?: string;
+  client_nom?: string;
+  montant_total?: number;
+  avance?: number;
+  reste?: number;
+  created_at?: string;
+}
+
+// Certains montants historiques sont stockés "en milliers" (ex: 65 au lieu de 65000).
+// On applique la même règle de normalisation que sur les pages Ventes / Statistiques.
+const normalizeAmount = (val: number | undefined | null) => {
+  let num = Number(val) || 0;
+  if (num > 0 && num < 1000) num = num * 1000;
+  return num;
+};
+
 export default function Dashboard() {
   const [totalClients, setTotalClients] = useState<number>(0);
   const [enCoursCount, setEnCoursCount] = useState<number>(0);
@@ -39,7 +56,7 @@ export default function Dashboard() {
   const [totalReste, setTotalReste] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Helper : Alignement strict avec la page statistiques pour le calcul des finances
+  // Helper : Alignement strict avec la page statistiques pour le calcul des finances (commandes)
   const getCalculatedFinancials = (c: Commande) => {
     const tot = Number(c.montant_total) || 0;
     let av = Number(c.avance) || 0;
@@ -56,45 +73,53 @@ export default function Dashboard() {
     async function loadDashboardStats() {
       setLoading(true);
 
-      const { data: commandes, error } = await supabase
-        .from('commandes')
-        .select('*');
+      // On charge en parallèle les commandes sur-mesure ET les ventes boutique,
+      // pour que le tableau de bord reflète la même réalité que la page Statistiques.
+      const [{ data: commandes, error: errCmd }, { data: ventes, error: errVentes }] = await Promise.all([
+        supabase.from('commandes').select('*'),
+        supabase.from('ventes').select('*')
+      ]);
 
-      if (!error && commandes) {
-        // Total des clients uniques
-        const clientsUniques = new Set(
-          commandes.map(c => (c.client_nom || '').trim().toLowerCase()).filter(Boolean)
-        );
-        setTotalClients(clientsUniques.size);
+      const cmds: Commande[] = !errCmd && commandes ? commandes : [];
+      const vts: Vente[] = !errVentes && ventes ? ventes : [];
 
-        // Commandes en cours atelier (Reçue / En Coupe)
-        const enCours = commandes.filter(
-          c => !c.statut || c.statut === 'Reçue' || c.statut === 'En Coupe'
-        ).length;
-        setEnCoursCount(enCours);
+      // Total des clients uniques (commandes sur-mesure + ventes boutique)
+      const clientsUniques = new Set(
+        [...cmds, ...vts]
+          .map(c => (c.client_nom || '').trim().toLowerCase())
+          .filter(Boolean)
+      );
+      setTotalClients(clientsUniques.size);
 
-        // Commandes prêtes
-        const pretes = commandes.filter(c => c.statut === 'Prête').length;
-        setPretesCount(pretes);
+      // Commandes en cours atelier (Reçue / En Coupe) — propre aux commandes sur-mesure
+      const enCours = cmds.filter(
+        c => !c.statut || c.statut === 'Reçue' || c.statut === 'En Coupe'
+      ).length;
+      setEnCoursCount(enCours);
 
-        // Chiffre d'affaires global
-        const caTotal = commandes.reduce((acc, c) => acc + (Number(c.montant_total) || 0), 0);
-        setChiffreAffaires(caTotal);
+      // Commandes prêtes — propre aux commandes sur-mesure
+      const pretes = cmds.filter(c => c.statut === 'Prête').length;
+      setPretesCount(pretes);
 
-        // Cumul des Avances / Encaissements réels
-        const avancesTotales = commandes.reduce((acc, c) => {
-          const { av } = getCalculatedFinancials(c);
-          return acc + av;
-        }, 0);
-        setTotalAvances(avancesTotales);
+      // Chiffre d'affaires : commandes sur-mesure + ventes boutique
+      const caCommandes = cmds.reduce((acc, c) => acc + (Number(c.montant_total) || 0), 0);
+      const caVentes = vts.reduce((acc, v) => acc + normalizeAmount(v.montant_total), 0);
+      setChiffreAffaires(caCommandes + caVentes);
 
-        // Cumul des Solde / Créances clients
-        const resteTotal = commandes.reduce((acc, c) => {
-          const { reste } = getCalculatedFinancials(c);
-          return acc + reste;
-        }, 0);
-        setTotalReste(resteTotal);
-      }
+      // Total encaissé : commandes (Livrée = totalement réglée) + ventes boutique
+      const avCommandes = cmds.reduce((acc, c) => acc + getCalculatedFinancials(c).av, 0);
+      const avVentes = vts.reduce((acc, v) => acc + normalizeAmount(v.avance), 0);
+      setTotalAvances(avCommandes + avVentes);
+
+      // Reste à recouvrer : commandes + ventes boutique
+      const resteCommandes = cmds.reduce((acc, c) => acc + getCalculatedFinancials(c).reste, 0);
+      const resteVentes = vts.reduce((acc, v) => {
+        const tot = normalizeAmount(v.montant_total);
+        const av = normalizeAmount(v.avance);
+        const reste = v.reste !== undefined && v.reste !== null ? normalizeAmount(v.reste) : Math.max(0, tot - av);
+        return acc + reste;
+      }, 0);
+      setTotalReste(resteCommandes + resteVentes);
 
       setLoading(false);
     }
