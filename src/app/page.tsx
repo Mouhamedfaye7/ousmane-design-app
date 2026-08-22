@@ -239,13 +239,17 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#F5F8FC' }}>
+    <div className="min-h-screen" style={{ backgroundColor: '#0F2A52' }}>
       <style jsx global>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
 
         .font-display { font-family: 'Fraunces', ui-serif, Georgia, serif; }
         .font-body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
-        .font-mono-tape { font-family: 'Space Mono', ui-monospace, monospace; }
+        .font-numeric {
+          font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+          font-variant-numeric: tabular-nums;
+          letter-spacing: -0.01em;
+        }
 
         .stitch-line {
           height: 1px;
@@ -287,11 +291,8 @@ export default function Dashboard() {
         }
       `}</style>
 
-      {/* HERO - bandeau bleu marine, fil dore */}
-      <div
-        className="relative overflow-hidden"
-        style={{ backgroundColor: '#0F2A52' }}
-      >
+      {/* HERO - le fond bleu marine de la page est visible, fil dore + touches orange en decor */}
+      <div className="relative overflow-hidden">
         <div
           className="pointer-events-none absolute -top-24 -right-24 h-80 w-80 rounded-full opacity-25 blur-3xl"
           style={{ background: 'radial-gradient(circle, #C69A2E, transparent 70%)' }}
@@ -346,7 +347,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* KPI - cartes blanches qui remontent sur le bandeau bleu marine */}
+      {/* KPI - cartes blanches qui se detachent sur le fond bleu marine */}
       <div className="max-w-7xl mx-auto px-6 -mt-14 relative z-10">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           {kpis.map((kpi, i) => {
@@ -354,7 +355,7 @@ export default function Dashboard() {
             return (
               <div
                 key={kpi.label}
-                className="rise-in bg-white p-5 rounded-2xl shadow-[0_10px_30px_-15px_rgba(15,42,82,0.25)] border border-black/5 flex flex-col gap-3"
+                className="rise-in bg-white p-5 rounded-2xl shadow-[0_10px_30px_-15px_rgba(0,0,0,0.35)] flex flex-col gap-3"
                 style={{ animationDelay: `${80 + i * 60}ms` }}
               >
                 <div
@@ -371,7 +372,7 @@ export default function Dashboard() {
                     {kpi.label}
                   </p>
                   <h2
-                    className="font-mono-tape text-lg font-bold mt-1"
+                    className="font-numeric text-xl font-bold mt-1"
                     style={{ color: '#0F2A52' }}
                   >
                     {kpi.value}
@@ -383,18 +384,19 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* MODULES - fiches facon echantillons de tissu */}
+      {/* MODULES - fiches blanches facon echantillons de tissu, sur le meme fond bleu marine */}
       <div className="max-w-7xl mx-auto px-6 py-16 space-y-8">
-        <div className="rise-in" style={{ animationDelay: '260ms' }}>
+        <div className="rise-in stitch-line pt-8" style={{ animationDelay: '260ms' }} />
+        <div className="rise-in" style={{ animationDelay: '280ms' }}>
           <p
             className="font-body text-[11px] font-bold tracking-[0.28em] uppercase mb-2"
-            style={{ color: '#C1611A' }}
+            style={{ color: '#F0924B' }}
           >
             Modules
           </p>
           <h2
             className="font-display italic font-semibold text-2xl md:text-3xl"
-            style={{ color: '#0F2A52' }}
+            style={{ color: '#FFFFFF' }}
           >
             Piloter l'atelier, d'un seul point de vue
           </h2>
@@ -407,7 +409,7 @@ export default function Dashboard() {
               <Link
                 key={m.href}
                 href={m.href}
-                className="swatch-card rise-in bg-white rounded-2xl border border-black/5 p-6 pt-7 shadow-[0_10px_30px_-18px_rgba(15,42,82,0.2)] hover:shadow-[0_18px_40px_-18px_rgba(15,42,82,0.3)] hover:-translate-y-1 transition-all group flex flex-col gap-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                className="swatch-card rise-in bg-white rounded-2xl p-6 pt-7 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.4)] hover:shadow-[0_18px_40px_-18px_rgba(0,0,0,0.5)] hover:-translate-y-1 transition-all group flex flex-col gap-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
                 style={{ animationDelay: `${320 + i * 70}ms`, outlineColor: '#C69A2E' }}
               >
                 <div
