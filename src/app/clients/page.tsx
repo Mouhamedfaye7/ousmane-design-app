@@ -37,7 +37,7 @@ export default function ClientsPage() {
     fetchClients();
   }, []);
 
-  const fetchClients = async () => {
+  const fetchClients = async (preferredId?: string, preferredTelephone?: string) => {
     setLoading(true);
     try {
       const { data, error } = await supabase.from('clients').select('*').order('created_at', { ascending: false });
@@ -48,6 +48,25 @@ export default function ClientsPage() {
           nom: c.nom || c.nom_complet || ''
         }));
         setClients(formattedData);
+
+        // Après un enregistrement, on re-sélectionne le client qu'on vient de
+        // modifier (par id, ou par téléphone pour une création) plutôt que de
+        // toujours retomber sur le plus récemment créé de la liste.
+        if (preferredId) {
+          const match = formattedData.find((c: Client) => c.id === preferredId);
+          if (match) {
+            setSelectedClient(match);
+            return;
+          }
+        }
+        if (preferredTelephone) {
+          const match = formattedData.find((c: Client) => c.telephone === preferredTelephone);
+          if (match) {
+            setSelectedClient(match);
+            return;
+          }
+        }
+
         if (formattedData.length > 0) {
           setSelectedClient(formattedData[0]);
         } else {
@@ -100,6 +119,9 @@ export default function ClientsPage() {
           .eq('id', selectedClient.id);
 
         if (error) throw error;
+
+        alert('Fiche client enregistrée avec succès !');
+        await fetchClients(selectedClient.id);
       } else {
         const { data, error } = await supabase
           .from('clients')
@@ -107,11 +129,12 @@ export default function ClientsPage() {
           .select();
 
         if (error) throw error;
+        const newId = data && data[0] ? data[0].id : undefined;
         if (data && data[0]) setSelectedClient(data[0]);
-      }
 
-      alert('Fiche client enregistrée avec succès !');
-      await fetchClients();
+        alert('Fiche client enregistrée avec succès !');
+        await fetchClients(newId, payload.telephone);
+      }
     } catch (err: any) {
       console.error('Erreur enregistrement:', err);
       alert('Erreur lors de la sauvegarde : ' + (err.message || 'Problème de connexion Supabase'));
