@@ -18,6 +18,8 @@ interface Client {
   poignet?: number | string;
   longueur_haut?: number | string;
   ceinture?: number | string;
+  hanche?: number | string;
+  tour_ventre?: number | string;
   longueur_pantalon?: number | string;
   tour_cuisse?: number | string;
   tour_cheville?: number | string;
@@ -90,8 +92,8 @@ export default function ClientsPage() {
 
     const numericFields: (keyof Client)[] = [
       'cou', 'epaule', 'poitrine', 'longueur_bras', 'tour_bras',
-      'poignet', 'longueur_haut', 'ceinture', 'longueur_pantalon',
-      'tour_cuisse', 'tour_cheville'
+      'poignet', 'longueur_haut', 'ceinture', 'hanche', 'tour_ventre',
+      'longueur_pantalon', 'tour_cuisse', 'tour_cheville'
     ];
 
     numericFields.forEach((field) => {
@@ -189,6 +191,8 @@ export default function ClientsPage() {
     if (selectedClient.longueur_bras) msg += `- Long. Bras: ${selectedClient.longueur_bras} cm\n`;
     if (selectedClient.longueur_haut) msg += `- Long. Haut: ${selectedClient.longueur_haut} cm\n`;
     if (selectedClient.ceinture) msg += `- Ceinture/Taille: ${selectedClient.ceinture} cm\n`;
+    if (selectedClient.hanche) msg += `- Hanche: ${selectedClient.hanche} cm\n`;
+    if (selectedClient.tour_ventre) msg += `- Tour de Ventre: ${selectedClient.tour_ventre} cm\n`;
     if (selectedClient.longueur_pantalon) msg += `- Long. Pantalon: ${selectedClient.longueur_pantalon} cm\n`;
 
     const url = cleanPhone 
@@ -221,6 +225,8 @@ export default function ClientsPage() {
     { label: 'Poignet (cm)', shortLabel: 'Poignet', key: 'poignet' },
     { label: 'Longueur Boubou/Haut (cm)', shortLabel: 'Long. Haut', key: 'longueur_haut' },
     { label: 'Ceinture/Taille (cm)', shortLabel: 'Ceinture', key: 'ceinture' },
+    { label: 'Hanche (cm)', shortLabel: 'Hanche', key: 'hanche' },
+    { label: 'Tour de Ventre (cm)', shortLabel: 'T. Ventre', key: 'tour_ventre' },
     { label: 'Longueur Pantalon (cm)', shortLabel: 'Long. Pantalon', key: 'longueur_pantalon' },
     { label: 'Tour Cuisse (cm)', shortLabel: 'Tour Cuisse', key: 'tour_cuisse' },
     { label: 'Tour Cheville (cm)', shortLabel: 'Tour Cheville', key: 'tour_cheville' },
