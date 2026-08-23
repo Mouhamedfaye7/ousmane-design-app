@@ -15,6 +15,7 @@ interface Client {
   poitrine?: number | string;
   longueur_bras?: number | string;
   tour_bras?: number | string;
+  manches?: number | string;
   poignet?: number | string;
   longueur_haut?: number | string;
   ceinture?: number | string;
@@ -91,7 +92,7 @@ export default function ClientsPage() {
     };
 
     const numericFields: (keyof Client)[] = [
-      'cou', 'epaule', 'poitrine', 'longueur_bras', 'tour_bras',
+      'cou', 'epaule', 'poitrine', 'longueur_bras', 'tour_bras', 'manches',
       'poignet', 'longueur_haut', 'ceinture', 'hanche', 'tour_ventre',
       'longueur_pantalon', 'tour_cuisse', 'tour_cheville'
     ];
@@ -189,6 +190,7 @@ export default function ClientsPage() {
     if (selectedClient.epaule) msg += `- Épaule: ${selectedClient.epaule} cm\n`;
     if (selectedClient.poitrine) msg += `- Poitrine: ${selectedClient.poitrine} cm\n`;
     if (selectedClient.longueur_bras) msg += `- Long. Bras: ${selectedClient.longueur_bras} cm\n`;
+    if (selectedClient.manches) msg += `- Manches: ${selectedClient.manches} cm\n`;
     if (selectedClient.longueur_haut) msg += `- Long. Haut: ${selectedClient.longueur_haut} cm\n`;
     if (selectedClient.ceinture) msg += `- Ceinture/Taille: ${selectedClient.ceinture} cm\n`;
     if (selectedClient.hanche) msg += `- Hanche: ${selectedClient.hanche} cm\n`;
@@ -222,6 +224,7 @@ export default function ClientsPage() {
     { label: 'Poitrine (cm)', shortLabel: 'Poitrine', key: 'poitrine' },
     { label: 'Longueur Bras (cm)', shortLabel: 'Long. Bras', key: 'longueur_bras' },
     { label: 'Tour de Bras (cm)', shortLabel: 'Tour Bras', key: 'tour_bras' },
+    { label: 'Manches (cm)', shortLabel: 'Manches', key: 'manches' },
     { label: 'Poignet (cm)', shortLabel: 'Poignet', key: 'poignet' },
     { label: 'Longueur Boubou/Haut (cm)', shortLabel: 'Long. Haut', key: 'longueur_haut' },
     { label: 'Ceinture/Taille (cm)', shortLabel: 'Ceinture', key: 'ceinture' },
