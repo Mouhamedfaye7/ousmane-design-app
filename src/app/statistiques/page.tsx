@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis,
-  Tooltip, Legend, ResponsiveContainer, CartesianGrid
+  Tooltip, Legend, ResponsiveContainer, CartesianGrid, LabelList
 } from 'recharts';
 import { supabase } from '@/lib/supabase';
 
@@ -430,7 +430,7 @@ export default function StatistiquesPage() {
           <h2 className="font-bold text-slate-800 text-base flex items-center gap-2 mb-4">
             <PieChartIcon size={18} className="text-amber-600" /> Répartition du Chiffre d'Affaires
           </h2>
-          <div className="h-64">
+          <div className="h-56">
             {pieDataGlobal.length === 0 ? (
               <div className="h-full flex items-center justify-center text-xs text-slate-400 italic">
                 Pas encore de données à afficher.
@@ -453,31 +453,85 @@ export default function StatistiquesPage() {
                     ))}
                   </Pie>
                   <Tooltip formatter={(val) => [`${formatAmount(Number(val))} FCFA`, '']} />
-                  <Legend verticalAlign="bottom" height={30} wrapperStyle={{ fontSize: 12 }} />
                 </PieChart>
               </ResponsiveContainer>
             )}
           </div>
+
+          {/* Légende détaillée : montant + part de chaque source de CA */}
+          {pieDataGlobal.length > 0 && (
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {pieDataGlobal.map((entry, idx) => {
+                const pct = caTotal > 0 ? Math.round((entry.value / caTotal) * 100) : 0;
+                return (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between gap-2 text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
+                        style={{ backgroundColor: entry.color }}
+                      ></span>
+                      <span className="font-semibold text-slate-700 truncate">{entry.name}</span>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="font-bold text-slate-900">{formatAmount(entry.value)} F</span>
+                      <span className="text-slate-400 ml-1">({pct}%)</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs">
           <h2 className="font-bold text-slate-800 text-base flex items-center gap-2 mb-4">
             <BarChart3 size={18} className="text-amber-600" /> Commandes par Statut de Fabrication
           </h2>
-          <div className="h-64">
+          <div className="h-56">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barDataGlobal} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+              <BarChart
+                data={barDataGlobal}
+                layout="horizontal"
+                margin={{ top: 20, right: 10, left: -20, bottom: 5 }}
+                barCategoryGap="28%"
+              >
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                <XAxis dataKey="name" type="category" tick={{ fontSize: 11 }} />
+                <YAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
                 <Tooltip />
-                <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={56}>
+                  <LabelList dataKey="value" position="top" style={{ fontSize: 11, fontWeight: 700, fill: '#475569' }} />
                   {barDataGlobal.map((entry, idx) => (
                     <Cell key={idx} fill={entry.color} />
                   ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+          </div>
+
+          {/* Légende détaillée : effectif + part de chaque statut */}
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {barDataGlobal.map((entry, idx) => {
+              const pct = totalCommandes > 0 ? Math.round((entry.value / totalCommandes) * 100) : 0;
+              return (
+                <div
+                  key={idx}
+                  className="flex items-center gap-2 text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2"
+                >
+                  <span
+                    className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
+                    style={{ backgroundColor: entry.color }}
+                  ></span>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-700 truncate">{entry.name}</p>
+                    <p className="text-slate-500">{entry.value} · {pct}%</p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -763,10 +817,10 @@ export default function StatistiquesPage() {
               <p className="text-[11px] font-semibold text-slate-600 mb-2 text-center">Commandes par Statut</p>
               <div style={{ width: '100%', height: 220 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={barDataBilan} margin={{ top: 5, right: 5, left: -25, bottom: 5 }}>
+                  <BarChart data={barDataBilan} layout="horizontal" margin={{ top: 5, right: 5, left: -25, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                    <XAxis dataKey="name" tick={{ fontSize: 9 }} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 9 }} />
+                    <XAxis dataKey="name" type="category" tick={{ fontSize: 9 }} />
+                    <YAxis type="number" allowDecimals={false} tick={{ fontSize: 9 }} />
                     <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                       {barDataBilan.map((entry, idx) => (
                         <Cell key={idx} fill={entry.color} />
