@@ -452,7 +452,7 @@ export default function StatistiquesPage() {
                       <Cell key={idx} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(val: number) => `${formatAmount(val)} FCFA`} />
+                  <Tooltip formatter={(val) => [`${formatAmount(Number(val))} FCFA`, '']} />
                   <Legend verticalAlign="bottom" height={30} wrapperStyle={{ fontSize: 12 }} />
                 </PieChart>
               </ResponsiveContainer>
