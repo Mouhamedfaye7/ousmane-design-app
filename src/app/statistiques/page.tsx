@@ -11,11 +11,16 @@ import {
   CheckCircle2,
   AlertCircle,
   RefreshCw,
-  PieChart,
+  PieChart as PieChartIcon,
   FileDown,
   CalendarRange,
-  Loader2
+  Loader2,
+  BarChart3
 } from 'lucide-react';
+import {
+  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis,
+  Tooltip, Legend, ResponsiveContainer, CartesianGrid
+} from 'recharts';
 import { supabase } from '@/lib/supabase';
 
 interface Commande {
@@ -71,6 +76,18 @@ const PERIODS: PeriodDef[] = [
 // Un bloc de cette taille tient toujours confortablement sur une page A4,
 // ce qui évite qu'une ligne soit coupée entre deux pages.
 const ROWS_PER_CHUNK = 18;
+
+const STATUT_COLORS = {
+  recues: '#94a3b8',
+  enCoupe: '#f59e0b',
+  pretes: '#3b82f6',
+  livrees: '#10b981',
+};
+
+const CA_COLORS = {
+  commandes: '#b45309',
+  boutique: '#059669',
+};
 
 function chunkArray<T>(arr: T[], size: number): T[][] {
   if (arr.length === 0) return [];
@@ -170,6 +187,19 @@ export default function StatistiquesPage() {
   const pctLivrees = totalCommandes > 0 ? Math.round((nbLivrees / totalCommandes) * 100) : 0;
   const pctEnCours = totalCommandes > 0 ? Math.round(((nbRecues + nbEnCoupe + nbPretes) / totalCommandes) * 100) : 0;
 
+  // --- DONNÉES DES GRAPHIQUES (vue globale, temps réel) ---
+  const pieDataGlobal = [
+    { name: 'Commandes Sur-Mesure', value: caCommandes, color: CA_COLORS.commandes },
+    { name: 'Ventes Boutique', value: caBoutique, color: CA_COLORS.boutique },
+  ].filter(d => d.value > 0);
+
+  const barDataGlobal = [
+    { name: 'Reçues', value: nbRecues, color: STATUT_COLORS.recues },
+    { name: 'En Coupe', value: nbEnCoupe, color: STATUT_COLORS.enCoupe },
+    { name: 'Prêtes', value: nbPretes, color: STATUT_COLORS.pretes },
+    { name: 'Livrées', value: nbLivrees, color: STATUT_COLORS.livrees },
+  ];
+
   // --- BILAN PÉRIODIQUE ---
   const getPeriodStartDate = (days: number) => {
     const d = new Date();
@@ -197,6 +227,24 @@ export default function StatistiquesPage() {
   const bilanResteCommandes = bilanCommandes.reduce((acc, c) => acc + getCalculatedFinancials(c).reste, 0);
   const bilanResteBoutique = bilanVentesBoutique.reduce((acc, v) => acc + getVenteFinancials(v).reste, 0);
   const bilanResteTotal = bilanResteCommandes + bilanResteBoutique;
+
+  const bilanNbRecues = bilanCommandes.filter(c => (c.statut || 'Reçue') === 'Reçue').length;
+  const bilanNbEnCoupe = bilanCommandes.filter(c => c.statut === 'En Coupe').length;
+  const bilanNbPretes = bilanCommandes.filter(c => c.statut === 'Prête').length;
+  const bilanNbLivrees = bilanCommandes.filter(c => c.statut === 'Livrée' || c.statut === 'Soldée').length;
+
+  // --- DONNÉES DES GRAPHIQUES (bilan de la période sélectionnée, pour le PDF) ---
+  const pieDataBilan = [
+    { name: 'Commandes Sur-Mesure', value: bilanCaCommandes, color: CA_COLORS.commandes },
+    { name: 'Ventes Boutique', value: bilanCaBoutique, color: CA_COLORS.boutique },
+  ].filter(d => d.value > 0);
+
+  const barDataBilan = [
+    { name: 'Reçues', value: bilanNbRecues, color: STATUT_COLORS.recues },
+    { name: 'En Coupe', value: bilanNbEnCoupe, color: STATUT_COLORS.enCoupe },
+    { name: 'Prêtes', value: bilanNbPretes, color: STATUT_COLORS.pretes },
+    { name: 'Livrées', value: bilanNbLivrees, color: STATUT_COLORS.livrees },
+  ];
 
   const inventoryTotalStock = catalogue.reduce((acc, item) => acc + (Number(item.quantite_stock) || 0), 0);
   const inventoryTotalValue = catalogue.reduce(
@@ -243,8 +291,6 @@ export default function StatistiquesPage() {
       const imgHeight = (canvas.height * usableWidth) / canvas.width;
 
       // Cas extrême : un bloc individuel est plus grand qu'une page entière.
-      // On le découpe alors classiquement, mais ceci n'arrive jamais en pratique
-      // puisque chaque bloc est limité à ROWS_PER_CHUNK lignes.
       if (imgHeight > usableHeight) {
         if (cursorY !== margin) {
           pdf.addPage();
@@ -259,11 +305,10 @@ export default function StatistiquesPage() {
           pdf.addImage(imgData, 'JPEG', margin, position, usableWidth, imgHeight);
           heightLeft -= usableHeight;
         }
-        cursorY = pageHeight; // force le bloc suivant à démarrer une nouvelle page
+        cursorY = pageHeight;
         continue;
       }
 
-      // Cas normal : si le bloc ne tient pas dans l'espace restant, nouvelle page.
       if (cursorY + imgHeight > pageHeight - margin) {
         pdf.addPage();
         cursorY = margin;
@@ -283,6 +328,8 @@ export default function StatistiquesPage() {
 
   useEffect(() => {
     if (!bilanPeriod) return;
+    // Délai un peu plus long pour laisser les graphiques Recharts se dimensionner
+    // correctement avant la capture (ResponsiveContainer a besoin d'un rendu complet).
     const timer = setTimeout(async () => {
       try {
         await downloadBilanPDF();
@@ -291,7 +338,7 @@ export default function StatistiquesPage() {
         alert('Erreur lors de la génération du bilan PDF. Veuillez réessayer.');
       }
       setBilanPeriod(null);
-    }, 350);
+    }, 600);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bilanPeriod]);
@@ -377,13 +424,71 @@ export default function StatistiquesPage() {
         </div>
       </div>
 
+      {/* SECTION GRAPHIQUES (VUE PREMIUM, TEMPS RÉEL) */}
+      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs">
+          <h2 className="font-bold text-slate-800 text-base flex items-center gap-2 mb-4">
+            <PieChartIcon size={18} className="text-amber-600" /> Répartition du Chiffre d'Affaires
+          </h2>
+          <div className="h-64">
+            {pieDataGlobal.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-xs text-slate-400 italic">
+                Pas encore de données à afficher.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={pieDataGlobal}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={55}
+                    outerRadius={85}
+                    paddingAngle={2}
+                  >
+                    {pieDataGlobal.map((entry, idx) => (
+                      <Cell key={idx} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(val: number) => `${formatAmount(val)} FCFA`} />
+                  <Legend verticalAlign="bottom" height={30} wrapperStyle={{ fontSize: 12 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs">
+          <h2 className="font-bold text-slate-800 text-base flex items-center gap-2 mb-4">
+            <BarChart3 size={18} className="text-amber-600" /> Commandes par Statut de Fabrication
+          </h2>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={barDataGlobal} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                  {barDataGlobal.map((entry, idx) => (
+                    <Cell key={idx} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
       {/* SECTION RÉPARTITION PAR STATUT ET FINANCES */}
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         {/* STATUT DE PRODUCTION */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-2xs space-y-4">
           <div className="flex justify-between items-center border-b pb-3">
             <h2 className="font-bold text-slate-800 text-base flex items-center gap-2">
-              <PieChart size={18} className="text-amber-600" /> État de la Production
+              <PieChartIcon size={18} className="text-amber-600" /> État de la Production
             </h2>
             <span className="text-xs font-semibold text-slate-500">{totalCommandes} au total</span>
           </div>
@@ -481,7 +586,7 @@ export default function StatistiquesPage() {
           </h2>
         </div>
         <p className="text-xs text-slate-500 mb-4">
-          Génère un PDF complet : chiffre d'affaires, encaissements, détail des commandes, des ventes boutique et l'inventaire actuel du catalogue.
+          Génère un PDF complet : graphiques, chiffre d'affaires, encaissements, détail des commandes, des ventes boutique et l'inventaire actuel du catalogue.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -614,6 +719,62 @@ export default function StatistiquesPage() {
             <div className="bg-amber-50 p-3 rounded-lg border border-amber-100">
               <p className="text-amber-800 font-medium">Reste à Recouvrer</p>
               <p className="text-base font-bold text-amber-800 mt-1">{formatAmount(bilanResteTotal)} F</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Bloc Graphiques (propres à la période sélectionnée) */}
+        <div className="pdf-block bg-white p-6 space-y-4">
+          <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5">
+            Aperçu Visuel de la Période
+          </h2>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-[11px] font-semibold text-slate-600 mb-2 text-center">Répartition du CA</p>
+              <div style={{ width: '100%', height: 220 }}>
+                {pieDataBilan.length === 0 ? (
+                  <div className="h-full flex items-center justify-center text-[10px] text-slate-400 italic">
+                    Aucune donnée sur cette période.
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={pieDataBilan}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={45}
+                        outerRadius={70}
+                        paddingAngle={2}
+                      >
+                        {pieDataBilan.map((entry, idx) => (
+                          <Cell key={idx} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Legend verticalAlign="bottom" height={24} wrapperStyle={{ fontSize: 10 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold text-slate-600 mb-2 text-center">Commandes par Statut</p>
+              <div style={{ width: '100%', height: 220 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={barDataBilan} margin={{ top: 5, right: 5, left: -25, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="name" tick={{ fontSize: 9 }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 9 }} />
+                    <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                      {barDataBilan.map((entry, idx) => (
+                        <Cell key={idx} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
         </div>
