@@ -2,7 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Trash2, Plus, ArrowLeft, Package, Loader2, Edit3, X, Check } from 'lucide-react';
+import {
+  Trash2, Plus, ArrowLeft, Package, Loader2, Edit3, X, Check,
+  Search, ArrowUpCircle, ArrowDownCircle, History, BarChart3, AlertTriangle, Sparkles
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 interface Produit {
@@ -14,6 +17,16 @@ interface Produit {
   couleurs: string[];
   quantiteStock: number;
   description: string;
+}
+
+interface Mouvement {
+  id: string;
+  produit_id: string;
+  produit_nom: string;
+  type: 'entree' | 'sortie';
+  quantite: number;
+  motif?: string;
+  created_at: string;
 }
 
 // Fonction utilitaire pour associer les noms de couleurs en français aux valeurs CSS
@@ -61,10 +74,23 @@ export default function CataloguePretAPorterPage() {
   const [taillesSelectionnees, setTaillesSelectionnees] = useState<string[]>([]);
   const [saisieCouleurs, setSaisieCouleurs] = useState('');
 
+  // Recherche
+  const [recherche, setRecherche] = useState('');
+
+  // Mouvements de stock (entrées / sorties)
+  const [mouvements, setMouvements] = useState<Mouvement[]>([]);
+  const [loadingMouvements, setLoadingMouvements] = useState(true);
+  const [mouvementModal, setMouvementModal] = useState<{ produit: Produit; type: 'entree' | 'sortie' } | null>(null);
+  const [mouvementQuantite, setMouvementQuantite] = useState<number | ''>('');
+  const [mouvementMotif, setMouvementMotif] = useState('');
+  const [mouvementSubmitting, setMouvementSubmitting] = useState(false);
+
   const optionsTailles = ['S', 'M', 'L', 'XL', 'XXL', '3XL', 'Sur Mesure'];
 
   // Calcul du nombre total de produits en stock disponibles
   const totalStock = produits.reduce((sum, p) => sum + (p.quantiteStock || 0), 0);
+  const valeurStock = produits.reduce((sum, p) => sum + p.prix * (p.quantiteStock || 0), 0);
+  const ruptureCount = produits.filter((p) => p.quantiteStock <= 3).length;
 
   // Chargement des données depuis Supabase
   const chargerProduits = async () => {
@@ -93,8 +119,25 @@ export default function CataloguePretAPorterPage() {
     setLoading(false);
   };
 
+  const chargerMouvements = async () => {
+    setLoadingMouvements(true);
+    const { data, error } = await supabase
+      .from('mouvements_stock')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(60);
+
+    if (error) {
+      console.error('Erreur chargement mouvements :', error.message);
+    } else if (data) {
+      setMouvements(data);
+    }
+    setLoadingMouvements(false);
+  };
+
   useEffect(() => {
     chargerProduits();
+    chargerMouvements();
   }, []);
 
   const toggleTaille = (taille: string) => {
@@ -231,19 +274,194 @@ export default function CataloguePretAPorterPage() {
     }
   };
 
+  // --- GESTION DES MOUVEMENTS DE STOCK (ENTRÉES / SORTIES) ---
+  const ouvrirMouvement = (produit: Produit, type: 'entree' | 'sortie') => {
+    setMouvementModal({ produit, type });
+    setMouvementQuantite('');
+    setMouvementMotif(type === 'entree' ? 'Réapprovisionnement' : 'Ajustement inventaire');
+  };
+
+  const confirmerMouvement = async () => {
+    if (!mouvementModal) return;
+    const { produit, type } = mouvementModal;
+
+    if (!mouvementQuantite || Number(mouvementQuantite) <= 0) {
+      alert('Veuillez indiquer une quantité valide.');
+      return;
+    }
+
+    setMouvementSubmitting(true);
+    const qte = Number(mouvementQuantite);
+    const nouveauStock = type === 'entree' ? produit.quantiteStock + qte : Math.max(0, produit.quantiteStock - qte);
+
+    const { error: errStock } = await supabase
+      .from('catalogue')
+      .update({ quantite_stock: nouveauStock })
+      .eq('id', produit.id);
+
+    if (errStock) {
+      console.error('Erreur mise à jour du stock :', errStock.message);
+      alert('Erreur lors de la mise à jour du stock.');
+      setMouvementSubmitting(false);
+      return;
+    }
+
+    const { data: mvtData, error: errMvt } = await supabase
+      .from('mouvements_stock')
+      .insert([{
+        produit_id: produit.id,
+        produit_nom: produit.nom,
+        type,
+        quantite: qte,
+        motif: mouvementMotif || null,
+      }])
+      .select();
+
+    setProduits(produits.map((p) => (p.id === produit.id ? { ...p, quantiteStock: nouveauStock } : p)));
+
+    if (!errMvt && mvtData && mvtData[0]) {
+      setMouvements([mvtData[0], ...mouvements]);
+    }
+
+    setMouvementModal(null);
+    setMouvementQuantite('');
+    setMouvementMotif('');
+    setMouvementSubmitting(false);
+  };
+
+  // --- RECHERCHE ---
+  const produitsFiltres = produits.filter((p) => {
+    const q = recherche.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      p.nom.toLowerCase().includes(q) ||
+      p.categorie.toLowerCase().includes(q) ||
+      p.description.toLowerCase().includes(q) ||
+      p.couleurs.some((c) => c.toLowerCase().includes(q)) ||
+      p.tailles.some((t) => t.toLowerCase().includes(q))
+    );
+  });
+
+  // --- DONNÉES POUR LA COURBE D'ÉVOLUTION (14 DERNIERS JOURS) ---
+  const donneesEvolution = (() => {
+    const jours = Array.from({ length: 14 }).map((_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (13 - i));
+      d.setHours(0, 0, 0, 0);
+      return d;
+    });
+
+    return jours.map((jour) => {
+      const finJour = new Date(jour);
+      finJour.setHours(23, 59, 59, 999);
+      const mvtsJour = mouvements.filter((m) => {
+        const dm = new Date(m.created_at);
+        return dm >= jour && dm <= finJour;
+      });
+      const entrees = mvtsJour.filter((m) => m.type === 'entree').reduce((s, m) => s + m.quantite, 0);
+      const sorties = mvtsJour.filter((m) => m.type === 'sortie').reduce((s, m) => s + m.quantite, 0);
+      return { date: jour, entrees, sorties };
+    });
+  })();
+
+  const maxEvolution = Math.max(1, ...donneesEvolution.map((d) => Math.max(d.entrees, d.sorties)));
+  const totalEntrees14j = donneesEvolution.reduce((s, d) => s + d.entrees, 0);
+  const totalSorties14j = donneesEvolution.reduce((s, d) => s + d.sorties, 0);
+
+  const formaterDateCourte = (d: Date) => d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+  const formaterDateHeure = (iso: string) =>
+    new Date(iso).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+
   return (
-    <div className="min-h-screen bg-slate-100 p-6 text-slate-800">
-      <div className="max-w-7xl mx-auto space-y-4">
+    <div className="min-h-screen bg-gradient-to-b from-slate-100 to-slate-50 p-6 text-slate-800">
+      <div className="max-w-7xl mx-auto space-y-5">
         <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors">
           <ArrowLeft size={16} /> Retour au tableau de bord
         </Link>
 
-        <header className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Catalogue & Modèles Prêt-à-Porter</h1>
-            <p className="text-sm font-medium text-slate-500">Ousmane Design — Enregistrement des tenues, tailles, couleurs et stock</p>
+        {/* HEADER PREMIUM */}
+        <header className="bg-gradient-to-r from-amber-800 via-amber-700 to-amber-900 rounded-2xl p-6 shadow-lg text-white flex flex-col md:flex-row justify-between md:items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="bg-white/15 p-3 rounded-xl backdrop-blur-sm">
+              <Package size={26} />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold flex items-center gap-2">
+                Catalogue & Modèles Prêt-à-Porter <Sparkles size={18} className="text-amber-200" />
+              </h1>
+              <p className="text-sm font-medium text-amber-100">
+                Ousmane Design — Gestion du stock, des entrées / sorties et de la performance du catalogue
+              </p>
+            </div>
           </div>
         </header>
+
+        {/* CARTES DE STATISTIQUES */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-1">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Articles au catalogue</p>
+            <p className="text-2xl font-extrabold text-slate-900">{produits.length}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-1">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Unités en stock</p>
+            <p className="text-2xl font-extrabold text-blue-700">{totalStock}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-1">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Valeur du stock</p>
+            <p className="text-lg font-extrabold text-amber-800">{valeurStock.toLocaleString('fr-FR')} FCFA</p>
+          </div>
+          <div className={`rounded-xl border shadow-sm p-4 space-y-1 ${ruptureCount > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'}`}>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 flex items-center gap-1">
+              {ruptureCount > 0 && <AlertTriangle size={12} className="text-red-600" />} Stock faible (≤3)
+            </p>
+            <p className={`text-2xl font-extrabold ${ruptureCount > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{ruptureCount}</p>
+          </div>
+        </div>
+
+        {/* COURBE D'ÉVOLUTION DES MOUVEMENTS DE STOCK */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3">
+          <div className="flex flex-wrap justify-between items-center gap-2">
+            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <BarChart3 size={16} className="text-amber-700" /> Évolution des Entrées / Sorties — 14 derniers jours
+            </h2>
+            <div className="flex items-center gap-4 text-[11px] font-semibold">
+              <span className="flex items-center gap-1.5 text-emerald-700">
+                <span className="w-2.5 h-2.5 rounded-sm bg-emerald-600 inline-block" /> Entrées : {totalEntrees14j}
+              </span>
+              <span className="flex items-center gap-1.5 text-red-600">
+                <span className="w-2.5 h-2.5 rounded-sm bg-red-600 inline-block" /> Sorties : {totalSorties14j}
+              </span>
+            </div>
+          </div>
+
+          {loadingMouvements ? (
+            <div className="flex items-center justify-center py-10 text-slate-400 gap-2">
+              <Loader2 size={20} className="animate-spin" /> <span className="text-xs font-semibold">Chargement des données...</span>
+            </div>
+          ) : (
+            <div className="w-full overflow-x-auto">
+              <svg viewBox="0 0 700 230" width="100%" height="220" preserveAspectRatio="none">
+                <line x1="0" y1="180" x2="700" y2="180" stroke="#e2e8f0" strokeWidth="1" />
+                {donneesEvolution.map((d, i) => {
+                  const xBase = i * (700 / 14) + 6;
+                  const hEntree = (d.entrees / maxEvolution) * 130;
+                  const hSortie = (d.sorties / maxEvolution) * 130;
+                  return (
+                    <g key={i}>
+                      <rect x={xBase} y={180 - hEntree} width={14} height={hEntree} fill="#059669" rx="2" />
+                      <rect x={xBase + 16} y={180 - hSortie} width={14} height={hSortie} fill="#dc2626" rx="2" />
+                      {i % 2 === 0 && (
+                        <text x={xBase + 15} y={198} fontSize="9" fill="#94a3b8" textAnchor="middle" fontWeight="600">
+                          {formaterDateCourte(d.date)}
+                        </text>
+                      )}
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+          )}
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* FORMULAIRE */}
@@ -393,14 +611,57 @@ export default function CataloguePretAPorterPage() {
                 )}
               </div>
             </form>
+
+            {/* HISTORIQUE DES MOUVEMENTS RÉCENTS */}
+            <div className="pt-4 border-t border-slate-200 space-y-2">
+              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                <History size={14} className="text-amber-700" /> Mouvements récents
+              </h3>
+              {loadingMouvements ? (
+                <p className="text-xs text-slate-400">Chargement...</p>
+              ) : mouvements.length === 0 ? (
+                <p className="text-xs text-slate-400 italic">Aucun mouvement enregistré pour l’instant.</p>
+              ) : (
+                <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                  {mouvements.slice(0, 8).map((m) => (
+                    <div key={m.id} className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {m.type === 'entree' ? (
+                          <ArrowUpCircle size={15} className="text-emerald-600 shrink-0" />
+                        ) : (
+                          <ArrowDownCircle size={15} className="text-red-600 shrink-0" />
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-bold text-slate-800 truncate">{m.produit_nom}</p>
+                          <p className="text-[10px] text-slate-400">{formaterDateHeure(m.created_at)}</p>
+                        </div>
+                      </div>
+                      <span className={`text-xs font-extrabold shrink-0 ${m.type === 'entree' ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {m.type === 'entree' ? '+' : '−'}{m.quantite}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* LISTE DES ARTICLES */}
           <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 pb-2 border-b border-slate-200">
               <h2 className="text-lg font-bold text-slate-900">
                 Articles Prêt-à-Porter ({totalStock} en stock)
               </h2>
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
+                <input
+                  type="text"
+                  placeholder="Rechercher un article..."
+                  value={recherche}
+                  onChange={(e) => setRecherche(e.target.value)}
+                  className="w-full pl-8 pr-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-amber-500 text-slate-900"
+                />
+              </div>
             </div>
 
             {loading ? (
@@ -408,14 +669,16 @@ export default function CataloguePretAPorterPage() {
                 <Loader2 size={32} className="animate-spin text-amber-700" />
                 <p className="text-sm font-semibold">Chargement du catalogue...</p>
               </div>
-            ) : produits.length === 0 ? (
+            ) : produitsFiltres.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-slate-500 gap-2 border border-dashed border-slate-300 rounded-xl">
                 <Package size={40} className="stroke-1 text-slate-400" />
-                <p className="text-sm font-medium">Aucun article enregistré dans le catalogue.</p>
+                <p className="text-sm font-medium">
+                  {recherche ? 'Aucun article ne correspond à cette recherche.' : 'Aucun article enregistré dans le catalogue.'}
+                </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {produits.map((p) => (
+                {produitsFiltres.map((p) => (
                   <div
                     key={p.id}
                     className={`border rounded-xl p-4 space-y-3 transition-all flex flex-col justify-between ${
@@ -506,6 +769,22 @@ export default function CataloguePretAPorterPage() {
                           {p.quantiteStock} dispo.
                         </span>
                       </div>
+
+                      {/* ENTRÉE / SORTIE RAPIDE DE STOCK */}
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          onClick={() => ouvrirMouvement(p, 'entree')}
+                          className="flex-1 flex items-center justify-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold py-1.5 rounded-lg text-[11px] transition-colors cursor-pointer"
+                        >
+                          <ArrowUpCircle size={13} /> Entrée
+                        </button>
+                        <button
+                          onClick={() => ouvrirMouvement(p, 'sortie')}
+                          className="flex-1 flex items-center justify-center gap-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-bold py-1.5 rounded-lg text-[11px] transition-colors cursor-pointer"
+                        >
+                          <ArrowDownCircle size={13} /> Sortie
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -514,6 +793,66 @@ export default function CataloguePretAPorterPage() {
           </div>
         </div>
       </div>
+
+      {/* MODAL MOUVEMENT DE STOCK */}
+      {mouvementModal && (
+        <div onClick={() => setMouvementModal(null)} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl relative border border-slate-200">
+            <div className="flex justify-between items-center mb-4 border-b pb-3">
+              <h2 className={`text-base font-bold flex items-center gap-2 ${mouvementModal.type === 'entree' ? 'text-emerald-700' : 'text-red-700'}`}>
+                {mouvementModal.type === 'entree' ? <ArrowUpCircle size={18} /> : <ArrowDownCircle size={18} />}
+                {mouvementModal.type === 'entree' ? 'Entrée de Stock' : 'Sortie de Stock'}
+              </h2>
+              <button onClick={() => setMouvementModal(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X size={20} /></button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                <p className="font-bold text-slate-900">{mouvementModal.produit.nom}</p>
+                <p className="text-slate-500">Stock actuel : <strong>{mouvementModal.produit.quantiteStock}</strong></p>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Quantité *</label>
+                <input
+                  type="number"
+                  min="1"
+                  autoFocus
+                  value={mouvementQuantite}
+                  onChange={(e) => setMouvementQuantite(e.target.value === '' ? '' : Number(e.target.value))}
+                  className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Motif</label>
+                <input
+                  type="text"
+                  value={mouvementMotif}
+                  onChange={(e) => setMouvementMotif(e.target.value)}
+                  placeholder={mouvementModal.type === 'entree' ? 'Ex: Réapprovisionnement' : 'Ex: Perte, casse, ajustement'}
+                  className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 outline-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setMouvementModal(null)} className="px-4 py-2 rounded-lg bg-slate-200 font-bold cursor-pointer">Annuler</button>
+                <button
+                  type="button"
+                  onClick={confirmerMouvement}
+                  disabled={mouvementSubmitting}
+                  className={`px-4 py-2 rounded-lg text-white font-bold cursor-pointer disabled:opacity-50 flex items-center gap-2 ${
+                    mouvementModal.type === 'entree' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'
+                  }`}
+                >
+                  {mouvementSubmitting && <Loader2 size={14} className="animate-spin" />}
+                  Valider
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
