@@ -24,6 +24,17 @@ interface Commande {
   created_at?: string;
 }
 
+// Palette de statut, purement visuelle : couleur d'accent + fond léger par colonne.
+const COLUMN_META: Record<string, { accent: string; bg: string }> = {
+  'Reçue': { accent: '#64748B', bg: '#F1F5F9' },
+  'En Coupe': { accent: '#C9A24B', bg: '#FBF3E2' },
+  'Prête': { accent: '#2C5AA0', bg: '#EAF1FB' },
+  'Livrée': { accent: '#16A34A', bg: '#E8F5EF' },
+};
+const ORANGE = '#C1502E';
+const NAVY = '#1B3B6F';
+const GOLD = '#C9A24B';
+
 export default function CommandesPage() {
   const [commandes, setCommandes] = useState<Commande[]>([]);
   const [search, setSearch] = useState('');
@@ -233,104 +244,163 @@ export default function CommandesPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-100 p-6 text-slate-800">
-      <div className="max-w-7xl mx-auto mb-6 flex flex-col md:flex-row justify-between md:items-center gap-4">
-        <div>
-          <Link href="/" className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1 mb-2">
-            <ArrowLeft size={16} /> Retour au tableau de bord
+    <div className="min-h-screen" style={{ backgroundColor: '#F5F8FC' }}>
+      <style jsx global>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
+        .font-display { font-family: 'Fraunces', ui-serif, Georgia, serif; }
+        .font-body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+        .font-mono-tape { font-family: 'Space Mono', ui-monospace, monospace; }
+      `}</style>
+
+      {/* HEADER — bandeau navy, identité premium alignée sur l'accueil */}
+      <div className="relative overflow-hidden" style={{ backgroundColor: NAVY }}>
+        <div
+          className="pointer-events-none absolute -top-20 -right-20 h-72 w-72 rounded-full opacity-20 blur-3xl"
+          style={{ background: `radial-gradient(circle, ${GOLD}, transparent 70%)` }}
+        />
+        <div className="max-w-7xl mx-auto px-6 pt-8 pb-16 md:pb-20 relative">
+          <Link
+            href="/"
+            className="font-body text-xs font-semibold flex items-center gap-1.5 mb-4 transition-opacity hover:opacity-80"
+            style={{ color: 'rgba(255,255,255,0.75)' }}
+          >
+            <ArrowLeft size={14} /> Retour au tableau de bord
           </Link>
-          <h1 className="text-2xl font-bold text-slate-900">Suivi d'Atelier & Commandes</h1>
-          <p className="text-sm text-slate-500">Ousmane Design — Pilotage de la production</p>
-        </div>
 
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 py-2.5 rounded-lg flex items-center gap-2 shadow-sm transition-colors cursor-pointer self-start md:self-auto"
-        >
-          <Plus size={18} /> Nouvelle Commande
-        </button>
-      </div>
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-5">
+            <div>
+              <h1 className="font-display italic font-semibold text-2xl md:text-3xl" style={{ color: '#FFFFFF' }}>
+                Suivi d'Atelier & Commandes
+              </h1>
+              <p className="font-body text-sm mt-1.5" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                Ousmane Design — Pilotage de la production
+              </p>
+            </div>
 
-      <div className="max-w-7xl mx-auto mb-6">
-        <div className="relative max-w-md bg-white rounded-lg border border-slate-200">
-          <Search className="absolute left-3 top-3 text-slate-400" size={16} />
-          <input
-            type="text"
-            placeholder="Rechercher par client, téléphone ou code..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-sm border-none bg-transparent outline-none focus:ring-2 focus:ring-amber-500 rounded-lg"
-          />
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="font-body font-bold text-sm px-5 py-2.5 rounded-full flex items-center gap-2 transition-all hover:-translate-y-0.5 shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 cursor-pointer"
+              style={{ backgroundColor: GOLD, color: NAVY, outlineColor: GOLD }}
+            >
+              <Plus size={17} strokeWidth={2.5} /> Nouvelle Commande
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-4">
-        {columns.map(col => {
-          const items = filteredCommandes.filter(c => (c.statut || 'Reçue') === col.key);
-          return (
-            <div key={col.key} className="bg-slate-200/60 p-4 rounded-xl border border-slate-300/60 flex flex-col">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="font-bold text-slate-800 text-sm">{col.title}</h2>
-                <span className="bg-slate-300 text-slate-700 text-xs font-bold px-2 py-0.5 rounded-full">
-                  {items.length}
-                </span>
-              </div>
+      {/* BARRE DE RECHERCHE — carte flottante sur le bandeau */}
+      <div className="max-w-7xl mx-auto px-6 -mt-8 relative z-10 mb-8">
+        <div className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.25)] p-2">
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2" size={16} style={{ color: NAVY, opacity: 0.5 }} />
+            <input
+              type="text"
+              placeholder="Rechercher par client, téléphone ou code..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="font-body w-full pl-10 pr-3 py-2.5 text-sm border-none bg-transparent outline-none rounded-xl"
+              style={{ color: '#16233D' }}
+            />
+          </div>
+        </div>
+      </div>
 
-              <div className="space-y-3 flex-1">
-                {loading ? (
-                  <p className="text-xs text-slate-400 text-center py-6">Chargement...</p>
-                ) : items.length === 0 ? (
-                  <p className="text-xs text-slate-400 italic text-center py-8">Aucune commande</p>
-                ) : (
-                  items.map(c => {
-                    const total = Number(c.montant_total) || 0;
-                    const avance = Number(c.avance) || 0;
-                    const isFullyPaid = avance >= total && total > 0;
-                    const reste = isFullyPaid ? 0 : Math.max(0, total - avance);
+      {/* KANBAN */}
+      <div className="max-w-7xl mx-auto px-6 pb-16">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+          {columns.map(col => {
+            const items = filteredCommandes.filter(c => (c.statut || 'Reçue') === col.key);
+            const meta = COLUMN_META[col.key];
+            return (
+              <div key={col.key} className="bg-white rounded-2xl border border-black/5 shadow-sm flex flex-col overflow-hidden">
+                <div className="px-4 py-3 flex items-center justify-between" style={{ backgroundColor: meta.bg }}>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: meta.accent }}></span>
+                    <h2 className="font-display font-semibold text-sm" style={{ color: '#16233D' }}>{col.title}</h2>
+                  </div>
+                  <span
+                    className="text-xs font-bold rounded-full px-2 py-0.5 bg-white font-mono-tape"
+                    style={{ color: meta.accent }}
+                  >
+                    {items.length}
+                  </span>
+                </div>
 
-                    return (
-                      <div key={c.id} className="bg-white p-4 rounded-lg border border-slate-200 shadow-xs space-y-3">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h3 className="font-bold text-slate-900 text-sm">{c.client_nom || 'Client sans nom'}</h3>
-                            <p className="text-xs text-slate-500">({c.client_tel || '-'})</p>
+                <div className="p-3 space-y-3 flex-1 min-h-[140px]">
+                  {loading ? (
+                    <p className="font-body text-xs text-slate-400 text-center py-6">Chargement...</p>
+                  ) : items.length === 0 ? (
+                    <p className="font-body text-xs text-slate-400 italic text-center py-8">Aucune commande</p>
+                  ) : (
+                    items.map(c => {
+                      const total = Number(c.montant_total) || 0;
+                      const avance = Number(c.avance) || 0;
+                      const isFullyPaid = avance >= total && total > 0;
+                      const reste = isFullyPaid ? 0 : Math.max(0, total - avance);
+                      const pct = total > 0 ? Math.min(100, Math.max(0, (avance / total) * 100)) : 0;
+                      const statutActuel = c.statut || 'Reçue';
+                      const statutMeta = COLUMN_META[statutActuel] || COLUMN_META['Reçue'];
+
+                      return (
+                        <div
+                          key={c.id}
+                          className="bg-white p-4 rounded-xl border border-slate-200 hover:shadow-md transition-shadow space-y-3"
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="min-w-0">
+                              <h3 className="font-display font-semibold text-slate-900 text-sm truncate">{c.client_nom || 'Client sans nom'}</h3>
+                              <p className="font-body text-[11px] text-slate-500">{c.client_tel || '-'}</p>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {c.code_commande && (
+                                <span
+                                  className="font-mono-tape text-[10px] font-semibold px-1.5 py-0.5 rounded border"
+                                  style={{ borderColor: `${NAVY}33`, color: NAVY, backgroundColor: '#EAF1FB' }}
+                                >
+                                  {c.code_commande}
+                                </span>
+                              )}
+                              <button
+                                onClick={() => handleDeleteCommande(c)}
+                                className="text-slate-300 hover:text-rose-600 p-1 rounded-md transition-colors cursor-pointer"
+                                title="Supprimer la commande"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            {c.code_commande && (
-                              <span className="text-[10px] bg-slate-100 border border-slate-300 font-mono font-semibold px-1.5 py-0.5 rounded text-slate-600">
-                                {c.code_commande}
-                              </span>
-                            )}
-                            <button
-                              onClick={() => handleDeleteCommande(c)}
-                              className="text-slate-400 hover:text-red-600 p-1 rounded-md transition-colors cursor-pointer"
-                              title="Supprimer la commande"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </div>
 
-                        <p className="text-xs text-slate-700 font-medium">{getItemName(c)}</p>
+                          <p className="font-body text-xs text-slate-700 font-medium">{getItemName(c)}</p>
 
-                        {/* RECAP FINANCIER + BOUTONS PAIEMENT */}
-                        <div className="space-y-1.5 pt-2 border-t border-slate-100">
-                          <div className="flex justify-between items-center text-xs">
-                            <span className="text-slate-500">Total: <strong className="text-slate-800">{formatAmount(total)} F</strong></span>
-                            {isFullyPaid ? (
-                              <span className="bg-emerald-100 text-emerald-800 font-bold text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
-                                <CheckCircle size={10} /> PAYÉ (100%)
+                          {/* RÉCAP FINANCIER — barre de progression du paiement */}
+                          <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                            <div className="flex justify-between items-baseline text-[11px] font-body">
+                              <span className="text-slate-500">
+                                Total <strong className="font-mono-tape text-slate-800">{formatAmount(total)} F</strong>
                               </span>
-                            ) : (
-                              <span className="text-amber-700 font-bold">Reste: {formatAmount(reste)} F</span>
-                            )}
+                              {isFullyPaid ? (
+                                <span className="bg-emerald-100 text-emerald-800 font-bold text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
+                                  <CheckCircle size={10} /> PAYÉ (100%)
+                                </span>
+                              ) : (
+                                <span className="font-mono-tape font-bold" style={{ color: ORANGE }}>
+                                  {formatAmount(reste)} F restant
+                                </span>
+                              )}
+                            </div>
+                            <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all duration-500"
+                                style={{ width: `${pct}%`, backgroundColor: isFullyPaid ? '#16A34A' : ORANGE }}
+                              ></div>
+                            </div>
                           </div>
 
                           {!isFullyPaid && (
-                            <div className="flex gap-1.5 pt-1">
+                            <div className="flex gap-1.5">
                               <button
                                 onClick={() => handleSolderCommande(c)}
-                                className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 text-[10px] font-bold px-2 py-1 rounded flex-1 transition-colors cursor-pointer"
+                                className="font-body bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 text-[10px] font-bold px-2 py-1.5 rounded-full flex-1 transition-colors cursor-pointer"
                               >
                                 ✓ Solder (100%)
                               </button>
@@ -339,48 +409,48 @@ export default function CommandesPage() {
                                   setSelectedCommandeForPay(c);
                                   setNewAvanceInput(String(c.avance || 0));
                                 }}
-                                className="bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-300 text-[10px] font-semibold px-2 py-1 rounded transition-colors cursor-pointer"
+                                className="font-body bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-300 text-[10px] font-semibold px-2 py-1.5 rounded-full transition-colors cursor-pointer"
                               >
                                 Modifier avance
                               </button>
                             </div>
                           )}
-                        </div>
 
-                        {/* CHANGEMENT STATUT */}
-                        <div className="pt-2 border-t border-slate-100">
-                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                            Statut de fabrication
-                          </label>
-                          <select
-                            value={c.statut || 'Reçue'}
-                            onChange={(e) => c.id && handleUpdateStatut(c.id, e.target.value)}
-                            className="w-full text-xs p-2 border border-slate-200 rounded-md bg-slate-50 font-medium text-slate-700 outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer"
+                          {/* STATUT — bordure gauche colorée pour un repérage rapide */}
+                          <div className="pt-1">
+                            <label className="font-body block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                              Statut de fabrication
+                            </label>
+                            <select
+                              value={statutActuel}
+                              onChange={(e) => c.id && handleUpdateStatut(c.id, e.target.value)}
+                              className="font-body w-full text-xs p-2 rounded-md bg-slate-50 font-semibold text-slate-700 outline-none focus:ring-1 cursor-pointer border-l-[3px]"
+                              style={{ borderLeftColor: statutMeta.accent, borderTop: '1px solid #E2E8F0', borderRight: '1px solid #E2E8F0', borderBottom: '1px solid #E2E8F0' }}
+                            >
+                              <option value="Reçue">Reçue</option>
+                              <option value="En Coupe">En Coupe</option>
+                              <option value="Prête">Prête</option>
+                              <option value="Livrée">Livrée</option>
+                            </select>
+                          </div>
+
+                          <button
+                            onClick={() => handleAlertWhatsApp(c)}
+                            className="font-body w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2.5 rounded-full flex items-center justify-center gap-1.5 shadow-sm transition-all hover:-translate-y-0.5 cursor-pointer"
+                            title="Alerter le client sur WhatsApp"
                           >
-                            <option value="Reçue">Reçue</option>
-                            <option value="En Coupe">En Coupe</option>
-                            <option value="Prête">Prête</option>
-                            <option value="Livrée">Livrée</option>
-                          </select>
+                            <Send size={14} />
+                            <span>Alerter le client sur WhatsApp</span>
+                          </button>
                         </div>
-
-                        {/* BOUTON WHATSAPP - pleine largeur, toujours visible */}
-                        <button
-                          onClick={() => handleAlertWhatsApp(c)}
-                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-md flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer"
-                          title="Alerter le client sur WhatsApp"
-                        >
-                          <Send size={14} />
-                          <span>Alerter le client sur WhatsApp</span>
-                        </button>
-                      </div>
-                    );
-                  })
-                )}
+                      );
+                    })
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
 
       {/* MODAL MODIFICATION PAIEMENT / AVANCE */}
@@ -391,28 +461,32 @@ export default function CommandesPage() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-xl max-w-sm w-full p-5 shadow-xl relative border border-slate-200 space-y-4"
+            className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl relative border border-slate-200 space-y-4"
           >
-            <div className="flex justify-between items-center border-b pb-2">
-              <h3 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                <CreditCard size={16} className="text-amber-600" /> Éditer le paiement
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="font-display font-semibold text-sm flex items-center gap-2" style={{ color: NAVY }}>
+                <span className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: '#FBF3E2', color: GOLD }}>
+                  <CreditCard size={14} />
+                </span>
+                Éditer le paiement
               </h3>
-              <button onClick={() => setSelectedCommandeForPay(null)} className="text-slate-400 hover:text-slate-600">
+              <button onClick={() => setSelectedCommandeForPay(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
                 <X size={18} />
               </button>
             </div>
 
-            <div className="space-y-2 text-xs">
-              <p className="font-semibold text-slate-800">{selectedCommandeForPay.client_nom}</p>
-              <p className="text-slate-500">Montant total: <strong>{formatAmount(selectedCommandeForPay.montant_total)} FCFA</strong></p>
+            <div className="space-y-2 text-xs font-body">
+              <p className="font-display font-semibold text-slate-800 text-sm">{selectedCommandeForPay.client_nom}</p>
+              <p className="text-slate-500">Montant total : <strong className="font-mono-tape">{formatAmount(selectedCommandeForPay.montant_total)} FCFA</strong></p>
 
               <div>
-                <label className="block font-semibold mt-3 mb-1">Nouvel acompte / Avance versée (FCFA)</label>
+                <label className="block font-semibold mt-3 mb-1 text-slate-600">Nouvel acompte / Avance versée (FCFA)</label>
                 <input
                   type="number"
                   value={newAvanceInput}
                   onChange={(e) => setNewAvanceInput(e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded-md text-sm font-bold text-emerald-700 focus:ring-2 focus:ring-amber-500 outline-none"
+                  className="font-mono-tape w-full p-2.5 border border-slate-300 rounded-lg text-sm font-bold text-emerald-700 focus:ring-2 outline-none"
+                  style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                 />
               </div>
             </div>
@@ -420,13 +494,13 @@ export default function CommandesPage() {
             <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => setSelectedCommandeForPay(null)}
-                className="px-3 py-1.5 rounded-md bg-slate-200 text-slate-700 text-xs font-semibold"
+                className="font-body px-4 py-2 rounded-full bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer"
               >
                 Annuler
               </button>
               <button
                 onClick={handleSavePaymentUpdate}
-                className="px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"
+                className="font-body px-4 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer"
               >
                 Enregistrer
               </button>
@@ -446,111 +520,119 @@ export default function CommandesPage() {
             className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl relative border border-slate-200"
           >
             <div className="flex justify-between items-center mb-4 border-b pb-3">
-              <h2 className="text-lg font-bold text-slate-900">Nouvelle Commande</h2>
+              <h2 className="font-display italic font-semibold text-lg" style={{ color: NAVY }}>Nouvelle Commande</h2>
               <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleCreateCommande} className="space-y-4 text-xs">
+            <form onSubmit={handleCreateCommande} className="space-y-4 text-xs font-body">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold mb-1">Nom du client *</label>
+                  <label className="block font-semibold mb-1 text-slate-600">Nom du client *</label>
                   <input
                     type="text"
                     required
                     value={formData.client_nom}
                     onChange={(e) => setFormData({ ...formData, client_nom: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 outline-none"
+                    style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold mb-1">Téléphone</label>
+                  <label className="block font-semibold mb-1 text-slate-600">Téléphone</label>
                   <input
                     type="text"
                     value={formData.client_tel}
                     onChange={(e) => setFormData({ ...formData, client_tel: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 outline-none"
+                    style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block font-semibold mb-1">Désignation / Article *</label>
+                <label className="block font-semibold mb-1 text-slate-600">Désignation / Article *</label>
                 <input
                   type="text"
                   required
                   placeholder="Ex: Boubou Bazin VIP, Caftan, costume..."
                   value={formData.designation}
                   onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
-                  className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
+                  className="w-full p-2.5 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 outline-none"
+                  style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                 />
               </div>
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block font-semibold mb-1">Quantité</label>
+                  <label className="block font-semibold mb-1 text-slate-600">Quantité</label>
                   <input
                     type="number"
                     min="1"
                     value={formData.quantite}
                     onChange={(e) => setFormData({ ...formData, quantite: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 outline-none"
+                    style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold mb-1">Prix Unitaire (FCFA)</label>
+                  <label className="block font-semibold mb-1 text-slate-600">Prix Unitaire (FCFA)</label>
                   <input
                     type="number"
                     min="0"
                     placeholder="Ex: 50000"
                     value={formData.prix_unitaire}
                     onChange={(e) => setFormData({ ...formData, prix_unitaire: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 outline-none"
+                    style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold mb-1">Montant Total</label>
+                  <label className="block font-semibold mb-1 text-slate-600">Montant Total</label>
                   <input
                     type="text"
                     readOnly
                     value={`${formatAmount(montantTotalCalcul)} FCFA`}
-                    className="w-full p-2 border border-slate-200 rounded-md bg-slate-100 font-bold text-slate-800"
+                    className="font-mono-tape w-full p-2.5 border border-slate-200 rounded-lg bg-slate-100 font-bold text-slate-800"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold mb-1">Avance versée (FCFA)</label>
+                  <label className="block font-semibold mb-1 text-slate-600">Avance versée (FCFA)</label>
                   <input
                     type="number"
                     min="0"
                     placeholder="Ex: 25000"
                     value={formData.avance}
                     onChange={(e) => setFormData({ ...formData, avance: e.target.value })}
-                    className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none text-emerald-600 font-bold"
+                    className="font-mono-tape w-full p-2.5 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 outline-none text-emerald-600 font-bold"
+                    style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold mb-1">Reste à payer</label>
+                  <label className="block font-semibold mb-1 text-slate-600">Reste à payer</label>
                   <input
                     type="text"
                     readOnly
                     value={`${formatAmount(resteCalcul)} FCFA`}
-                    className="w-full p-2 border border-slate-200 rounded-md bg-amber-50 text-amber-700 font-bold"
+                    className="font-mono-tape w-full p-2.5 border border-slate-200 rounded-lg bg-amber-50 font-bold"
+                    style={{ color: ORANGE }}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block font-semibold mb-1">Observations / Mesures</label>
+                <label className="block font-semibold mb-1 text-slate-600">Observations / Mesures</label>
                 <textarea
                   rows={2}
                   value={formData.observations}
                   onChange={(e) => setFormData({ ...formData, observations: e.target.value })}
                   placeholder="Notes, détails du tissu ou mesures..."
-                  className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none"
+                  className="w-full p-2.5 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 outline-none"
+                  style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                 ></textarea>
               </div>
 
@@ -558,13 +640,14 @@ export default function CommandesPage() {
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-200 text-slate-700 font-semibold cursor-pointer"
+                  className="px-4 py-2 rounded-full bg-slate-200 text-slate-700 font-semibold cursor-pointer"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold cursor-pointer"
+                  className="px-4 py-2 rounded-full font-bold cursor-pointer transition-all hover:-translate-y-0.5"
+                  style={{ backgroundColor: GOLD, color: NAVY }}
                 >
                   Créer la commande
                 </button>
