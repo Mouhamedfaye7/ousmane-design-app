@@ -17,6 +17,7 @@ interface Produit {
   couleurs: string[];
   quantiteStock: number;
   description: string;
+  createdAt: string;
 }
 
 interface Mouvement {
@@ -58,6 +59,14 @@ const getCouleurHex = (couleur: string): string => {
 
   return dictionary[c] || c;
 };
+
+type Granularite = 'jour' | 'semaine' | 'mois';
+
+interface Bucket {
+  debut: Date;
+  fin: Date;
+  label: string;
+}
 
 export default function CataloguePretAPorterPage() {
   const [produits, setProduits] = useState<Produit[]>([]);
@@ -113,6 +122,7 @@ export default function CataloguePretAPorterPage() {
           couleurs: item.couleurs || [],
           quantiteStock: Number(item.quantite_stock),
           description: item.description || '',
+          createdAt: item.created_at,
         }))
       );
     }
@@ -124,8 +134,7 @@ export default function CataloguePretAPorterPage() {
     const { data, error } = await supabase
       .from('mouvements_stock')
       .select('*')
-      .order('created_at', { ascending: false })
-      .limit(60);
+      .order('created_at', { ascending: false });
 
     if (error) {
       console.error('Erreur chargement mouvements :', error.message);
@@ -248,6 +257,7 @@ export default function CataloguePretAPorterPage() {
           couleurs: p.couleurs || [],
           quantiteStock: Number(p.quantite_stock),
           description: p.description || '',
+          createdAt: p.created_at,
         };
 
         setProduits([prodAjoute, ...produits]);
@@ -342,35 +352,84 @@ export default function CataloguePretAPorterPage() {
     );
   });
 
-  // --- DONNÉES POUR LA COURBE D'ÉVOLUTION (14 DERNIERS JOURS) ---
-  const donneesEvolution = (() => {
-    const jours = Array.from({ length: 14 }).map((_, i) => {
-      const d = new Date();
-      d.setDate(d.getDate() - (13 - i));
-      d.setHours(0, 0, 0, 0);
-      return d;
-    });
+  // --- COURBE D'ÉVOLUTION : DEPUIS LE PREMIER ARTICLE ENREGISTRÉ, GRANULARITÉ ADAPTATIVE ---
+  const construireBuckets = (dateDebut: Date, dateFin: Date, granularite: Granularite): Bucket[] => {
+    const buckets: Bucket[] = [];
 
-    return jours.map((jour) => {
-      const finJour = new Date(jour);
-      finJour.setHours(23, 59, 59, 999);
-      const mvtsJour = mouvements.filter((m) => {
-        const dm = new Date(m.created_at);
-        return dm >= jour && dm <= finJour;
-      });
-      const entrees = mvtsJour.filter((m) => m.type === 'entree').reduce((s, m) => s + m.quantite, 0);
-      const sorties = mvtsJour.filter((m) => m.type === 'sortie').reduce((s, m) => s + m.quantite, 0);
-      return { date: jour, entrees, sorties };
+    if (granularite === 'jour') {
+      const curseur = new Date(dateDebut);
+      while (curseur <= dateFin) {
+        const debut = new Date(curseur);
+        debut.setHours(0, 0, 0, 0);
+        const fin = new Date(curseur);
+        fin.setHours(23, 59, 59, 999);
+        buckets.push({ debut, fin, label: debut.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) });
+        curseur.setDate(curseur.getDate() + 1);
+      }
+    } else if (granularite === 'semaine') {
+      const curseur = new Date(dateDebut);
+      while (curseur <= dateFin) {
+        const debut = new Date(curseur);
+        debut.setHours(0, 0, 0, 0);
+        const finBrute = new Date(curseur);
+        finBrute.setDate(finBrute.getDate() + 6);
+        finBrute.setHours(23, 59, 59, 999);
+        const fin = finBrute > dateFin ? dateFin : finBrute;
+        buckets.push({ debut, fin, label: debut.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) });
+        curseur.setDate(curseur.getDate() + 7);
+      }
+    } else {
+      const curseur = new Date(dateDebut.getFullYear(), dateDebut.getMonth(), 1);
+      while (curseur <= dateFin) {
+        const debut = new Date(curseur);
+        const finBrute = new Date(curseur.getFullYear(), curseur.getMonth() + 1, 0);
+        finBrute.setHours(23, 59, 59, 999);
+        const fin = finBrute > dateFin ? dateFin : finBrute;
+        buckets.push({ debut, fin, label: debut.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }) });
+        curseur.setMonth(curseur.getMonth() + 1);
+      }
+    }
+
+    return buckets;
+  };
+
+  const timestampsProduits = produits
+    .map((p) => new Date(p.createdAt).getTime())
+    .filter((t) => !isNaN(t));
+
+  const aujourdHui = new Date();
+  aujourdHui.setHours(23, 59, 59, 999);
+
+  const dateDebutCatalogue = timestampsProduits.length > 0 ? new Date(Math.min(...timestampsProduits)) : new Date();
+  dateDebutCatalogue.setHours(0, 0, 0, 0);
+
+  const diffJours = Math.max(1, Math.ceil((aujourdHui.getTime() - dateDebutCatalogue.getTime()) / 86400000) + 1);
+
+  const granularite: Granularite = diffJours <= 31 ? 'jour' : diffJours <= 180 ? 'semaine' : 'mois';
+
+  const buckets = construireBuckets(dateDebutCatalogue, aujourdHui, granularite);
+
+  const donneesEvolution = buckets.map((b) => {
+    const mvtsBucket = mouvements.filter((m) => {
+      const dm = new Date(m.created_at);
+      return dm >= b.debut && dm <= b.fin;
     });
-  })();
+    const entrees = mvtsBucket.filter((m) => m.type === 'entree').reduce((s, m) => s + m.quantite, 0);
+    const sorties = mvtsBucket.filter((m) => m.type === 'sortie').reduce((s, m) => s + m.quantite, 0);
+    return { label: b.label, entrees, sorties };
+  });
 
   const maxEvolution = Math.max(1, ...donneesEvolution.map((d) => Math.max(d.entrees, d.sorties)));
-  const totalEntrees14j = donneesEvolution.reduce((s, d) => s + d.entrees, 0);
-  const totalSorties14j = donneesEvolution.reduce((s, d) => s + d.sorties, 0);
+  const totalEntreesPeriode = donneesEvolution.reduce((s, d) => s + d.entrees, 0);
+  const totalSortiesPeriode = donneesEvolution.reduce((s, d) => s + d.sorties, 0);
+  const nbBuckets = Math.max(1, donneesEvolution.length);
+  const etiquetteStep = Math.max(1, Math.ceil(nbBuckets / 10));
 
-  const formaterDateCourte = (d: Date) => d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
   const formaterDateHeure = (iso: string) =>
     new Date(iso).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+  const libelleGranularite = granularite === 'jour' ? 'par jour' : granularite === 'semaine' ? 'par semaine' : 'par mois';
+  const libelleDepuis = dateDebutCatalogue.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-100 to-slate-50 p-6 text-slate-800">
@@ -421,15 +480,20 @@ export default function CataloguePretAPorterPage() {
         {/* COURBE D'ÉVOLUTION DES MOUVEMENTS DE STOCK */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3">
           <div className="flex flex-wrap justify-between items-center gap-2">
-            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <BarChart3 size={16} className="text-amber-700" /> Évolution des Entrées / Sorties — 14 derniers jours
-            </h2>
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <BarChart3 size={16} className="text-amber-700" /> Évolution des Entrées / Sorties
+              </h2>
+              <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                Depuis le {libelleDepuis} (premier article enregistré) — vue {libelleGranularite}
+              </p>
+            </div>
             <div className="flex items-center gap-4 text-[11px] font-semibold">
               <span className="flex items-center gap-1.5 text-emerald-700">
-                <span className="w-2.5 h-2.5 rounded-sm bg-emerald-600 inline-block" /> Entrées : {totalEntrees14j}
+                <span className="w-2.5 h-2.5 rounded-sm bg-emerald-600 inline-block" /> Entrées : {totalEntreesPeriode}
               </span>
               <span className="flex items-center gap-1.5 text-red-600">
-                <span className="w-2.5 h-2.5 rounded-sm bg-red-600 inline-block" /> Sorties : {totalSorties14j}
+                <span className="w-2.5 h-2.5 rounded-sm bg-red-600 inline-block" /> Sorties : {totalSortiesPeriode}
               </span>
             </div>
           </div>
@@ -443,16 +507,18 @@ export default function CataloguePretAPorterPage() {
               <svg viewBox="0 0 700 230" width="100%" height="220" preserveAspectRatio="none">
                 <line x1="0" y1="180" x2="700" y2="180" stroke="#e2e8f0" strokeWidth="1" />
                 {donneesEvolution.map((d, i) => {
-                  const xBase = i * (700 / 14) + 6;
+                  const largeurBucket = 700 / nbBuckets;
+                  const xBase = i * largeurBucket + largeurBucket * 0.15;
+                  const largeurBarre = Math.max(2, largeurBucket * 0.35);
                   const hEntree = (d.entrees / maxEvolution) * 130;
                   const hSortie = (d.sorties / maxEvolution) * 130;
                   return (
                     <g key={i}>
-                      <rect x={xBase} y={180 - hEntree} width={14} height={hEntree} fill="#059669" rx="2" />
-                      <rect x={xBase + 16} y={180 - hSortie} width={14} height={hSortie} fill="#dc2626" rx="2" />
-                      {i % 2 === 0 && (
-                        <text x={xBase + 15} y={198} fontSize="9" fill="#94a3b8" textAnchor="middle" fontWeight="600">
-                          {formaterDateCourte(d.date)}
+                      <rect x={xBase} y={180 - hEntree} width={largeurBarre} height={hEntree} fill="#059669" rx="1.5" />
+                      <rect x={xBase + largeurBarre + 2} y={180 - hSortie} width={largeurBarre} height={hSortie} fill="#dc2626" rx="1.5" />
+                      {i % etiquetteStep === 0 && (
+                        <text x={xBase + largeurBarre} y={198} fontSize="9" fill="#94a3b8" textAnchor="middle" fontWeight="600">
+                          {d.label}
                         </text>
                       )}
                     </g>
@@ -650,7 +716,7 @@ export default function CataloguePretAPorterPage() {
           <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4">
             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 pb-2 border-b border-slate-200">
               <h2 className="text-lg font-bold text-slate-900">
-                Articles Prêt-à-Porter ({totalStock} en stock)
+                Articles Prêt-à-Porter
               </h2>
               <div className="relative w-full sm:w-64">
                 <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
