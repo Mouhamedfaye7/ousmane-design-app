@@ -261,6 +261,27 @@ export default function CataloguePretAPorterPage() {
         };
 
         setProduits([prodAjoute, ...produits]);
+
+        // Enregistre automatiquement une "entrée" de stock correspondant à
+        // l'enregistrement initial de l'article, pour que la courbe
+        // d'évolution reflète la création des articles du catalogue.
+        if (prodAjoute.quantiteStock > 0) {
+          const { data: mvtData, error: errMvt } = await supabase
+            .from('mouvements_stock')
+            .insert([{
+              produit_id: p.id,
+              produit_nom: p.nom,
+              type: 'entree',
+              quantite: prodAjoute.quantiteStock,
+              motif: 'Enregistrement du produit'
+            }])
+            .select();
+
+          if (!errMvt && mvtData && mvtData[0]) {
+            setMouvements(prev => [mvtData[0], ...prev]);
+          }
+        }
+
         reinitialiserFormulaire();
       }
     }
