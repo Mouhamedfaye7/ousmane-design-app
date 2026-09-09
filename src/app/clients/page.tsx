@@ -2,7 +2,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Search, Plus, Save, Trash2, Send, Ruler, FileText, Tag as TagIcon } from 'lucide-react';
+import {
+  ArrowLeft, Search, Plus, Save, Trash2, Send, Ruler, FileText, Tag as TagIcon, Phone, MapPin, User
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 interface Client {
@@ -15,7 +17,6 @@ interface Client {
   poitrine?: number | string;
   longueur_bras?: number | string;
   tour_bras?: number | string;
-  manches?: number | string;
   poignet?: number | string;
   longueur_haut?: number | string;
   ceinture?: number | string;
@@ -26,6 +27,10 @@ interface Client {
   tour_cheville?: number | string;
   notes?: string;
 }
+
+const NAVY = '#1B3B6F';
+const GOLD = '#C9A24B';
+const ORANGE = '#C1502E';
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
@@ -92,7 +97,7 @@ export default function ClientsPage() {
     };
 
     const numericFields: (keyof Client)[] = [
-      'cou', 'epaule', 'poitrine', 'longueur_bras', 'tour_bras', 'manches',
+      'cou', 'epaule', 'poitrine', 'longueur_bras', 'tour_bras',
       'poignet', 'longueur_haut', 'ceinture', 'hanche', 'tour_ventre',
       'longueur_pantalon', 'tour_cuisse', 'tour_cheville'
     ];
@@ -190,7 +195,6 @@ export default function ClientsPage() {
     if (selectedClient.epaule) msg += `- Épaule: ${selectedClient.epaule} cm\n`;
     if (selectedClient.poitrine) msg += `- Poitrine: ${selectedClient.poitrine} cm\n`;
     if (selectedClient.longueur_bras) msg += `- Long. Bras: ${selectedClient.longueur_bras} cm\n`;
-    if (selectedClient.manches) msg += `- Manches: ${selectedClient.manches} cm\n`;
     if (selectedClient.longueur_haut) msg += `- Long. Haut: ${selectedClient.longueur_haut} cm\n`;
     if (selectedClient.ceinture) msg += `- Ceinture/Taille: ${selectedClient.ceinture} cm\n`;
     if (selectedClient.hanche) msg += `- Hanche: ${selectedClient.hanche} cm\n`;
@@ -224,7 +228,6 @@ export default function ClientsPage() {
     { label: 'Poitrine (cm)', shortLabel: 'Poitrine', key: 'poitrine' },
     { label: 'Longueur Bras (cm)', shortLabel: 'Long. Bras', key: 'longueur_bras' },
     { label: 'Tour de Bras (cm)', shortLabel: 'Tour Bras', key: 'tour_bras' },
-    { label: 'Manches (cm)', shortLabel: 'Manches', key: 'manches' },
     { label: 'Poignet (cm)', shortLabel: 'Poignet', key: 'poignet' },
     { label: 'Longueur Boubou/Haut (cm)', shortLabel: 'Long. Haut', key: 'longueur_haut' },
     { label: 'Ceinture/Taille (cm)', shortLabel: 'Ceinture', key: 'ceinture' },
@@ -310,102 +313,163 @@ export default function ClientsPage() {
     day: '2-digit', month: 'long', year: 'numeric'
   });
 
+  // Regroupement des mesures par zone du corps — purement visuel, ne change aucune donnée/clé
+  const mesureGroups: Array<{ title: string; keys: (keyof Client)[] }> = [
+    { title: 'Haut du corps', keys: ['cou', 'epaule', 'poitrine', 'longueur_bras', 'tour_bras', 'poignet', 'longueur_haut'] },
+    { title: 'Bas du corps', keys: ['ceinture', 'hanche', 'tour_ventre', 'longueur_pantalon', 'tour_cuisse', 'tour_cheville'] }
+  ];
+  const fieldByKey = Object.fromEntries(mesureFields.map(f => [f.key, f])) as Record<keyof Client, typeof mesureFields[number]>;
+
   return (
-    <div className="min-h-screen bg-slate-100 p-6 text-slate-800">
-      <div className="max-w-7xl mx-auto mb-6 flex justify-between items-center">
-        <div>
-          <Link href="/" className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1 mb-2">
-            <ArrowLeft size={16} /> Retour au tableau de bord
+    <div className="min-h-screen" style={{ backgroundColor: '#F5F8FC' }}>
+      <style jsx global>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
+        .font-display { font-family: 'Fraunces', ui-serif, Georgia, serif; }
+        .font-body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+        .font-mono-tape { font-family: 'Space Mono', ui-monospace, monospace; }
+      `}</style>
+
+      {/* HEADER — bandeau navy premium */}
+      <div className="relative overflow-hidden" style={{ backgroundColor: NAVY }}>
+        <div
+          className="pointer-events-none absolute -top-20 -right-20 h-72 w-72 rounded-full opacity-20 blur-3xl"
+          style={{ background: `radial-gradient(circle, ${GOLD}, transparent 70%)` }}
+        />
+        <div className="max-w-7xl mx-auto px-6 pt-8 pb-16 md:pb-20 relative">
+          <Link
+            href="/"
+            className="font-body text-xs font-semibold flex items-center gap-1.5 mb-4 transition-opacity hover:opacity-80"
+            style={{ color: 'rgba(255,255,255,0.75)' }}
+          >
+            <ArrowLeft size={14} /> Retour au tableau de bord
           </Link>
-          <h1 className="text-2xl font-bold text-slate-900">Clients & Carnet de Mesures</h1>
-          <p className="text-sm text-slate-500">Ousmane Design — Gestion des profils clients</p>
+
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-5">
+            <div>
+              <h1 className="font-display italic font-semibold text-2xl md:text-3xl" style={{ color: '#FFFFFF' }}>
+                Clients & Carnet de Mesures
+              </h1>
+              <p className="font-body text-sm mt-1.5" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                Ousmane Design — Profils clients et mesures sur-mesure
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+              <button
+                onClick={handleNewClient}
+                className="font-body font-bold text-xs px-4 py-2.5 rounded-full flex items-center gap-2 transition-all hover:-translate-y-0.5 cursor-pointer"
+                style={{ backgroundColor: GOLD, color: NAVY }}
+              >
+                <Plus size={15} /> Nouveau Client
+              </button>
+            </div>
+          </div>
         </div>
-        <button 
-          onClick={handleNewClient}
-          className="bg-amber-700 hover:bg-amber-800 text-white font-semibold px-4 py-2 rounded-lg flex items-center gap-2 shadow-xs cursor-pointer"
-        >
-          <Plus size={18} /> Nouveau Client
-        </button>
       </div>
 
-      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* CONTENU — cartes flottantes sur le bandeau */}
+      <div className="max-w-7xl mx-auto px-6 -mt-10 relative z-10 pb-16 grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* LISTE CLIENTS */}
-        <div className="space-y-4">
+        <div className="bg-white p-5 rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.25)] space-y-4 h-fit">
           <div className="relative">
-            <Search className="absolute left-3 top-3 text-slate-400" size={16} />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2" size={16} style={{ color: NAVY, opacity: 0.5 }} />
             <input
               type="text"
               placeholder="Rechercher nom, téléphone..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-white rounded-lg border border-slate-200 text-sm outline-none"
+              className="font-body w-full pl-10 pr-3 py-2.5 text-xs border border-slate-200 rounded-full bg-slate-50 outline-none focus:ring-2 text-slate-900"
+              style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
             />
           </div>
 
-          <div className="space-y-2 max-h-[600px] overflow-y-auto">
+          <div className="space-y-2 max-h-[620px] overflow-y-auto pr-0.5">
             {loading ? (
-              <p className="text-sm text-slate-400 p-2">Chargement des clients...</p>
+              <p className="font-body text-xs text-slate-400 p-3 text-center">Chargement des clients...</p>
             ) : filteredClients.length === 0 ? (
-              <p className="text-sm text-slate-400 p-2">Aucun client trouvé.</p>
+              <p className="font-body text-xs text-slate-400 p-3 text-center">Aucun client trouvé.</p>
             ) : (
-              filteredClients.map((c) => (
-                <div
-                  key={c.id || c.telephone || c.nom}
-                  onClick={() => setSelectedClient(c)}
-                  className={`p-4 rounded-xl border cursor-pointer transition-all bg-white ${
-                    (selectedClient?.id && selectedClient.id === c.id) ||
-                    (!selectedClient?.id && selectedClient?.telephone === c.telephone)
-                      ? 'border-amber-500 ring-2 ring-amber-500/20' 
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-bold text-slate-900 text-sm">{c.nom || 'Sans nom'}</h3>
-                      <p className="text-xs text-slate-500 mt-0.5">{c.telephone || 'Sans téléphone'}</p>
+              filteredClients.map((c) => {
+                const isSelected =
+                  (selectedClient?.id && selectedClient.id === c.id) ||
+                  (!selectedClient?.id && selectedClient?.telephone === c.telephone);
+
+                return (
+                  <div
+                    key={c.id || c.telephone || c.nom}
+                    onClick={() => setSelectedClient(c)}
+                    className="font-body p-3.5 rounded-xl border cursor-pointer transition-all flex items-center gap-3"
+                    style={
+                      isSelected
+                        ? { backgroundColor: '#FBF3E2', borderColor: `${GOLD}66`, boxShadow: `0 0 0 1px ${GOLD}33 inset` }
+                        : { backgroundColor: '#F8FAFD', borderColor: 'rgba(0,0,0,0.05)' }
+                    }
+                  >
+                    <span
+                      className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                      style={isSelected ? { backgroundColor: GOLD, color: NAVY } : { backgroundColor: '#EAF1FB', color: NAVY }}
+                    >
+                      <User size={16} />
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-slate-900 text-xs truncate">{c.nom || 'Sans nom'}</h3>
+                      <p className="text-[11px] text-slate-500 mt-0.5 truncate">{c.telephone || 'Sans téléphone'}</p>
                     </div>
-                    <Ruler size={16} className="text-amber-600" />
+                    {isSelected && <Ruler size={14} className="ml-auto shrink-0" style={{ color: GOLD }} />}
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
 
         {/* FORMULAIRE & MESURES */}
         {selectedClient ? (
-          <div className="md:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-6">
-            <div className="flex flex-col lg:flex-row justify-between items-start gap-4 border-b border-slate-100 pb-4">
-              <div>
-                <input
-                  type="text"
-                  value={selectedClient.nom || ''}
-                  onChange={(e) => setSelectedClient({...selectedClient, nom: e.target.value})}
-                  placeholder="Nom complet du client"
-                  className="text-2xl font-bold text-slate-900 border-b border-dashed border-slate-300 focus:border-amber-500 outline-none pb-1"
-                />
-                <div className="flex items-center gap-4 mt-2">
+          <div className="md:col-span-2 bg-white p-6 rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.25)] space-y-6 font-body">
+            <div className="flex flex-col lg:flex-row justify-between items-start gap-4 border-b border-slate-100 pb-5">
+              <div className="flex items-start gap-3 min-w-0">
+                <span className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#FBF3E2', color: GOLD }}>
+                  <User size={20} />
+                </span>
+                <div className="min-w-0">
                   <input
                     type="text"
-                    value={selectedClient.telephone || ''}
-                    onChange={(e) => setSelectedClient({...selectedClient, telephone: e.target.value})}
-                    placeholder="Numéro Téléphone"
-                    className="text-xs text-slate-500 border-b border-slate-200 outline-none"
+                    value={selectedClient.nom || ''}
+                    onChange={(e) => setSelectedClient({...selectedClient, nom: e.target.value})}
+                    placeholder="Nom complet du client"
+                    className="font-display font-semibold text-xl text-slate-900 border-b border-dashed border-slate-300 focus:border-current outline-none pb-1 bg-transparent w-full"
+                    style={{ caretColor: GOLD }}
                   />
-                  <input
-                    type="text"
-                    value={selectedClient.adresse || ''}
-                    onChange={(e) => setSelectedClient({...selectedClient, adresse: e.target.value})}
-                    placeholder="Adresse / Quartier"
-                    className="text-xs text-slate-500 border-b border-slate-200 outline-none"
-                  />
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
+                    <div className="flex items-center gap-1.5">
+                      <Phone size={12} style={{ color: NAVY, opacity: 0.5 }} />
+                      <input
+                        type="text"
+                        value={selectedClient.telephone || ''}
+                        onChange={(e) => setSelectedClient({...selectedClient, telephone: e.target.value})}
+                        placeholder="Numéro Téléphone"
+                        className="text-xs text-slate-600 border-b border-slate-200 outline-none bg-transparent"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <MapPin size={12} style={{ color: NAVY, opacity: 0.5 }} />
+                      <input
+                        type="text"
+                        value={selectedClient.adresse || ''}
+                        onChange={(e) => setSelectedClient({...selectedClient, adresse: e.target.value})}
+                        placeholder="Adresse / Quartier"
+                        className="text-xs text-slate-600 border-b border-slate-200 outline-none bg-transparent"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
                 <button
                   onClick={downloadFichePDF}
-                  className="bg-slate-900 hover:bg-slate-800 text-white font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 text-xs cursor-pointer shadow-xs"
+                  className="font-bold text-xs px-3.5 py-2 rounded-full flex items-center gap-1.5 cursor-pointer shadow-xs transition-all hover:-translate-y-0.5"
+                  style={{ backgroundColor: NAVY, color: '#FFFFFF' }}
                   title="Télécharger la fiche de mesures complète en PDF"
                 >
                   <FileText size={14} /> Fiche PDF
@@ -413,7 +477,8 @@ export default function ClientsPage() {
 
                 <button
                   onClick={downloadEtiquettePDF}
-                  className="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 text-xs cursor-pointer shadow-xs"
+                  className="font-bold text-xs px-3.5 py-2 rounded-full flex items-center gap-1.5 cursor-pointer transition-all hover:-translate-y-0.5 border"
+                  style={{ borderColor: `${NAVY}33`, color: NAVY }}
                   title="Télécharger une petite étiquette à découper et coller sur le tissu"
                 >
                   <TagIcon size={14} /> Étiquette Tissu
@@ -421,14 +486,14 @@ export default function ClientsPage() {
 
                 <button
                   onClick={handleShareWhatsApp}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 text-xs cursor-pointer shadow-xs"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-full flex items-center gap-1.5 cursor-pointer shadow-xs transition-all hover:-translate-y-0.5"
                 >
-                  <Send size={14} /> Partager WhatsApp
+                  <Send size={14} /> WhatsApp
                 </button>
 
                 <button
                   onClick={handleDeleteClient}
-                  className="bg-red-50 hover:bg-red-100 text-red-600 p-2.5 rounded-lg flex items-center justify-center transition-colors cursor-pointer"
+                  className="p-2.5 text-slate-300 hover:text-rose-600 rounded-full transition-colors cursor-pointer"
                   title="Supprimer définitivement ce client"
                 >
                   <Trash2 size={18} />
@@ -436,44 +501,64 @@ export default function ClientsPage() {
 
                 <button
                   onClick={handleSave}
-                  className="bg-amber-700 hover:bg-amber-800 text-white font-semibold px-4 py-2 rounded-lg flex items-center gap-1.5 text-xs cursor-pointer shadow-xs"
+                  className="font-bold text-xs px-4 py-2.5 rounded-full flex items-center gap-1.5 cursor-pointer transition-all hover:-translate-y-0.5"
+                  style={{ backgroundColor: GOLD, color: NAVY }}
                 >
                   <Save size={14} /> Enregistrer
                 </button>
               </div>
             </div>
 
-            {/* GRILLE DES MESURES */}
-            <div className="grid grid-cols-3 gap-4">
-              {mesureFields.map((m) => (
-                <div key={m.key}>
-                  <label className="text-[11px] font-bold text-slate-700 block mb-1">{m.label}</label>
-                  <input
-                    type="number"
-                    value={selectedClient[m.key] ?? ''}
-                    onChange={(e) => setSelectedClient({
-                      ...selectedClient, 
-                      [m.key]: e.target.value ? Number(e.target.value) : ''
+            {/* GRILLE DES MESURES — regroupée par zone pour une lecture plus rapide, mêmes champs et clés */}
+            <div className="space-y-5">
+              {mesureGroups.map((group) => (
+                <div key={group.title}>
+                  <p className="text-[11px] font-bold uppercase tracking-wide mb-2.5" style={{ color: GOLD }}>
+                    {group.title}
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {group.keys.map((key) => {
+                      const m = fieldByKey[key];
+                      return (
+                        <div key={m.key}>
+                          <label className="text-[11px] font-bold text-slate-500 block mb-1">{m.label}</label>
+                          <input
+                            type="number"
+                            value={selectedClient[m.key] ?? ''}
+                            onChange={(e) => setSelectedClient({
+                              ...selectedClient,
+                              [m.key]: e.target.value ? Number(e.target.value) : ''
+                            })}
+                            className="font-mono-tape w-full rounded-lg px-3 py-2.5 text-sm font-bold outline-none focus:ring-2 border border-slate-200 bg-slate-50 text-slate-900 focus:bg-white"
+                            style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
+                          />
+                        </div>
+                      );
                     })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-semibold outline-none focus:bg-white focus:border-amber-500"
-                  />
+                  </div>
                 </div>
               ))}
             </div>
 
             <div>
-              <label className="text-[11px] font-bold text-slate-700 block mb-1">Notes & Particularités du Modèle</label>
+              <p className="text-[11px] font-bold uppercase tracking-wide mb-2" style={{ color: GOLD }}>
+                Notes & Particularités du Modèle
+              </p>
               <textarea
                 value={selectedClient.notes || ''}
                 onChange={(e) => setSelectedClient({...selectedClient, notes: e.target.value})}
                 rows={3}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm outline-none focus:bg-white focus:border-amber-500"
+                className="w-full rounded-lg p-3 text-xs outline-none focus:ring-2 border border-slate-200 bg-slate-50 text-slate-900 focus:bg-white"
+                style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
               />
             </div>
           </div>
         ) : (
-          <div className="md:col-span-2 bg-white p-12 rounded-2xl border border-slate-200 text-center text-slate-400">
-            Sélectionnez un client ou cliquez sur "Nouveau Client".
+          <div className="md:col-span-2 bg-white p-14 rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.25)] text-center font-body">
+            <span className="w-12 h-12 rounded-full inline-flex items-center justify-center mb-3" style={{ backgroundColor: '#EAF1FB', color: NAVY }}>
+              <User size={22} />
+            </span>
+            <p className="text-sm text-slate-400">Sélectionnez un client ou cliquez sur "Nouveau Client".</p>
           </div>
         )}
       </div>
