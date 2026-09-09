@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Search, Send, X, CheckCircle, CreditCard, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Search, Send, X, CheckCircle, CreditCard, Trash2, Package2, ClipboardList } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 interface Commande {
@@ -252,7 +252,7 @@ export default function CommandesPage() {
         .font-mono-tape { font-family: 'Space Mono', ui-monospace, monospace; }
       `}</style>
 
-      {/* HEADER — bandeau navy, identité premium alignée sur l'accueil */}
+      {/* HEADER — bandeau navy premium */}
       <div className="relative overflow-hidden" style={{ backgroundColor: NAVY }}>
         <div
           className="pointer-events-none absolute -top-20 -right-20 h-72 w-72 rounded-full opacity-20 blur-3xl"
@@ -279,29 +279,32 @@ export default function CommandesPage() {
 
             <button
               onClick={() => setShowAddModal(true)}
-              className="font-body font-bold text-sm px-5 py-2.5 rounded-full flex items-center gap-2 transition-all hover:-translate-y-0.5 shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 cursor-pointer"
-              style={{ backgroundColor: GOLD, color: NAVY, outlineColor: GOLD }}
+              className="font-body font-bold text-xs px-4 py-2.5 rounded-full flex items-center gap-2 transition-all hover:-translate-y-0.5 shrink-0 cursor-pointer"
+              style={{ backgroundColor: GOLD, color: NAVY }}
             >
-              <Plus size={17} strokeWidth={2.5} /> Nouvelle Commande
+              <Plus size={15} /> Nouvelle Commande
             </button>
           </div>
         </div>
       </div>
 
-      {/* BARRE DE RECHERCHE — carte flottante sur le bandeau */}
-      <div className="max-w-7xl mx-auto px-6 -mt-8 relative z-10 mb-8">
-        <div className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.25)] p-2">
-          <div className="relative">
+      {/* BARRE DE RECHERCHE — carte flottante sur le bandeau, alignée sur les autres pages */}
+      <div className="max-w-7xl mx-auto px-6 -mt-10 relative z-10 mb-6">
+        <div className="bg-white p-4 rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.25)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="relative max-w-md w-full">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2" size={16} style={{ color: NAVY, opacity: 0.5 }} />
             <input
               type="text"
               placeholder="Rechercher par client, téléphone ou code..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="font-body w-full pl-10 pr-3 py-2.5 text-sm border-none bg-transparent outline-none rounded-xl"
-              style={{ color: '#16233D' }}
+              className="font-body w-full pl-10 pr-3 py-2.5 text-xs border border-slate-200 rounded-full bg-slate-50 outline-none focus:ring-2 text-slate-900"
+              style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
             />
           </div>
+          <p className="font-body text-[11px] text-slate-400 shrink-0">
+            {filteredCommandes.length} commande{filteredCommandes.length !== 1 ? 's' : ''} au total
+          </p>
         </div>
       </div>
 
@@ -311,26 +314,46 @@ export default function CommandesPage() {
           {columns.map(col => {
             const items = filteredCommandes.filter(c => (c.statut || 'Reçue') === col.key);
             const meta = COLUMN_META[col.key];
+            const colTotal = items.reduce((acc, c) => acc + (Number(c.montant_total) || 0), 0);
+            const colReste = items.reduce((acc, c) => {
+              const t = Number(c.montant_total) || 0;
+              const a = Number(c.avance) || 0;
+              return acc + Math.max(0, t - a);
+            }, 0);
+
             return (
-              <div key={col.key} className="bg-white rounded-2xl border border-black/5 shadow-sm flex flex-col overflow-hidden">
-                <div className="px-4 py-3 flex items-center justify-between" style={{ backgroundColor: meta.bg }}>
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: meta.accent }}></span>
-                    <h2 className="font-display font-semibold text-sm" style={{ color: '#16233D' }}>{col.title}</h2>
+              <div key={col.key} className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.15)] flex flex-col overflow-hidden">
+                <div className="px-4 pt-3.5 pb-3 space-y-1.5" style={{ backgroundColor: meta.bg, borderBottom: `2px solid ${meta.accent}22` }}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: meta.accent }}></span>
+                      <h2 className="font-display font-semibold text-sm" style={{ color: '#16233D' }}>{col.title}</h2>
+                    </div>
+                    <span
+                      className="text-xs font-bold rounded-full px-2 py-0.5 bg-white font-mono-tape"
+                      style={{ color: meta.accent }}
+                    >
+                      {items.length}
+                    </span>
                   </div>
-                  <span
-                    className="text-xs font-bold rounded-full px-2 py-0.5 bg-white font-mono-tape"
-                    style={{ color: meta.accent }}
-                  >
-                    {items.length}
-                  </span>
+                  {items.length > 0 && (
+                    <p className="font-mono-tape text-[10px] text-slate-500 pl-4.5">
+                      {formatAmount(colTotal)} F
+                      {colReste > 0 && <span style={{ color: ORANGE }}> · {formatAmount(colReste)} F restant</span>}
+                    </p>
+                  )}
                 </div>
 
                 <div className="p-3 space-y-3 flex-1 min-h-[140px]">
                   {loading ? (
                     <p className="font-body text-xs text-slate-400 text-center py-6">Chargement...</p>
                   ) : items.length === 0 ? (
-                    <p className="font-body text-xs text-slate-400 italic text-center py-8">Aucune commande</p>
+                    <div className="flex flex-col items-center justify-center py-8 gap-2">
+                      <span className="w-9 h-9 rounded-full flex items-center justify-center" style={{ backgroundColor: '#F1F5F9', color: '#94A3B8' }}>
+                        <Package2 size={16} />
+                      </span>
+                      <p className="font-body text-xs text-slate-400 italic">Aucune commande</p>
+                    </div>
                   ) : (
                     items.map(c => {
                       const total = Number(c.montant_total) || 0;
@@ -344,9 +367,9 @@ export default function CommandesPage() {
                       return (
                         <div
                           key={c.id}
-                          className="bg-white p-4 rounded-xl border border-slate-200 hover:shadow-md transition-shadow space-y-3"
+                          className="bg-white p-4 rounded-xl border border-slate-200 hover:border-slate-300 hover:shadow-md transition-all space-y-3"
                         >
-                          <div className="flex justify-between items-start">
+                          <div className="flex justify-between items-start gap-2">
                             <div className="min-w-0">
                               <h3 className="font-display font-semibold text-slate-900 text-sm truncate">{c.client_nom || 'Client sans nom'}</h3>
                               <p className="font-body text-[11px] text-slate-500">{c.client_tel || '-'}</p>
@@ -370,10 +393,10 @@ export default function CommandesPage() {
                             </div>
                           </div>
 
-                          <p className="font-body text-xs text-slate-700 font-medium">{getItemName(c)}</p>
+                          <p className="font-body text-xs text-slate-700 font-medium leading-snug">{getItemName(c)}</p>
 
                           {/* RÉCAP FINANCIER — barre de progression du paiement */}
-                          <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                          <div className="space-y-1.5 pt-2.5 border-t border-slate-100">
                             <div className="flex justify-between items-baseline text-[11px] font-body">
                               <span className="text-slate-500">
                                 Total <strong className="font-mono-tape text-slate-800">{formatAmount(total)} F</strong>
@@ -461,26 +484,28 @@ export default function CommandesPage() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl relative border border-slate-200 space-y-4"
+            className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl relative border border-slate-200 space-y-4 font-body"
           >
-            <div className="flex justify-between items-center border-b pb-3">
-              <h3 className="font-display font-semibold text-sm flex items-center gap-2" style={{ color: NAVY }}>
-                <span className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: '#FBF3E2', color: GOLD }}>
-                  <CreditCard size={14} />
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#FBF3E2', color: GOLD }}>
+                  <CreditCard size={15} />
                 </span>
-                Éditer le paiement
-              </h3>
+                <h3 className="font-display font-semibold text-sm" style={{ color: NAVY }}>
+                  Éditer le paiement
+                </h3>
+              </div>
               <button onClick={() => setSelectedCommandeForPay(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
                 <X size={18} />
               </button>
             </div>
 
-            <div className="space-y-2 text-xs font-body">
+            <div className="space-y-2 text-xs">
               <p className="font-display font-semibold text-slate-800 text-sm">{selectedCommandeForPay.client_nom}</p>
-              <p className="text-slate-500">Montant total : <strong className="font-mono-tape">{formatAmount(selectedCommandeForPay.montant_total)} FCFA</strong></p>
+              <p className="text-slate-500">Montant total : <strong className="font-mono-tape text-slate-800">{formatAmount(selectedCommandeForPay.montant_total)} FCFA</strong></p>
 
               <div>
-                <label className="block font-semibold mt-3 mb-1 text-slate-600">Nouvel acompte / Avance versée (FCFA)</label>
+                <label className="block font-bold mt-3 mb-1 text-slate-600">Nouvel acompte / Avance versée (FCFA)</label>
                 <input
                   type="number"
                   value={newAvanceInput}
@@ -494,13 +519,13 @@ export default function CommandesPage() {
             <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => setSelectedCommandeForPay(null)}
-                className="font-body px-4 py-2 rounded-full bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer"
+                className="px-4 py-2 rounded-full bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
               >
                 Annuler
               </button>
               <button
                 onClick={handleSavePaymentUpdate}
-                className="font-body px-4 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer"
+                className="px-4 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer transition-all hover:-translate-y-0.5"
               >
                 Enregistrer
               </button>
@@ -517,121 +542,126 @@ export default function CommandesPage() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl relative border border-slate-200"
+            className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl relative border border-slate-200 font-body"
           >
-            <div className="flex justify-between items-center mb-4 border-b pb-3">
-              <h2 className="font-display italic font-semibold text-lg" style={{ color: NAVY }}>Nouvelle Commande</h2>
+            <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#FBF3E2', color: GOLD }}>
+                  <ClipboardList size={17} />
+                </span>
+                <h2 className="font-display italic font-semibold text-lg" style={{ color: NAVY }}>Nouvelle Commande</h2>
+              </div>
               <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleCreateCommande} className="space-y-4 text-xs font-body">
+            <form onSubmit={handleCreateCommande} className="space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold mb-1 text-slate-600">Nom du client *</label>
+                  <label className="block font-bold mb-1 text-slate-700">Nom du client *</label>
                   <input
                     type="text"
                     required
                     value={formData.client_nom}
                     onChange={(e) => setFormData({ ...formData, client_nom: e.target.value })}
-                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 outline-none"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-slate-900 outline-none focus:ring-2"
                     style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold mb-1 text-slate-600">Téléphone</label>
+                  <label className="block font-bold mb-1 text-slate-700">Téléphone</label>
                   <input
                     type="text"
                     value={formData.client_tel}
                     onChange={(e) => setFormData({ ...formData, client_tel: e.target.value })}
-                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 outline-none"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-slate-900 outline-none focus:ring-2"
                     style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block font-semibold mb-1 text-slate-600">Désignation / Article *</label>
+                <label className="block font-bold mb-1 text-slate-700">Désignation / Article *</label>
                 <input
                   type="text"
                   required
                   placeholder="Ex: Boubou Bazin VIP, Caftan, costume..."
                   value={formData.designation}
                   onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
-                  className="w-full p-2.5 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 outline-none"
+                  className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-slate-900 outline-none focus:ring-2"
                   style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                 />
               </div>
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block font-semibold mb-1 text-slate-600">Quantité</label>
+                  <label className="block font-bold mb-1 text-slate-700">Quantité</label>
                   <input
                     type="number"
                     min="1"
                     value={formData.quantite}
                     onChange={(e) => setFormData({ ...formData, quantite: e.target.value })}
-                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 outline-none"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-slate-900 outline-none focus:ring-2"
                     style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold mb-1 text-slate-600">Prix Unitaire (FCFA)</label>
+                  <label className="block font-bold mb-1 text-slate-700">Prix Unitaire (FCFA)</label>
                   <input
                     type="number"
                     min="0"
                     placeholder="Ex: 50000"
                     value={formData.prix_unitaire}
                     onChange={(e) => setFormData({ ...formData, prix_unitaire: e.target.value })}
-                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 outline-none"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-slate-900 outline-none focus:ring-2"
                     style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold mb-1 text-slate-600">Montant Total</label>
+                  <label className="block font-bold mb-1 text-slate-700">Montant Total</label>
                   <input
                     type="text"
                     readOnly
                     value={`${formatAmount(montantTotalCalcul)} FCFA`}
-                    className="font-mono-tape w-full p-2.5 border border-slate-200 rounded-lg bg-slate-100 font-bold text-slate-800"
+                    className="font-mono-tape w-full p-2.5 border border-slate-200 rounded-lg bg-slate-100 font-bold text-slate-900"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold mb-1 text-slate-600">Avance versée (FCFA)</label>
+                  <label className="block font-bold mb-1 text-slate-700">Avance versée (FCFA)</label>
                   <input
                     type="number"
                     min="0"
                     placeholder="Ex: 25000"
                     value={formData.avance}
                     onChange={(e) => setFormData({ ...formData, avance: e.target.value })}
-                    className="font-mono-tape w-full p-2.5 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 outline-none text-emerald-600 font-bold"
+                    className="font-mono-tape w-full p-2.5 border border-slate-300 rounded-lg bg-white outline-none focus:ring-2 text-emerald-600 font-bold"
                     style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold mb-1 text-slate-600">Reste à payer</label>
+                  <label className="block font-bold mb-1 text-slate-700">Reste à payer</label>
                   <input
                     type="text"
                     readOnly
                     value={`${formatAmount(resteCalcul)} FCFA`}
-                    className="font-mono-tape w-full p-2.5 border border-slate-200 rounded-lg bg-amber-50 font-bold"
-                    style={{ color: ORANGE }}
+                    className="font-mono-tape w-full p-2.5 border border-slate-200 rounded-lg font-bold"
+                    style={{ backgroundColor: '#FBEAE3', color: ORANGE }}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block font-semibold mb-1 text-slate-600">Observations / Mesures</label>
+                <label className="block font-bold mb-1 text-slate-700">Observations / Mesures</label>
                 <textarea
                   rows={2}
                   value={formData.observations}
                   onChange={(e) => setFormData({ ...formData, observations: e.target.value })}
                   placeholder="Notes, détails du tissu ou mesures..."
-                  className="w-full p-2.5 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 outline-none"
+                  className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-slate-900 outline-none focus:ring-2"
                   style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                 ></textarea>
               </div>
@@ -640,7 +670,7 @@ export default function CommandesPage() {
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-full bg-slate-200 text-slate-700 font-semibold cursor-pointer"
+                  className="px-4 py-2 rounded-full bg-slate-200 font-bold cursor-pointer"
                 >
                   Annuler
                 </button>
