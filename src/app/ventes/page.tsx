@@ -65,6 +65,10 @@ interface SelectedCommandeDetail {
   reste: number;
 }
 
+const NAVY = '#1B3B6F';
+const GOLD = '#C9A24B';
+const ORANGE = '#C1502E';
+
 export default function VentesPage() {
   const [ventes, setVentes] = useState<Vente[]>([]);
   const [commandesPending, setCommandesPending] = useState<Commande[]>([]);
@@ -90,9 +94,6 @@ export default function VentesPage() {
 
   // État pour piloter la séquence "PDF -> WhatsApp"
   const [pendingWhatsApp, setPendingWhatsApp] = useState<Vente | null>(null);
-
-  // Id de la vente en cours de correction (mode édition). Null = création d'une nouvelle vente.
-  const [editingVenteId, setEditingVenteId] = useState<string | null>(null);
 
   const invoiceRef = useRef<HTMLDivElement>(null);
 
@@ -172,7 +173,6 @@ export default function VentesPage() {
   };
 
   const handleOpenVenteLiberale = () => {
-    setEditingVenteId(null);
     setSelectedCommandesDetails([]);
     setFormData({
       commande_ids: [],
@@ -216,8 +216,6 @@ export default function VentesPage() {
   const handleConfirmImportCommandes = () => {
     const selectedCmds = commandesPending.filter(c => selectedCommandesIds.includes(c.id));
     if (selectedCmds.length === 0) return;
-
-    setEditingVenteId(null);
 
     // Construction du détail par commande, affiché dans le formulaire final
     const details: SelectedCommandeDetail[] = selectedCmds.map(cmd => {
@@ -288,8 +286,6 @@ export default function VentesPage() {
     if (!selectedCatItem) return;
     const item = selectedCatItem;
 
-    setEditingVenteId(null);
-
     let price = Number(item.prix) || 0;
     if (price > 0 && price < 1000) price = price * 1000;
     const priceStr = price > 0 ? price.toString() : '';
@@ -319,40 +315,6 @@ export default function VentesPage() {
     setShowAddModal(true);
   };
 
-  // Ouvre le formulaire en mode "correction" pour une vente déjà enregistrée
-  // (ex: le client revient régler le reste de sa facture).
-  const handleOpenEditVente = (v: Vente) => {
-    let total = v.montant_total || 0;
-    let avance = v.avance || 0;
-    if (total > 0 && total < 1000) total *= 1000;
-    if (avance > 0 && avance < 1000) avance *= 1000;
-    const qte = v.quantite || 1;
-    const pu = v.prix_unitaire && v.prix_unitaire > 0 ? v.prix_unitaire : (qte > 0 ? total / qte : total);
-
-    setEditingVenteId(v.id || null);
-    setSelectedCommandesIds([]);
-    setSelectedCommandesDetails([]);
-    setFormData({
-      commande_ids: [],
-      article_id: '',
-      client_nom: v.client_nom || '',
-      client_tel: v.client_tel || '',
-      mode_commande: v.mode_commande || 'Vente Libérale',
-      mode_paiement: v.mode_paiement || 'Espèces',
-      designation: getItemName(v),
-      quantite: qte.toString(),
-      prix_unitaire: pu.toString(),
-      avance: avance.toString(),
-      observations: v.observations || ''
-    });
-    setShowAddModal(true);
-  };
-
-  const closeAddModal = () => {
-    setShowAddModal(false);
-    setEditingVenteId(null);
-  };
-
   const handleCreateVente = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.client_nom || !formData.designation) {
@@ -374,59 +336,57 @@ export default function VentesPage() {
       observations: formData.observations
     };
 
-    if (editingVenteId) {
-      // MODE CORRECTION : on met à jour la vente existante (ex: encaissement du reste)
-      // sans toucher au stock du catalogue ni au statut des commandes.
-      const { error } = await supabase.from('ventes').update(payload).eq('id', editingVenteId);
-      if (error) {
-        console.error('Erreur Supabase mise à jour Vente:', error);
-        alert('Erreur lors de la mise à jour de la facture. Veuillez réessayer.');
-        return;
-      }
-    } else {
-      const { error } = await supabase.from('ventes').insert([payload]);
+    const { error } = await supabase.from('ventes').insert([payload]);
 
-      if (error) {
-        console.error('Erreur Supabase Ventes:', error);
-        const fallbackPayload = {
-          client_nom: formData.client_nom,
-          client_tel: formData.client_tel,
-          montant_total: montantTotalCalcul,
-          avance: avanceNum,
-          observations: `[${formData.designation}] Qté: ${qtyNum} x ${puNum} FCFA - Reste: ${resteCalcul} FCFA | ${formData.observations}`.trim()
-        };
-        await supabase.from('ventes').insert([fallbackPayload]);
-      }
+    if (error) {
+      console.error('Erreur Supabase Ventes:', error);
+      const fallbackPayload = {
+        client_nom: formData.client_nom,
+        client_tel: formData.client_tel,
+        montant_total: montantTotalCalcul,
+        avance: avanceNum,
+        observations: `[${formData.designation}] Qté: ${qtyNum} x ${puNum} FCFA - Reste: ${resteCalcul} FCFA | ${formData.observations}`.trim()
+      };
+      await supabase.from('ventes').insert([fallbackPayload]);
+    }
 
-      if (formData.article_id) {
-        const { data: catItem } = await supabase.from('catalogue').select('quantite_stock').eq('id', formData.article_id).single();
-        if (catItem) {
-          const nouveauStock = Math.max(0, Number(catItem.quantite_stock) - qtyNum);
-          const updatePayload: { quantite_stock: number; statut?: string } = { quantite_stock: nouveauStock };
-          if (nouveauStock === 0) {
-            updatePayload.statut = 'Vendu';
-          }
-          await supabase.from('catalogue').update(updatePayload).eq('id', formData.article_id);
+    if (formData.article_id) {
+      const { data: catItem } = await supabase.from('catalogue').select('quantite_stock, nom').eq('id', formData.article_id).single();
+      if (catItem) {
+        const nouveauStock = Math.max(0, Number(catItem.quantite_stock) - qtyNum);
+        const updatePayload: { quantite_stock: number; statut?: string } = { quantite_stock: nouveauStock };
+        if (nouveauStock === 0) {
+          updatePayload.statut = 'Vendu';
         }
-      }
+        await supabase.from('catalogue').update(updatePayload).eq('id', formData.article_id);
 
-      if (formData.commande_ids && formData.commande_ids.length > 0) {
-        for (const cmdId of formData.commande_ids) {
-          const cmdOriginal = commandesPending.find(c => c.id === cmdId);
-          const cmdTotal = normalizeCmdAmount(cmdOriginal?.montant_total);
-          // On marque la commande Livrée (payée intégralement) pour qu'elle
-          // reste visible et cohérente dans le Kanban et les statistiques.
-          await supabase.from('commandes').update({
-            statut: 'Livrée',
-            avance: cmdTotal,
-            reste: 0
-          }).eq('id', cmdId);
-        }
+        // Enregistre automatiquement une "sortie" de stock liée à cette vente
+        // catalogue, pour que la courbe d'évolution du catalogue reflète les ventes.
+        await supabase.from('mouvements_stock').insert([{
+          produit_id: formData.article_id,
+          produit_nom: catItem.nom || formData.designation,
+          type: 'sortie',
+          quantite: qtyNum,
+          motif: `Vente catalogue - ${formData.client_nom}`
+        }]);
+      }
+    }
+
+    if (formData.commande_ids && formData.commande_ids.length > 0) {
+      for (const cmdId of formData.commande_ids) {
+        const cmdOriginal = commandesPending.find(c => c.id === cmdId);
+        const cmdTotal = normalizeCmdAmount(cmdOriginal?.montant_total);
+        // On marque la commande Livrée (payée intégralement) pour qu'elle
+        // reste visible et cohérente dans le Kanban et les statistiques.
+        await supabase.from('commandes').update({
+          statut: 'Livrée',
+          avance: cmdTotal,
+          reste: 0
+        }).eq('id', cmdId);
       }
     }
 
     setShowAddModal(false);
-    setEditingVenteId(null);
     setSelectedCommandesIds([]);
     setSelectedCommandesDetails([]);
     fetchVentes();
@@ -590,145 +550,171 @@ export default function VentesPage() {
     );
 
   return (
-    <div className="min-h-screen bg-slate-100 p-6 text-slate-800">
-      {/* HEADER */}
-      <div className="max-w-7xl mx-auto mb-6 flex flex-col md:flex-row justify-between md:items-center gap-4">
-        <div>
-          <Link href="/" className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1 mb-2 font-semibold">
-            <ArrowLeft size={16} /> Retour au tableau de bord
+    <div className="min-h-screen" style={{ backgroundColor: '#F5F8FC' }}>
+      <style jsx global>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
+        .font-display { font-family: 'Fraunces', ui-serif, Georgia, serif; }
+        .font-body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+        .font-mono-tape { font-family: 'Space Mono', ui-monospace, monospace; }
+      `}</style>
+
+      {/* HEADER — bandeau navy premium */}
+      <div className="relative overflow-hidden" style={{ backgroundColor: NAVY }}>
+        <div
+          className="pointer-events-none absolute -top-20 -right-20 h-72 w-72 rounded-full opacity-20 blur-3xl"
+          style={{ background: `radial-gradient(circle, ${GOLD}, transparent 70%)` }}
+        />
+        <div className="max-w-7xl mx-auto px-6 pt-8 pb-16 md:pb-20 relative">
+          <Link
+            href="/"
+            className="font-body text-xs font-semibold flex items-center gap-1.5 mb-4 transition-opacity hover:opacity-80"
+            style={{ color: 'rgba(255,255,255,0.75)' }}
+          >
+            <ArrowLeft size={14} /> Retour au tableau de bord
           </Link>
-          <h1 className="text-2xl font-bold text-slate-900">Gestion des Ventes & Factures</h1>
-          <p className="text-sm font-medium text-slate-500">Ousmane Design — Enregistrement, facturation et encaissement</p>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            onClick={handleOpenVenteLiberale}
-            className="bg-slate-900 hover:bg-slate-800 text-white font-bold px-3.5 py-2.5 rounded-lg flex items-center gap-2 shadow-sm transition-colors cursor-pointer text-xs"
-          >
-            <PlusCircle size={16} /> Vente Libérale
-          </button>
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-5">
+            <div>
+              <h1 className="font-display italic font-semibold text-2xl md:text-3xl" style={{ color: '#FFFFFF' }}>
+                Gestion des Ventes & Factures
+              </h1>
+              <p className="font-body text-sm mt-1.5" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                Ousmane Design — Enregistrement, facturation et encaissement
+              </p>
+            </div>
 
-          <button
-            onClick={() => setShowCatalogueModal(true)}
-            className="bg-amber-700 hover:bg-amber-800 text-white font-bold px-3.5 py-2.5 rounded-lg flex items-center gap-2 shadow-sm transition-colors cursor-pointer text-xs"
-          >
-            <Package size={16} /> Vendre du Catalogue
-          </button>
+            <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+              <button
+                onClick={handleOpenVenteLiberale}
+                className="font-body font-bold text-xs px-4 py-2.5 rounded-full flex items-center gap-2 transition-all hover:-translate-y-0.5 cursor-pointer"
+                style={{ backgroundColor: GOLD, color: NAVY }}
+              >
+                <PlusCircle size={15} /> Vente Libérale
+              </button>
 
-          <button
-            onClick={() => setShowImportModal(true)}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-2.5 rounded-lg flex items-center gap-2 shadow-sm transition-colors cursor-pointer text-xs"
-          >
-            <Download size={16} /> Solder une Commande
-          </button>
+              <button
+                onClick={() => setShowCatalogueModal(true)}
+                className="font-body font-bold text-xs px-4 py-2.5 rounded-full flex items-center gap-2 border transition-all hover:-translate-y-0.5 cursor-pointer"
+                style={{ borderColor: 'rgba(255,255,255,0.35)', color: '#FFFFFF' }}
+              >
+                <Package size={15} /> Vendre du Catalogue
+              </button>
+
+              <button
+                onClick={() => setShowImportModal(true)}
+                className="font-body font-bold text-xs px-4 py-2.5 rounded-full flex items-center gap-2 border transition-all hover:-translate-y-0.5 cursor-pointer"
+                style={{ borderColor: 'rgba(255,255,255,0.35)', color: '#FFFFFF' }}
+              >
+                <Download size={15} /> Solder une Commande
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* TABLEAU DES VENTES */}
-      <div className="max-w-7xl mx-auto bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-3 text-slate-400" size={16} />
-          <input
-            type="text"
-            placeholder="Rechercher une facture ou un client..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-amber-500 text-slate-900"
-          />
-        </div>
+      {/* TABLEAU DES VENTES — carte flottante sur le bandeau */}
+      <div className="max-w-7xl mx-auto px-6 -mt-10 relative z-10 pb-16">
+        <div className="bg-white p-6 rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.25)] space-y-4">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2" size={16} style={{ color: NAVY, opacity: 0.5 }} />
+            <input
+              type="text"
+              placeholder="Rechercher une facture ou un client..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="font-body w-full pl-10 pr-3 py-2.5 text-xs border border-slate-200 rounded-full bg-slate-50 outline-none focus:ring-2 text-slate-900"
+              style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
+            />
+          </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase">
-                <th className="p-3">Client</th>
-                <th className="p-3">Téléphone</th>
-                <th className="p-3">Désignation</th>
-                <th className="p-3">Total</th>
-                <th className="p-3">Réglé</th>
-                <th className="p-3">Reste</th>
-                <th className="p-3 text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                <tr><td colSpan={7} className="text-center py-6 text-slate-400">Chargement...</td></tr>
-              ) : filteredVentes.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-6 text-slate-400">Aucune vente enregistrée.</td></tr>
-              ) : filteredVentes.map((v) => {
-                let total = v.montant_total || 0;
-                let avance = v.avance || 0;
-                if (total > 0 && total < 1000) total = total * 1000;
-                if (avance > 0 && avance < 1000) avance = avance * 1000;
-                const reste = v.reste !== undefined ? v.reste : (total - avance);
-                const hasReste = reste > 0;
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs font-body">
+              <thead>
+                <tr style={{ backgroundColor: '#EAF1FB' }}>
+                  <th className="p-3 font-bold uppercase rounded-tl-lg" style={{ color: NAVY }}>Client</th>
+                  <th className="p-3 font-bold uppercase" style={{ color: NAVY }}>Téléphone</th>
+                  <th className="p-3 font-bold uppercase" style={{ color: NAVY }}>Désignation</th>
+                  <th className="p-3 font-bold uppercase" style={{ color: NAVY }}>Total</th>
+                  <th className="p-3 font-bold uppercase" style={{ color: NAVY }}>Réglé</th>
+                  <th className="p-3 font-bold uppercase" style={{ color: NAVY }}>Reste</th>
+                  <th className="p-3 font-bold uppercase text-center rounded-tr-lg" style={{ color: NAVY }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {loading ? (
+                  <tr><td colSpan={7} className="text-center py-6 text-slate-400">Chargement...</td></tr>
+                ) : filteredVentes.length === 0 ? (
+                  <tr><td colSpan={7} className="text-center py-6 text-slate-400">Aucune vente enregistrée.</td></tr>
+                ) : filteredVentes.map((v) => {
+                  let total = v.montant_total || 0;
+                  let avance = v.avance || 0;
+                  if (total > 0 && total < 1000) total = total * 1000;
+                  if (avance > 0 && avance < 1000) avance = avance * 1000;
+                  const reste = v.reste !== undefined ? v.reste : (total - avance);
 
-                return (
-                  <tr key={v.id} className="hover:bg-amber-50/30 transition-colors">
-                    <td className="p-3 font-semibold text-slate-900">{v.client_nom}</td>
-                    <td className="p-3 text-slate-500">{v.client_tel || '-'}</td>
-                    <td className="p-3 text-slate-700">{getItemName(v)}</td>
-                    <td className="p-3 font-bold text-slate-900">{formatAmount(total)} FCFA</td>
-                    <td className="p-3 text-emerald-600 font-semibold">{formatAmount(avance)} FCFA</td>
-                    <td className="p-3 font-bold text-amber-600">{formatAmount(reste)} FCFA</td>
-                    <td className="p-3 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => setSelectedVente(v)}
-                          className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-1.5 rounded-md shadow-xs transition-colors cursor-pointer"
-                          title="Voir / Imprimer Facture"
-                        >
-                          Facture
-                        </button>
-                        <button
-                          onClick={() => handleOpenEditVente(v)}
-                          className={`p-1.5 rounded-md transition-colors cursor-pointer text-white ${
-                            hasReste ? 'bg-rose-500 hover:bg-rose-600' : 'bg-sky-600 hover:bg-sky-700'
-                          }`}
-                          title={hasReste ? 'Corriger la facture / Encaisser le reste' : 'Corriger la facture'}
-                        >
-                          <Pencil size={15} />
-                        </button>
-                        <button
-                          onClick={() => handleSendWhatsAppInvoice(v)}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white p-1.5 rounded-md transition-colors cursor-pointer"
-                          title="Télécharger le PDF et envoyer sur WhatsApp"
-                        >
-                          <Send size={15} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteVente(v.id, v.client_nom)}
-                          className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
-                          title="Supprimer la vente"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                  return (
+                    <tr key={v.id} className="hover:bg-[#EAF1FB]/50 transition-colors">
+                      <td className="p-3 font-semibold text-slate-900">{v.client_nom}</td>
+                      <td className="p-3 text-slate-500">{v.client_tel || '-'}</td>
+                      <td className="p-3 text-slate-700">{getItemName(v)}</td>
+                      <td className="p-3 font-mono-tape font-bold text-slate-900">{formatAmount(total)} FCFA</td>
+                      <td className="p-3 font-mono-tape text-emerald-600 font-semibold">{formatAmount(avance)} FCFA</td>
+                      <td className="p-3 font-mono-tape font-bold" style={{ color: ORANGE }}>{formatAmount(reste)} FCFA</td>
+                      <td className="p-3 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => setSelectedVente(v)}
+                            className="font-bold px-3 py-1.5 rounded-full shadow-xs transition-colors cursor-pointer"
+                            style={{ backgroundColor: GOLD, color: NAVY }}
+                            title="Voir / Imprimer Facture"
+                          >
+                            Facture
+                          </button>
+                          <button
+                            onClick={() => handleSendWhatsAppInvoice(v)}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white p-1.5 rounded-full transition-colors cursor-pointer"
+                            title="Télécharger le PDF et envoyer sur WhatsApp"
+                          >
+                            <Send size={15} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteVente(v.id, v.client_nom)}
+                            className="p-1.5 text-slate-300 hover:text-rose-600 rounded-full transition-colors cursor-pointer"
+                            title="Supprimer la vente"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
       {/* MODAL CATALOGUE */}
       {showCatalogueModal && (
         <div onClick={() => { setShowCatalogueModal(false); setSelectedCatItem(null); }} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative border border-slate-200">
-            <div className="flex justify-between items-center mb-4 border-b pb-3">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">Vendre un article du Catalogue</h2>
-                <p className="text-xs text-slate-500">Sélectionnez le modèle. Le stock sera déduit automatiquement à la validation.</p>
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative border border-slate-200 font-body">
+            <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-3">
+                <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#FBF3E2', color: GOLD }}>
+                  <Package size={18} />
+                </span>
+                <div>
+                  <h2 className="font-display font-semibold text-lg" style={{ color: NAVY }}>Vendre un article du Catalogue</h2>
+                  <p className="text-xs text-slate-500">Sélectionnez le modèle. Le stock sera déduit automatiquement à la validation.</p>
+                </div>
               </div>
               <button onClick={() => { setShowCatalogueModal(false); setSelectedCatItem(null); }} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X size={20} /></button>
             </div>
 
             <div className="relative mb-4">
-              <Search className="absolute left-3 top-3 text-slate-400" size={16} />
-              <input type="text" placeholder="Rechercher par nom, catégorie, taille ou couleur..." value={catalogueSearch} onChange={(e) => setCatalogueSearch(e.target.value)} className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-amber-500 text-slate-900" />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2" size={16} style={{ color: NAVY, opacity: 0.5 }} />
+              <input type="text" placeholder="Rechercher par nom, catégorie, taille ou couleur..." value={catalogueSearch} onChange={(e) => setCatalogueSearch(e.target.value)} className="w-full pl-10 pr-3 py-2.5 text-xs border border-slate-200 rounded-full bg-slate-50 outline-none focus:ring-2 text-slate-900" style={{ '--tw-ring-color': GOLD } as React.CSSProperties} />
             </div>
 
             {!selectedCatItem ? (
@@ -740,12 +726,12 @@ export default function VentesPage() {
                   const detailsText = formatCatalogueDetails(item);
 
                   return (
-                    <div key={item.id} className={`p-3.5 flex items-center justify-between transition-colors ${isVendu ? 'bg-slate-50 opacity-75' : 'hover:bg-amber-50/40'}`}>
+                    <div key={item.id} className={`p-3.5 flex items-center justify-between transition-colors ${isVendu ? 'bg-slate-50 opacity-75' : 'hover:bg-[#EAF1FB]/40'}`}>
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-slate-900 text-xs">{item.nom}</span>
                           {isVendu ? (
-                            <span className="bg-rose-100 text-rose-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-rose-200 flex items-center gap-1">
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1" style={{ backgroundColor: '#FBEAE3', color: ORANGE, borderColor: `${ORANGE}33` }}>
                               <Tag size={10} /> VENDU
                             </span>
                           ) : (
@@ -761,7 +747,7 @@ export default function VentesPage() {
                           </p>
                         )}
 
-                        <p className="text-[11px] text-amber-800 font-bold">
+                        <p className="text-[11px] font-bold font-mono-tape" style={{ color: GOLD }}>
                           Prix : {formatAmount(item.prix)} FCFA
                         </p>
                       </div>
@@ -769,7 +755,8 @@ export default function VentesPage() {
                       <button
                         onClick={() => handlePrepareCatalogueItem(item)}
                         disabled={isVendu}
-                        className="bg-amber-700 hover:bg-amber-800 disabled:bg-slate-300 disabled:text-slate-500 text-white font-bold text-xs px-3.5 py-2 rounded-lg cursor-pointer transition-colors shrink-0"
+                        className="font-bold text-xs px-3.5 py-2 rounded-full cursor-pointer transition-colors shrink-0 disabled:bg-slate-300 disabled:text-slate-500"
+                        style={!isVendu ? { backgroundColor: GOLD, color: NAVY } : undefined}
                       >
                         {isVendu ? 'Épuisé' : 'Choisir'}
                       </button>
@@ -778,11 +765,11 @@ export default function VentesPage() {
                 })}
               </div>
             ) : (
-              <div className="bg-amber-50/60 border border-amber-200 p-4 rounded-xl space-y-4">
+              <div className="rounded-xl space-y-4 p-4" style={{ backgroundColor: '#FBF3E2', border: `1px solid ${GOLD}44` }}>
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="font-bold text-slate-900 text-sm">{selectedCatItem.nom}</h3>
-                    <p className="text-xs text-amber-800 font-bold">{formatAmount(selectedCatItem.prix)} FCFA</p>
+                    <h3 className="font-display font-semibold text-slate-900 text-sm">{selectedCatItem.nom}</h3>
+                    <p className="text-xs font-bold font-mono-tape" style={{ color: GOLD }}>{formatAmount(selectedCatItem.prix)} FCFA</p>
                   </div>
                   <button onClick={() => setSelectedCatItem(null)} className="text-xs text-slate-500 underline cursor-pointer">Changer d'article</button>
                 </div>
@@ -816,8 +803,8 @@ export default function VentesPage() {
                 </div>
 
                 <div className="flex justify-end gap-2 pt-2">
-                  <button onClick={() => setSelectedCatItem(null)} className="px-3.5 py-2 rounded-lg bg-slate-200 text-xs font-bold cursor-pointer">Retour</button>
-                  <button onClick={handleConfirmCatalogueItem} className="px-4 py-2 rounded-lg bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold cursor-pointer">Valider la sélection</button>
+                  <button onClick={() => setSelectedCatItem(null)} className="px-3.5 py-2 rounded-full bg-slate-200 text-xs font-bold cursor-pointer">Retour</button>
+                  <button onClick={handleConfirmCatalogueItem} className="px-4 py-2 rounded-full text-xs font-bold cursor-pointer transition-all hover:-translate-y-0.5" style={{ backgroundColor: GOLD, color: NAVY }}>Valider la sélection</button>
                 </div>
               </div>
             )}
@@ -828,23 +815,28 @@ export default function VentesPage() {
       {/* MODAL SOLDER COMMANDE */}
       {showImportModal && (
         <div onClick={() => setShowImportModal(false)} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl relative border border-slate-200">
-            <div className="flex justify-between items-center mb-4 border-b pb-3">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">Solder des Commandes Sur-Mesure</h2>
-                <p className="text-xs text-slate-500">Sélectionnez une ou plusieurs commandes du même client pour les solder et générer une facture unique.</p>
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl relative border border-slate-200 font-body">
+            <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-3">
+                <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-emerald-100 text-emerald-700">
+                  <Download size={18} />
+                </span>
+                <div>
+                  <h2 className="font-display font-semibold text-lg" style={{ color: NAVY }}>Solder des Commandes Sur-Mesure</h2>
+                  <p className="text-xs text-slate-500">Sélectionnez une ou plusieurs commandes du même client pour les solder et générer une facture unique.</p>
+                </div>
               </div>
               <button onClick={() => setShowImportModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X size={20} /></button>
             </div>
 
             <div className="relative mb-4">
-              <Search className="absolute left-3 top-3 text-slate-400" size={16} />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2" size={16} style={{ color: NAVY, opacity: 0.5 }} />
               <input
                 type="text"
                 placeholder="Rechercher par nom de client, modèle ou détail..."
                 value={importSearch}
                 onChange={(e) => setImportSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900"
+                className="w-full pl-10 pr-3 py-2.5 text-xs border border-slate-200 rounded-full bg-slate-50 outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900"
               />
             </div>
 
@@ -882,10 +874,10 @@ export default function VentesPage() {
                       </div>
                     </div>
 
-                    <div className="text-right space-y-0.5 shrink-0">
+                    <div className="text-right space-y-0.5 shrink-0 font-mono-tape">
                       <p className="font-bold text-slate-900 text-xs">Total: {formatAmount(total)} FCFA</p>
                       <p className="text-[11px] text-emerald-600 font-semibold">Acompte versé: {formatAmount(acompte)} FCFA</p>
-                      <p className="text-[11px] text-amber-600 font-bold">Reste: {formatAmount(reste)} FCFA</p>
+                      <p className="text-[11px] font-bold" style={{ color: ORANGE }}>Reste: {formatAmount(reste)} FCFA</p>
                     </div>
                   </div>
                 );
@@ -898,10 +890,10 @@ export default function VentesPage() {
                   {selectedCommandesIds.length} article(s) sélectionné(s)
                 </span>
                 {selectedCommandesIds.length > 0 && (
-                  <p className="text-[11px] text-slate-500 mt-0.5">
+                  <p className="text-[11px] text-slate-500 mt-0.5 font-mono-tape">
                     Total: <strong className="text-slate-800">{formatAmount(selectedCommandesSummary.total)} FCFA</strong>
                     {' · '}Acompte déjà versé: <strong className="text-emerald-600">{formatAmount(selectedCommandesSummary.acompte)} FCFA</strong>
-                    {' · '}Reste à percevoir: <strong className="text-amber-600">{formatAmount(selectedCommandesSummary.reste)} FCFA</strong>
+                    {' · '}Reste à percevoir: <strong style={{ color: ORANGE }}>{formatAmount(selectedCommandesSummary.reste)} FCFA</strong>
                   </p>
                 )}
               </div>
@@ -910,7 +902,7 @@ export default function VentesPage() {
                 <button
                   type="button"
                   onClick={() => setShowImportModal(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-200 font-bold text-xs cursor-pointer"
+                  className="px-4 py-2 rounded-full bg-slate-200 font-bold text-xs cursor-pointer"
                 >
                   Annuler
                 </button>
@@ -918,7 +910,7 @@ export default function VentesPage() {
                   type="button"
                   onClick={handleConfirmImportCommandes}
                   disabled={selectedCommandesIds.length === 0}
-                  className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold text-xs cursor-pointer"
+                  className="px-4 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold text-xs cursor-pointer transition-all hover:-translate-y-0.5"
                 >
                   Solder & Générer Facture ({selectedCommandesIds.length})
                 </button>
@@ -928,44 +920,31 @@ export default function VentesPage() {
         </div>
       )}
 
-      {/* MODAL FORMULAIRE DE VENTE / CORRECTION */}
+      {/* MODAL FORMULAIRE DE VENTE */}
       {showAddModal && (
-        <div onClick={closeAddModal} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl relative border border-slate-200 text-slate-900">
-            <div className="flex justify-between items-center mb-4 border-b pb-3">
-              <h2 className="text-lg font-bold text-slate-900">
-                {editingVenteId
-                  ? 'Corriger la Facture / Encaisser un Paiement'
-                  : formData.commande_ids.length > 0
-                    ? 'Solder & Générer Facture'
-                    : formData.mode_commande === 'Vente Libérale'
-                      ? 'Nouvelle Vente Libérale'
-                      : 'Vente Catalogue'}
+        <div onClick={() => setShowAddModal(false)} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl relative border border-slate-200 text-slate-900 font-body">
+            <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
+              <h2 className="font-display italic font-semibold text-lg" style={{ color: NAVY }}>
+                {formData.commande_ids.length > 0 ? 'Solder & Générer Facture' : formData.mode_commande === 'Vente Libérale' ? 'Nouvelle Vente Libérale' : 'Vente Catalogue'}
               </h2>
-              <button onClick={closeAddModal} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X size={20} /></button>
+              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X size={20} /></button>
             </div>
-
-            {editingVenteId && (
-              <div className="mb-4 bg-sky-50 border border-sky-200 text-sky-800 text-[11px] font-semibold rounded-lg p-2.5">
-                Mode correction : modifiez le montant encaissé (ou tout autre champ) puis validez pour mettre à jour cette facture existante.
-              </div>
-            )}
-
             <form onSubmit={handleCreateVente} className="space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Nom du client *</label>
-                  <input type="text" required value={formData.client_nom} onChange={(e) => setFormData({ ...formData, client_nom: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 outline-none" />
+                  <input type="text" required value={formData.client_nom} onChange={(e) => setFormData({ ...formData, client_nom: e.target.value })} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-slate-900 outline-none focus:ring-2" style={{ '--tw-ring-color': GOLD } as React.CSSProperties} />
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Téléphone</label>
-                  <input type="text" value={formData.client_tel} onChange={(e) => setFormData({ ...formData, client_tel: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 outline-none" />
+                  <input type="text" value={formData.client_tel} onChange={(e) => setFormData({ ...formData, client_tel: e.target.value })} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-slate-900 outline-none focus:ring-2" style={{ '--tw-ring-color': GOLD } as React.CSSProperties} />
                 </div>
               </div>
 
               {/* DÉTAIL DES COMMANDES SOLDÉES (visible uniquement quand cette vente provient d'un solde de commande(s)) */}
               {formData.commande_ids.length > 0 && selectedCommandesDetails.length > 0 && (
-                <div className="border border-amber-200 bg-amber-50/60 rounded-lg p-3 space-y-2">
+                <div className="rounded-lg p-3 space-y-2" style={{ backgroundColor: '#FBF3E2', border: `1px solid ${GOLD}44` }}>
                   <p className="font-bold text-slate-700 text-[11px] uppercase tracking-wide">
                     Détail des commandes incluses dans ce solde
                   </p>
@@ -973,10 +952,10 @@ export default function VentesPage() {
                     {selectedCommandesDetails.map((d) => (
                       <div key={d.id} className="bg-white border border-slate-200 rounded-md p-2 flex flex-col gap-0.5">
                         <p className="text-slate-800 font-semibold text-[11px]">{d.label}</p>
-                        <div className="flex flex-wrap gap-x-3 text-[10px]">
+                        <div className="flex flex-wrap gap-x-3 text-[10px] font-mono-tape">
                           <span className="text-slate-600">Total: <strong>{formatAmount(d.total)} FCFA</strong></span>
                           <span className="text-emerald-600">Acompte versé: <strong>{formatAmount(d.acompte)} FCFA</strong></span>
-                          <span className="text-amber-600">Reste: <strong>{formatAmount(d.reste)} FCFA</strong></span>
+                          <span style={{ color: ORANGE }}>Reste: <strong>{formatAmount(d.reste)} FCFA</strong></span>
                         </div>
                       </div>
                     ))}
@@ -990,7 +969,8 @@ export default function VentesPage() {
                   required
                   value={formData.mode_paiement}
                   onChange={(e) => setFormData({ ...formData, mode_paiement: e.target.value })}
-                  className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 outline-none font-semibold"
+                  className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-slate-900 outline-none font-semibold focus:ring-2"
+                  style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                 >
                   <option value="Espèces">Espèces</option>
                   <option value="Wave">Wave</option>
@@ -1001,7 +981,7 @@ export default function VentesPage() {
               </div>
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Désignation / Article *</label>
-                <textarea required rows={2} value={formData.designation} onChange={(e) => setFormData({ ...formData, designation: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 outline-none" />
+                <textarea required rows={2} value={formData.designation} onChange={(e) => setFormData({ ...formData, designation: e.target.value })} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-slate-900 outline-none focus:ring-2" style={{ '--tw-ring-color': GOLD } as React.CSSProperties} />
               </div>
 
               {formData.commande_ids.length > 0 ? (
@@ -1009,7 +989,7 @@ export default function VentesPage() {
                   <label className="block font-bold text-slate-700 mb-1">
                     Montant Total (somme des {formData.commande_ids.length} commande{formData.commande_ids.length > 1 ? 's' : ''})
                   </label>
-                  <input type="text" readOnly value={`${formatAmount(montantTotalCalcul)} FCFA`} className="w-full p-2 border border-slate-200 rounded-md bg-slate-100 font-bold text-slate-900" />
+                  <input type="text" readOnly value={`${formatAmount(montantTotalCalcul)} FCFA`} className="font-mono-tape w-full p-2.5 border border-slate-200 rounded-lg bg-slate-100 font-bold text-slate-900" />
                   <p className="text-[10px] text-slate-400 mt-1">
                     Les commandes ayant des prix différents, le total est calculé automatiquement à partir du détail ci-dessus (pas de prix unitaire unique).
                   </p>
@@ -1018,15 +998,15 @@ export default function VentesPage() {
                 <div className="grid grid-cols-3 gap-3">
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">Quantité</label>
-                    <input type="number" min="1" value={formData.quantite} onChange={(e) => setFormData({ ...formData, quantite: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 outline-none" />
+                    <input type="number" min="1" value={formData.quantite} onChange={(e) => setFormData({ ...formData, quantite: e.target.value })} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-slate-900 outline-none focus:ring-2" style={{ '--tw-ring-color': GOLD } as React.CSSProperties} />
                   </div>
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">Prix Unitaire</label>
-                    <input type="number" min="0" value={formData.prix_unitaire} onChange={(e) => setFormData({ ...formData, prix_unitaire: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 outline-none" />
+                    <input type="number" min="0" value={formData.prix_unitaire} onChange={(e) => setFormData({ ...formData, prix_unitaire: e.target.value })} className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-slate-900 outline-none focus:ring-2" style={{ '--tw-ring-color': GOLD } as React.CSSProperties} />
                   </div>
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">Montant Total</label>
-                    <input type="text" readOnly value={`${formatAmount(montantTotalCalcul)} FCFA`} className="w-full p-2 border border-slate-200 rounded-md bg-slate-100 font-bold" />
+                    <input type="text" readOnly value={`${formatAmount(montantTotalCalcul)} FCFA`} className="font-mono-tape w-full p-2.5 border border-slate-200 rounded-lg bg-slate-100 font-bold" />
                   </div>
                 </div>
               )}
@@ -1034,18 +1014,16 @@ export default function VentesPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Montant Encaissé</label>
-                  <input type="number" min="0" value={formData.avance} onChange={(e) => setFormData({ ...formData, avance: e.target.value })} className="w-full p-2 border border-slate-300 rounded-md bg-white text-emerald-600 font-bold outline-none" />
+                  <input type="number" min="0" value={formData.avance} onChange={(e) => setFormData({ ...formData, avance: e.target.value })} className="font-mono-tape w-full p-2.5 border border-slate-300 rounded-lg bg-white text-emerald-600 font-bold outline-none focus:ring-2" style={{ '--tw-ring-color': GOLD } as React.CSSProperties} />
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Reste à payer</label>
-                  <input type="text" readOnly value={`${formatAmount(resteCalcul)} FCFA`} className="w-full p-2 border border-slate-200 rounded-md bg-amber-50 text-amber-700 font-bold" />
+                  <input type="text" readOnly value={`${formatAmount(resteCalcul)} FCFA`} className="font-mono-tape w-full p-2.5 border border-slate-200 rounded-lg font-bold" style={{ backgroundColor: '#FBEAE3', color: ORANGE }} />
                 </div>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={closeAddModal} className="px-4 py-2 rounded-lg bg-slate-200 font-bold cursor-pointer">Annuler</button>
-                <button type="submit" className="px-4 py-2 rounded-lg bg-amber-700 hover:bg-amber-800 text-white font-bold cursor-pointer">
-                  {editingVenteId ? 'Enregistrer les modifications' : 'Enregistrer la vente'}
-                </button>
+                <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 rounded-full bg-slate-200 font-bold cursor-pointer">Annuler</button>
+                <button type="submit" className="px-4 py-2 rounded-full font-bold cursor-pointer transition-all hover:-translate-y-0.5" style={{ backgroundColor: GOLD, color: NAVY }}>Enregistrer la vente</button>
               </div>
             </form>
           </div>
@@ -1065,40 +1043,31 @@ export default function VentesPage() {
 
         return (
           <div onClick={() => setSelectedVente(null)} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-            <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative border border-slate-200 my-8">
+            <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative border border-slate-200 my-8 font-body">
               
-              <div className="flex justify-between items-center mb-4 border-b pb-3 print:hidden">
+              <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3 print:hidden">
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={() => handleDownloadPDF(selectedVente)}
-                    className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    className="font-bold text-xs px-3.5 py-2 rounded-full flex items-center gap-1.5 cursor-pointer shadow-xs transition-all hover:-translate-y-0.5"
+                    style={{ backgroundColor: NAVY, color: '#FFFFFF' }}
                   >
                     <FileText size={15} /> Télécharger PDF
                   </button>
 
                   <button
                     onClick={() => window.print()}
-                    className="bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    className="font-bold text-xs px-3.5 py-2 rounded-full flex items-center gap-1.5 cursor-pointer shadow-xs transition-all hover:-translate-y-0.5"
+                    style={{ backgroundColor: GOLD, color: NAVY }}
                   >
                     <Printer size={15} /> Imprimer
                   </button>
 
                   <button
                     onClick={() => handleSendWhatsAppInvoice(selectedVente)}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-full flex items-center gap-1.5 cursor-pointer shadow-xs transition-all hover:-translate-y-0.5"
                   >
                     <Send size={15} /> WhatsApp
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      const v = selectedVente;
-                      setSelectedVente(null);
-                      if (v) handleOpenEditVente(v);
-                    }}
-                    className="bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-xs"
-                  >
-                    <Pencil size={15} /> Corriger
                   </button>
                 </div>
 
