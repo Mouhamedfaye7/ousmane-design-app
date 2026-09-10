@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Trash2, Plus, ArrowLeft, Package, Loader2, Edit3, X, Check,
-  Search, ArrowUpCircle, ArrowDownCircle, History, BarChart3, AlertTriangle
+  Search, ArrowUpCircle, ArrowDownCircle, History, BarChart3, AlertTriangle, Sparkles
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -29,10 +29,6 @@ interface Mouvement {
   motif?: string;
   created_at: string;
 }
-
-const NAVY = '#1B3B6F';
-const GOLD = '#C9A24B';
-const ORANGE = '#C1502E';
 
 // Fonction utilitaire pour associer les noms de couleurs en français aux valeurs CSS
 const getCouleurHex = (couleur: string): string => {
@@ -282,7 +278,7 @@ export default function CataloguePretAPorterPage() {
             .select();
 
           if (!errMvt && mvtData && mvtData[0]) {
-            setMouvements((prev) => [mvtData[0], ...prev]);
+            setMouvements(prev => [mvtData[0], ...prev]);
           }
         }
 
@@ -457,72 +453,57 @@ export default function CataloguePretAPorterPage() {
   const libelleDepuis = dateDebutCatalogue.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#F5F8FC' }}>
-      <style jsx global>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
-        .font-display { font-family: 'Fraunces', ui-serif, Georgia, serif; }
-        .font-body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
-        .font-mono-tape { font-family: 'Space Mono', ui-monospace, monospace; }
-      `}</style>
+    <div className="min-h-screen bg-gradient-to-b from-slate-100 to-slate-50 p-6 text-slate-800">
+      <div className="max-w-7xl mx-auto space-y-5">
+        <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors">
+          <ArrowLeft size={16} /> Retour au tableau de bord
+        </Link>
 
-      {/* HEADER — bandeau navy premium */}
-      <div className="relative overflow-hidden" style={{ backgroundColor: NAVY }}>
-        <div
-          className="pointer-events-none absolute -top-20 -right-20 h-72 w-72 rounded-full opacity-20 blur-3xl"
-          style={{ background: `radial-gradient(circle, ${GOLD}, transparent 70%)` }}
-        />
-        <div className="max-w-7xl mx-auto px-6 pt-8 pb-16 md:pb-20 relative">
-          <Link
-            href="/"
-            className="font-body text-xs font-semibold flex items-center gap-1.5 mb-4 transition-opacity hover:opacity-80"
-            style={{ color: 'rgba(255,255,255,0.75)' }}
-          >
-            <ArrowLeft size={14} /> Retour au tableau de bord
-          </Link>
-
-          <div>
-            <h1 className="font-display italic font-semibold text-2xl md:text-3xl" style={{ color: '#FFFFFF' }}>
-              Catalogue & Modèles Prêt-à-Porter
-            </h1>
-            <p className="font-body text-sm mt-1.5" style={{ color: 'rgba(255,255,255,0.7)' }}>
-              Ousmane Design — Gestion du stock, des entrées / sorties et de la performance du catalogue
-            </p>
+        {/* HEADER PREMIUM */}
+        <header className="bg-gradient-to-r from-amber-800 via-amber-700 to-amber-900 rounded-2xl p-6 shadow-lg text-white flex flex-col md:flex-row justify-between md:items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="bg-white/15 p-3 rounded-xl backdrop-blur-sm">
+              <Package size={26} />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold flex items-center gap-2">
+                Catalogue & Modèles Prêt-à-Porter <Sparkles size={18} className="text-amber-200" />
+              </h1>
+              <p className="text-sm font-medium text-amber-100">
+                Ousmane Design — Gestion du stock, des entrées / sorties et de la performance du catalogue
+              </p>
+            </div>
           </div>
-        </div>
-      </div>
+        </header>
 
-      <div className="max-w-7xl mx-auto px-6 -mt-10 relative z-10 pb-16 space-y-6">
         {/* CARTES DE STATISTIQUES */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.25)] p-4 space-y-1 font-body">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-1">
             <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Articles au catalogue</p>
-            <p className="font-mono-tape text-2xl font-extrabold" style={{ color: NAVY }}>{produits.length}</p>
+            <p className="text-2xl font-extrabold text-slate-900">{produits.length}</p>
           </div>
-          <div className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.25)] p-4 space-y-1 font-body">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-1">
             <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Unités en stock</p>
-            <p className="font-mono-tape text-2xl font-extrabold" style={{ color: NAVY }}>{totalStock}</p>
+            <p className="text-2xl font-extrabold text-blue-700">{totalStock}</p>
           </div>
-          <div className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.25)] p-4 space-y-1 font-body">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-1">
             <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Valeur du stock</p>
-            <p className="font-mono-tape text-lg font-extrabold" style={{ color: GOLD }}>{valeurStock.toLocaleString('fr-FR')} FCFA</p>
+            <p className="text-lg font-extrabold text-amber-800">{valeurStock.toLocaleString('fr-FR')} FCFA</p>
           </div>
-          <div
-            className="rounded-2xl border shadow-[0_10px_30px_-15px_rgba(23,27,46,0.25)] p-4 space-y-1 font-body"
-            style={ruptureCount > 0 ? { backgroundColor: '#FBEAE3', borderColor: `${ORANGE}33` } : { backgroundColor: '#FFFFFF', borderColor: 'rgba(0,0,0,0.05)' }}
-          >
+          <div className={`rounded-xl border shadow-sm p-4 space-y-1 ${ruptureCount > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'}`}>
             <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 flex items-center gap-1">
-              {ruptureCount > 0 && <AlertTriangle size={12} style={{ color: ORANGE }} />} Stock faible (≤3)
+              {ruptureCount > 0 && <AlertTriangle size={12} className="text-red-600" />} Stock faible (≤3)
             </p>
-            <p className="font-mono-tape text-2xl font-extrabold" style={{ color: ruptureCount > 0 ? ORANGE : '#16A34A' }}>{ruptureCount}</p>
+            <p className={`text-2xl font-extrabold ${ruptureCount > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{ruptureCount}</p>
           </div>
         </div>
 
         {/* COURBE D'ÉVOLUTION DES MOUVEMENTS DE STOCK */}
-        <div className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.25)] p-5 space-y-3 font-body">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3">
           <div className="flex flex-wrap justify-between items-center gap-2">
             <div>
-              <h2 className="font-display font-semibold text-sm flex items-center gap-2" style={{ color: NAVY }}>
-                <BarChart3 size={16} style={{ color: GOLD }} /> Évolution des Entrées / Sorties
+              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <BarChart3 size={16} className="text-amber-700" /> Évolution des Entrées / Sorties
               </h2>
               <p className="text-[11px] text-slate-400 font-medium mt-0.5">
                 Depuis le {libelleDepuis} (premier article enregistré) — vue {libelleGranularite}
@@ -532,8 +513,8 @@ export default function CataloguePretAPorterPage() {
               <span className="flex items-center gap-1.5 text-emerald-700">
                 <span className="w-2.5 h-2.5 rounded-sm bg-emerald-600 inline-block" /> Entrées : {totalEntreesPeriode}
               </span>
-              <span className="flex items-center gap-1.5" style={{ color: ORANGE }}>
-                <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: ORANGE }} /> Sorties : {totalSortiesPeriode}
+              <span className="flex items-center gap-1.5 text-red-600">
+                <span className="w-2.5 h-2.5 rounded-sm bg-red-600 inline-block" /> Sorties : {totalSortiesPeriode}
               </span>
             </div>
           </div>
@@ -545,25 +526,45 @@ export default function CataloguePretAPorterPage() {
           ) : (
             <div className="w-full overflow-x-auto">
               <svg viewBox="0 0 700 230" width="100%" height="220" preserveAspectRatio="none">
+                {/* Lignes de repère horizontales */}
                 <line x1="0" y1="180" x2="700" y2="180" stroke="#e2e8f0" strokeWidth="1" />
-                {donneesEvolution.map((d, i) => {
+                <line x1="0" y1="115" x2="700" y2="115" stroke="#f1f5f9" strokeWidth="1" strokeDasharray="4 4" />
+                <line x1="0" y1="50" x2="700" y2="50" stroke="#f1f5f9" strokeWidth="1" strokeDasharray="4 4" />
+
+                {(() => {
                   const largeurBucket = 700 / nbBuckets;
-                  const xBase = i * largeurBucket + largeurBucket * 0.15;
-                  const largeurBarre = Math.max(2, largeurBucket * 0.35);
-                  const hEntree = (d.entrees / maxEvolution) * 130;
-                  const hSortie = (d.sorties / maxEvolution) * 130;
+                  const getX = (i: number) => i * largeurBucket + largeurBucket / 2;
+                  const getY = (val: number) => 180 - (val / maxEvolution) * 130;
+
+                  const pointsEntrees = donneesEvolution.map((d, i) => `${getX(i)},${getY(d.entrees)}`).join(' ');
+                  const pointsSorties = donneesEvolution.map((d, i) => `${getX(i)},${getY(d.sorties)}`).join(' ');
+
                   return (
-                    <g key={i}>
-                      <rect x={xBase} y={180 - hEntree} width={largeurBarre} height={hEntree} fill="#059669" rx="1.5" />
-                      <rect x={xBase + largeurBarre + 2} y={180 - hSortie} width={largeurBarre} height={hSortie} fill={ORANGE} rx="1.5" />
-                      {i % etiquetteStep === 0 && (
-                        <text x={xBase + largeurBarre} y={198} fontSize="9" fill="#94a3b8" textAnchor="middle" fontWeight="600">
-                          {d.label}
-                        </text>
-                      )}
-                    </g>
+                    <>
+                      {/* Courbe des entrées */}
+                      <polyline points={pointsEntrees} fill="none" stroke="#059669" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+                      {/* Courbe des sorties */}
+                      <polyline points={pointsSorties} fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+
+                      {/* Points + étiquettes de l'axe X */}
+                      {donneesEvolution.map((d, i) => (
+                        <g key={i}>
+                          {d.entrees > 0 && (
+                            <circle cx={getX(i)} cy={getY(d.entrees)} r="3" fill="#059669" stroke="#ffffff" strokeWidth="1.5" />
+                          )}
+                          {d.sorties > 0 && (
+                            <circle cx={getX(i)} cy={getY(d.sorties)} r="3" fill="#dc2626" stroke="#ffffff" strokeWidth="1.5" />
+                          )}
+                          {i % etiquetteStep === 0 && (
+                            <text x={getX(i)} y={198} fontSize="9" fill="#94a3b8" textAnchor="middle" fontWeight="600">
+                              {d.label}
+                            </text>
+                          )}
+                        </g>
+                      ))}
+                    </>
                   );
-                })}
+                })()}
               </svg>
             </div>
           )}
@@ -571,21 +572,16 @@ export default function CataloguePretAPorterPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* FORMULAIRE */}
-          <div className="bg-white p-6 rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.25)] space-y-4 self-start font-body">
-            <div className="flex justify-between items-center pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#FBF3E2', color: GOLD }}>
-                  <Package size={17} />
-                </span>
-                <h2 className="font-display font-semibold text-lg" style={{ color: NAVY }}>
-                  {editingId ? 'Modifier l’Article' : 'Ajouter un Article'}
-                </h2>
-              </div>
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4 self-start">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+              <h2 className="text-lg font-bold text-slate-900">
+                {editingId ? 'Modifier l’Article' : 'Ajouter un Article Prêt-à-Porter'}
+              </h2>
               {editingId && (
                 <button
                   type="button"
                   onClick={reinitialiserFormulaire}
-                  className="text-slate-400 hover:text-slate-600 p-1 rounded-md cursor-pointer"
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-md"
                   title="Annuler l'édition"
                 >
                   <X size={18} />
@@ -593,28 +589,26 @@ export default function CataloguePretAPorterPage() {
               )}
             </div>
 
-            <form onSubmit={enregistrerProduit} className="space-y-4 text-xs">
+            <form onSubmit={enregistrerProduit} className="space-y-4">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Nom du modèle / Article</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Nom du modèle / Article</label>
                 <input
                   type="text"
                   placeholder="Ex: Ensemble Tunique Brodé"
                   value={nom}
                   onChange={(e) => setNom(e.target.value)}
-                  className="w-full bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm outline-none focus:ring-2"
-                  style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
+                  className="w-full bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
                   required
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Catégorie</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Catégorie</label>
                   <select
                     value={categorie}
                     onChange={(e) => setCategorie(e.target.value)}
-                    className="w-full bg-white border border-slate-300 text-slate-900 p-2.5 rounded-lg text-sm font-medium outline-none focus:ring-2"
-                    style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
+                    className="w-full bg-white border border-slate-300 text-slate-900 p-2.5 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-amber-600"
                   >
                     <option value="Homme">Homme</option>
                     <option value="Femme">Femme</option>
@@ -624,34 +618,32 @@ export default function CataloguePretAPorterPage() {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Prix (FCFA)</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Prix (FCFA)</label>
                   <input
                     type="number"
                     placeholder="Ex: 25000"
                     value={prix}
                     onChange={(e) => setPrix(e.target.value === '' ? '' : Number(e.target.value))}
-                    className="w-full bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm outline-none focus:ring-2"
-                    style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
+                    className="w-full bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
                     required
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Stock Initial (Quantité)</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Stock Initial (Quantité)</label>
                 <input
                   type="number"
                   placeholder="Ex: 10"
                   value={quantiteStock}
                   onChange={(e) => setQuantiteStock(e.target.value === '' ? '' : Number(e.target.value))}
-                  className="w-full bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm outline-none focus:ring-2"
-                  style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
+                  className="w-full bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
                   required
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Tailles disponibles</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Tailles disponibles</label>
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   {optionsTailles.map((t) => {
                     const estSelectionne = taillesSelectionnees.includes(t);
@@ -660,12 +652,11 @@ export default function CataloguePretAPorterPage() {
                         type="button"
                         key={t}
                         onClick={() => toggleTaille(t)}
-                        className="px-2.5 py-1 text-xs rounded-full font-bold border transition-all cursor-pointer"
-                        style={
+                        className={`px-2.5 py-1 text-xs rounded-md font-bold border transition-all cursor-pointer ${
                           estSelectionne
-                            ? { backgroundColor: GOLD, color: NAVY, borderColor: GOLD }
-                            : { backgroundColor: '#F8FAFD', color: '#475569', borderColor: '#E2E8F0' }
-                        }
+                            ? 'bg-amber-700 text-white border-amber-700'
+                            : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100'
+                        }`}
                       >
                         {t}
                       </button>
@@ -675,7 +666,7 @@ export default function CataloguePretAPorterPage() {
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">
+                <label className="block text-xs font-bold text-slate-700 mb-1">
                   Couleurs (séparées par une virgule)
                 </label>
                 <input
@@ -683,19 +674,17 @@ export default function CataloguePretAPorterPage() {
                   placeholder="Ex: Blanc, Bleu Marine, Doré, Noir"
                   value={saisieCouleurs}
                   onChange={(e) => setSaisieCouleurs(e.target.value)}
-                  className="w-full bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm outline-none focus:ring-2"
-                  style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
+                  className="w-full bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Description & Tissu</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Description & Tissu</label>
                 <textarea
                   placeholder="Ex: Tissu Bazin riche, col officier, coupe ajustée"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="w-full bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm h-20 outline-none focus:ring-2"
-                  style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
+                  className="w-full bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm h-20 focus:outline-none focus:ring-2 focus:ring-amber-600"
                 />
               </div>
 
@@ -703,8 +692,7 @@ export default function CataloguePretAPorterPage() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full disabled:opacity-50 py-2.5 rounded-full font-bold text-sm shadow-xs transition-all hover:-translate-y-0.5 flex items-center justify-center gap-2 cursor-pointer"
-                  style={{ backgroundColor: GOLD, color: NAVY }}
+                  className="w-full bg-amber-700 hover:bg-amber-800 disabled:opacity-50 text-white py-2.5 rounded-lg font-bold text-sm shadow-sm transition-colors flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {isSubmitting ? (
                     <Loader2 size={18} className="animate-spin" />
@@ -723,7 +711,7 @@ export default function CataloguePretAPorterPage() {
                   <button
                     type="button"
                     onClick={reinitialiserFormulaire}
-                    className="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 py-2 rounded-full font-semibold text-xs transition-colors cursor-pointer"
+                    className="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 py-2 rounded-lg font-semibold text-xs transition-colors cursor-pointer"
                   >
                     Annuler la modification
                   </button>
@@ -732,9 +720,9 @@ export default function CataloguePretAPorterPage() {
             </form>
 
             {/* HISTORIQUE DES MOUVEMENTS RÉCENTS */}
-            <div className="pt-4 border-t border-slate-100 space-y-2">
-              <h3 className="text-[11px] font-bold uppercase tracking-wide flex items-center gap-1.5" style={{ color: GOLD }}>
-                <History size={14} /> Mouvements récents
+            <div className="pt-4 border-t border-slate-200 space-y-2">
+              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                <History size={14} className="text-amber-700" /> Mouvements récents
               </h3>
               {loadingMouvements ? (
                 <p className="text-xs text-slate-400">Chargement...</p>
@@ -748,14 +736,14 @@ export default function CataloguePretAPorterPage() {
                         {m.type === 'entree' ? (
                           <ArrowUpCircle size={15} className="text-emerald-600 shrink-0" />
                         ) : (
-                          <ArrowDownCircle size={15} className="shrink-0" style={{ color: ORANGE }} />
+                          <ArrowDownCircle size={15} className="text-red-600 shrink-0" />
                         )}
                         <div className="min-w-0">
                           <p className="text-[11px] font-bold text-slate-800 truncate">{m.produit_nom}</p>
-                          <p className="text-[10px] text-slate-400 font-mono-tape">{formaterDateHeure(m.created_at)}</p>
+                          <p className="text-[10px] text-slate-400">{formaterDateHeure(m.created_at)}</p>
                         </div>
                       </div>
-                      <span className="font-mono-tape text-xs font-extrabold shrink-0" style={{ color: m.type === 'entree' ? '#059669' : ORANGE }}>
+                      <span className={`text-xs font-extrabold shrink-0 ${m.type === 'entree' ? 'text-emerald-600' : 'text-red-600'}`}>
                         {m.type === 'entree' ? '+' : '−'}{m.quantite}
                       </span>
                     </div>
@@ -766,27 +754,26 @@ export default function CataloguePretAPorterPage() {
           </div>
 
           {/* LISTE DES ARTICLES */}
-          <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.25)] space-y-4 font-body">
-            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 pb-3 border-b border-slate-100">
-              <h2 className="font-display font-semibold text-lg" style={{ color: NAVY }}>
+          <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 pb-2 border-b border-slate-200">
+              <h2 className="text-lg font-bold text-slate-900">
                 Articles Prêt-à-Porter
               </h2>
               <div className="relative w-full sm:w-64">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2" size={15} style={{ color: NAVY, opacity: 0.5 }} />
+                <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
                 <input
                   type="text"
                   placeholder="Rechercher un article..."
                   value={recherche}
                   onChange={(e) => setRecherche(e.target.value)}
-                  className="w-full pl-10 pr-3 py-2.5 text-xs border border-slate-200 rounded-full bg-slate-50 outline-none focus:ring-2 text-slate-900"
-                  style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
+                  className="w-full pl-8 pr-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-amber-500 text-slate-900"
                 />
               </div>
             </div>
 
             {loading ? (
               <div className="flex flex-col items-center justify-center py-12 text-slate-500 gap-2">
-                <Loader2 size={32} className="animate-spin" style={{ color: GOLD }} />
+                <Loader2 size={32} className="animate-spin text-amber-700" />
                 <p className="text-sm font-semibold">Chargement du catalogue...</p>
               </div>
             ) : produitsFiltres.length === 0 ? (
@@ -801,16 +788,15 @@ export default function CataloguePretAPorterPage() {
                 {produitsFiltres.map((p) => (
                   <div
                     key={p.id}
-                    className="border rounded-xl p-4 space-y-3 transition-all flex flex-col justify-between"
-                    style={
+                    className={`border rounded-xl p-4 space-y-3 transition-all flex flex-col justify-between ${
                       editingId === p.id
-                        ? { backgroundColor: '#FBF3E2', borderColor: `${GOLD}88`, boxShadow: `0 0 0 1px ${GOLD}33 inset` }
-                        : { backgroundColor: '#F8FAFD', borderColor: 'rgba(0,0,0,0.06)' }
-                    }
+                        ? 'bg-amber-50/60 border-amber-500 ring-2 ring-amber-500/20'
+                        : 'bg-slate-50/50 border-slate-200 hover:border-amber-500/50'
+                    }`}
                   >
                     <div className="space-y-2">
                       <div className="flex justify-between items-start">
-                        <span className="text-[11px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full" style={{ backgroundColor: '#EAF1FB', color: NAVY }}>
+                        <span className="text-xs font-bold uppercase tracking-wide px-2 py-0.5 rounded bg-amber-100 text-amber-900">
                           {p.categorie}
                         </span>
 
@@ -818,17 +804,14 @@ export default function CataloguePretAPorterPage() {
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => editerProduit(p)}
-                            className="text-slate-400 transition-colors p-1.5 rounded-full hover:bg-[#FBF3E2] cursor-pointer"
-                            style={{ '--tw-text-opacity': 1 } as React.CSSProperties}
-                            onMouseEnter={(e) => (e.currentTarget.style.color = GOLD)}
-                            onMouseLeave={(e) => (e.currentTarget.style.color = '')}
+                            className="text-slate-400 hover:text-amber-600 transition-colors p-1.5 rounded-lg hover:bg-amber-100/60 cursor-pointer"
                             title="Modifier cet article"
                           >
                             <Edit3 size={16} />
                           </button>
                           <button
                             onClick={() => supprimerProduit(p.id)}
-                            className="text-slate-400 hover:text-rose-600 transition-colors p-1.5 rounded-full hover:bg-red-50 cursor-pointer"
+                            className="text-slate-400 hover:text-red-600 transition-colors p-1.5 rounded-lg hover:bg-red-50 cursor-pointer"
                             title="Supprimer cet article"
                           >
                             <Trash2 size={16} />
@@ -837,8 +820,8 @@ export default function CataloguePretAPorterPage() {
                       </div>
 
                       <div>
-                        <h3 className="font-display font-semibold text-base text-slate-900">{p.nom}</h3>
-                        <p className="font-mono-tape text-sm font-extrabold" style={{ color: GOLD }}>
+                        <h3 className="text-base font-bold text-slate-900">{p.nom}</h3>
+                        <p className="text-sm font-extrabold text-amber-800">
                           {p.prix.toLocaleString('fr-FR')} FCFA
                         </p>
                       </div>
@@ -884,12 +867,11 @@ export default function CataloguePretAPorterPage() {
                       <div className="flex justify-between items-center pt-1 font-semibold">
                         <span className="text-slate-700">Quantité en Stock :</span>
                         <span
-                          className="px-2 py-0.5 rounded-full font-bold font-mono-tape"
-                          style={
+                          className={`px-2 py-0.5 rounded font-bold ${
                             p.quantiteStock > 3
-                              ? { backgroundColor: '#E8F5EF', color: '#16A34A' }
-                              : { backgroundColor: '#FBEAE3', color: ORANGE }
-                          }
+                              ? 'bg-emerald-100 text-emerald-900'
+                              : 'bg-red-100 text-red-900'
+                          }`}
                         >
                           {p.quantiteStock} dispo.
                         </span>
@@ -899,14 +881,13 @@ export default function CataloguePretAPorterPage() {
                       <div className="flex gap-2 pt-1">
                         <button
                           onClick={() => ouvrirMouvement(p, 'entree')}
-                          className="flex-1 flex items-center justify-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold py-1.5 rounded-full text-[11px] transition-colors cursor-pointer"
+                          className="flex-1 flex items-center justify-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold py-1.5 rounded-lg text-[11px] transition-colors cursor-pointer"
                         >
                           <ArrowUpCircle size={13} /> Entrée
                         </button>
                         <button
                           onClick={() => ouvrirMouvement(p, 'sortie')}
-                          className="flex-1 flex items-center justify-center gap-1 font-bold py-1.5 rounded-full text-[11px] transition-colors cursor-pointer border"
-                          style={{ backgroundColor: '#FBEAE3', color: ORANGE, borderColor: `${ORANGE}33` }}
+                          className="flex-1 flex items-center justify-center gap-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-bold py-1.5 rounded-lg text-[11px] transition-colors cursor-pointer"
                         >
                           <ArrowDownCircle size={13} /> Sortie
                         </button>
@@ -923,26 +904,19 @@ export default function CataloguePretAPorterPage() {
       {/* MODAL MOUVEMENT DE STOCK */}
       {mouvementModal && (
         <div onClick={() => setMouvementModal(null)} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl relative border border-slate-200 font-body">
-            <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2.5">
-                <span
-                  className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-                  style={mouvementModal.type === 'entree' ? { backgroundColor: '#E8F5EF', color: '#059669' } : { backgroundColor: '#FBEAE3', color: ORANGE }}
-                >
-                  {mouvementModal.type === 'entree' ? <ArrowUpCircle size={16} /> : <ArrowDownCircle size={16} />}
-                </span>
-                <h2 className="font-display font-semibold text-sm" style={{ color: mouvementModal.type === 'entree' ? '#059669' : ORANGE }}>
-                  {mouvementModal.type === 'entree' ? 'Entrée de Stock' : 'Sortie de Stock'}
-                </h2>
-              </div>
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl relative border border-slate-200">
+            <div className="flex justify-between items-center mb-4 border-b pb-3">
+              <h2 className={`text-base font-bold flex items-center gap-2 ${mouvementModal.type === 'entree' ? 'text-emerald-700' : 'text-red-700'}`}>
+                {mouvementModal.type === 'entree' ? <ArrowUpCircle size={18} /> : <ArrowDownCircle size={18} />}
+                {mouvementModal.type === 'entree' ? 'Entrée de Stock' : 'Sortie de Stock'}
+              </h2>
               <button onClick={() => setMouvementModal(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X size={20} /></button>
             </div>
 
             <div className="space-y-3 text-xs">
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
                 <p className="font-bold text-slate-900">{mouvementModal.produit.nom}</p>
-                <p className="text-slate-500">Stock actuel : <strong className="font-mono-tape">{mouvementModal.produit.quantiteStock}</strong></p>
+                <p className="text-slate-500">Stock actuel : <strong>{mouvementModal.produit.quantiteStock}</strong></p>
               </div>
 
               <div>
@@ -953,8 +927,7 @@ export default function CataloguePretAPorterPage() {
                   autoFocus
                   value={mouvementQuantite}
                   onChange={(e) => setMouvementQuantite(e.target.value === '' ? '' : Number(e.target.value))}
-                  className="font-mono-tape w-full p-2.5 border border-slate-300 rounded-lg bg-white text-slate-900 outline-none focus:ring-2"
-                  style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
+                  className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 outline-none"
                 />
               </div>
 
@@ -965,19 +938,19 @@ export default function CataloguePretAPorterPage() {
                   value={mouvementMotif}
                   onChange={(e) => setMouvementMotif(e.target.value)}
                   placeholder={mouvementModal.type === 'entree' ? 'Ex: Réapprovisionnement' : 'Ex: Perte, casse, ajustement'}
-                  className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-slate-900 outline-none focus:ring-2"
-                  style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
+                  className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 outline-none"
                 />
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setMouvementModal(null)} className="px-4 py-2 rounded-full bg-slate-200 font-bold cursor-pointer">Annuler</button>
+                <button type="button" onClick={() => setMouvementModal(null)} className="px-4 py-2 rounded-lg bg-slate-200 font-bold cursor-pointer">Annuler</button>
                 <button
                   type="button"
                   onClick={confirmerMouvement}
                   disabled={mouvementSubmitting}
-                  className="px-4 py-2 rounded-full text-white font-bold cursor-pointer disabled:opacity-50 flex items-center gap-2 transition-all hover:-translate-y-0.5"
-                  style={{ backgroundColor: mouvementModal.type === 'entree' ? '#059669' : ORANGE }}
+                  className={`px-4 py-2 rounded-lg text-white font-bold cursor-pointer disabled:opacity-50 flex items-center gap-2 ${
+                    mouvementModal.type === 'entree' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'
+                  }`}
                 >
                   {mouvementSubmitting && <Loader2 size={14} className="animate-spin" />}
                   Valider
