@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Trash2, Plus, ArrowLeft, Package, Loader2, Edit3, X, Check,
-  Search, ArrowUpCircle, ArrowDownCircle, History, BarChart3, AlertTriangle
+  Search, ArrowUpCircle, ArrowDownCircle, History, BarChart3, AlertTriangle,
+  Tag, Layers, Wallet
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -51,6 +52,32 @@ const CATEGORIES: Categorie[] = [
 
 const CATEGORIE_AUTRES: Categorie = { id: 'autres', label: 'Autres Articles', code: 'ART' };
 const TOUTES_CATEGORIES = [...CATEGORIES, CATEGORIE_AUTRES];
+
+// Palette d'accent par catégorie, pour distinguer visuellement chaque bloc
+const getStyleCategorie = (id: string) => {
+  switch (id) {
+    case 'diaspora':
+      return { entete: 'bg-blue-50 border-blue-100', pastille: 'bg-blue-600' };
+    case 'chemises':
+      return { entete: 'bg-cyan-50 border-cyan-100', pastille: 'bg-cyan-600' };
+    case 'caftan':
+      return { entete: 'bg-amber-50 border-amber-100', pastille: 'bg-amber-700' };
+    case 'robes':
+      return { entete: 'bg-rose-50 border-rose-100', pastille: 'bg-rose-600' };
+    case 'chaussures':
+      return { entete: 'bg-orange-50 border-orange-100', pastille: 'bg-orange-600' };
+    case 'montres':
+      return { entete: 'bg-slate-100 border-slate-200', pastille: 'bg-slate-700' };
+    case 'chapeaux':
+      return { entete: 'bg-violet-50 border-violet-100', pastille: 'bg-violet-600' };
+    case 'parfums':
+      return { entete: 'bg-fuchsia-50 border-fuchsia-100', pastille: 'bg-fuchsia-600' };
+    case 'accessoires':
+      return { entete: 'bg-emerald-50 border-emerald-100', pastille: 'bg-emerald-600' };
+    default:
+      return { entete: 'bg-amber-50 border-amber-200', pastille: 'bg-amber-500' };
+  }
+};
 
 // Fonction utilitaire pour associer les noms de couleurs en français aux valeurs CSS
 const getCouleurHex = (couleur: string): string => {
@@ -560,18 +587,18 @@ export default function CataloguePretAPorterPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 text-slate-800">
-      <div className="max-w-7xl mx-auto space-y-5">
+      <div className="max-w-7xl mx-auto space-y-6">
         <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors">
           <ArrowLeft size={16} /> Retour au tableau de bord
         </Link>
 
         {/* HEADER ÉPURÉ */}
-        <header className="bg-white rounded-xl border border-slate-200 p-5 flex items-center gap-3">
-          <div className="bg-amber-100 text-amber-700 p-2.5 rounded-lg">
+        <header className="flex items-center gap-3">
+          <div className="bg-amber-700 text-white p-3 rounded-xl shadow-sm">
             <Package size={22} />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-900">Catalogue Prêt-à-Porter</h1>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Catalogue Prêt-à-Porter</h1>
             <p className="text-xs font-medium text-slate-500">Ousmane Design — Articles, stock et évolution</p>
           </div>
         </header>
@@ -579,38 +606,50 @@ export default function CataloguePretAPorterPage() {
         {/* ALERTE ARTICLES À CLASSER */}
         {nonClassesCount > 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
-            <AlertTriangle size={20} className="text-amber-600 shrink-0" />
+            <AlertTriangle size={18} className="text-amber-600 shrink-0" />
             <p className="text-xs font-semibold text-amber-800">
-              {nonClassesCount} article{nonClassesCount > 1 ? 's' : ''} n’{nonClassesCount > 1 ? 'ont' : 'a'} pas encore de catégorie précise.
-              Utilisez le menu déroulant sur chaque carte (section "Autres Articles" ci-dessous) pour les classer en un clic.
+              {nonClassesCount} article{nonClassesCount > 1 ? 's' : ''} n’{nonClassesCount > 1 ? 'ont' : 'a'} pas encore de catégorie précise
+              — reclassez-{nonClassesCount > 1 ? 'les' : 'le'} depuis le bloc "Autres Articles" ci-dessous.
             </p>
           </div>
         )}
 
-        {/* STATS EN LIGNE */}
-        <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-wrap divide-x divide-slate-100">
-          <div className="px-4 pl-0">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Articles</p>
-            <p className="text-lg font-extrabold text-slate-900">{produits.length}</p>
+        {/* CARTES DE STATISTIQUES */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-3">
+            <div className="bg-slate-100 text-slate-600 p-2.5 rounded-lg"><Layers size={17} /></div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Articles</p>
+              <p className="text-lg font-extrabold text-slate-900">{produits.length}</p>
+            </div>
           </div>
-          <div className="px-4">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Stock total</p>
-            <p className="text-lg font-extrabold text-blue-700">{totalStock}</p>
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-3">
+            <div className="bg-blue-50 text-blue-600 p-2.5 rounded-lg"><Package size={17} /></div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Stock total</p>
+              <p className="text-lg font-extrabold text-blue-700">{totalStock}</p>
+            </div>
           </div>
-          <div className="px-4">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Valeur stock</p>
-            <p className="text-lg font-extrabold text-amber-800">{valeurStock.toLocaleString('fr-FR')} FCFA</p>
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-3">
+            <div className="bg-amber-50 text-amber-700 p-2.5 rounded-lg"><Wallet size={17} /></div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Valeur stock</p>
+              <p className="text-base font-extrabold text-amber-800">{valeurStock.toLocaleString('fr-FR')} FCFA</p>
+            </div>
           </div>
-          <div className="px-4">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 flex items-center gap-1">
-              {ruptureCount > 0 && <AlertTriangle size={11} className="text-red-600" />} Stock faible
-            </p>
-            <p className={`text-lg font-extrabold ${ruptureCount > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{ruptureCount}</p>
+          <div className={`bg-white rounded-2xl border p-4 flex items-center gap-3 ${ruptureCount > 0 ? 'border-red-200' : 'border-slate-200'}`}>
+            <div className={`p-2.5 rounded-lg ${ruptureCount > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+              <AlertTriangle size={17} />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Stock faible</p>
+              <p className={`text-lg font-extrabold ${ruptureCount > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{ruptureCount}</p>
+            </div>
           </div>
         </div>
 
         {/* COURBE D'ÉVOLUTION */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
           <div className="flex flex-wrap justify-between items-center gap-2">
             <div>
               <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -639,12 +678,12 @@ export default function CataloguePretAPorterPage() {
               <svg viewBox="0 0 700 195" width="100%" height="200" preserveAspectRatio="none">
                 <defs>
                   <linearGradient id="degradeEntrees" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#059669" stopOpacity="0.25" />
+                    <stop offset="0%" stopColor="#059669" stopOpacity="0.22" />
                     <stop offset="100%" stopColor="#059669" stopOpacity="0" />
                   </linearGradient>
                 </defs>
 
-                <line x1="0" y1="170" x2="700" y2="170" stroke="#e2e8f0" strokeWidth="1" />
+                <line x1="0" y1="170" x2="700" y2="170" stroke="#eef2f7" strokeWidth="1" />
 
                 {aireEntrees && <path d={aireEntrees} fill="url(#degradeEntrees)" stroke="none" />}
                 <path d={cheminEntrees} fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" />
@@ -666,9 +705,9 @@ export default function CataloguePretAPorterPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* FORMULAIRE */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4 self-start">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-200">
-              <h2 className="text-lg font-bold text-slate-900">
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 space-y-4 self-start">
+            <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+              <h2 className="text-base font-bold text-slate-900">
                 {editingId ? 'Modifier l’Article' : 'Ajouter un Article'}
               </h2>
               {editingId && (
@@ -686,7 +725,7 @@ export default function CataloguePretAPorterPage() {
                   placeholder="Ex: Ensemble Tunique Brodé"
                   value={nom}
                   onChange={(e) => setNom(e.target.value)}
-                  className="w-full bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-colors"
                   required
                 />
               </div>
@@ -696,19 +735,19 @@ export default function CataloguePretAPorterPage() {
                 <select
                   value={categorie}
                   onChange={(e) => setCategorie(e.target.value)}
-                  className="w-full bg-white border border-slate-300 text-slate-900 p-2.5 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-amber-600"
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 p-2.5 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-colors"
                 >
                   {CATEGORIES.map((c) => (
                     <option key={c.id} value={c.id}>{c.label}</option>
                   ))}
                 </select>
                 {editingId ? (
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    Code article : <span className="font-mono font-bold text-slate-600">{produits.find((p) => p.id === editingId)?.code || genererCode(categorie, produits)}</span>
+                  <p className="text-[10px] text-slate-400 mt-1.5 flex items-center gap-1">
+                    <Tag size={11} /> Code article : <span className="font-mono font-bold text-slate-600">{produits.find((p) => p.id === editingId)?.code || genererCode(categorie, produits)}</span>
                   </p>
                 ) : (
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    Code généré automatiquement : <span className="font-mono font-bold text-slate-600">{genererCode(categorie, produits)}</span>
+                  <p className="text-[10px] text-slate-400 mt-1.5 flex items-center gap-1">
+                    <Tag size={11} /> Code généré : <span className="font-mono font-bold text-slate-600">{genererCode(categorie, produits)}</span>
                   </p>
                 )}
               </div>
@@ -721,7 +760,7 @@ export default function CataloguePretAPorterPage() {
                     placeholder="Ex: 25000"
                     value={prix}
                     onChange={(e) => setPrix(e.target.value === '' ? '' : Number(e.target.value))}
-                    className="w-full bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-colors"
                     required
                   />
                 </div>
@@ -732,7 +771,7 @@ export default function CataloguePretAPorterPage() {
                     placeholder="Ex: 10"
                     value={quantiteStock}
                     onChange={(e) => setQuantiteStock(e.target.value === '' ? '' : Number(e.target.value))}
-                    className="w-full bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-colors"
                     required
                   />
                 </div>
@@ -751,7 +790,7 @@ export default function CataloguePretAPorterPage() {
                         className={`px-2.5 py-1 text-xs rounded-md font-bold border transition-all cursor-pointer ${
                           estSelectionne
                             ? 'bg-amber-700 text-white border-amber-700'
-                            : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                         }`}
                       >
                         {t}
@@ -768,7 +807,7 @@ export default function CataloguePretAPorterPage() {
                   placeholder="Ex: Blanc, Bleu Marine, Doré, Noir"
                   value={saisieCouleurs}
                   onChange={(e) => setSaisieCouleurs(e.target.value)}
-                  className="w-full bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-colors"
                 />
               </div>
 
@@ -778,7 +817,7 @@ export default function CataloguePretAPorterPage() {
                   placeholder="Ex: Tissu Bazin riche, col officier, coupe ajustée"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="w-full bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm h-20 focus:outline-none focus:ring-2 focus:ring-amber-600"
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm h-20 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-colors"
                 />
               </div>
 
@@ -805,7 +844,7 @@ export default function CataloguePretAPorterPage() {
                   <button
                     type="button"
                     onClick={reinitialiserFormulaire}
-                    className="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 py-2 rounded-lg font-semibold text-xs transition-colors cursor-pointer"
+                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-2 rounded-lg font-semibold text-xs transition-colors cursor-pointer"
                   >
                     Annuler la modification
                   </button>
@@ -814,7 +853,7 @@ export default function CataloguePretAPorterPage() {
             </form>
 
             {/* HISTORIQUE DES MOUVEMENTS RÉCENTS */}
-            <div className="pt-4 border-t border-slate-200 space-y-2">
+            <div className="pt-4 border-t border-slate-100 space-y-2">
               <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
                 <History size={14} className="text-amber-700" /> Mouvements récents
               </h3>
@@ -825,7 +864,7 @@ export default function CataloguePretAPorterPage() {
               ) : (
                 <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
                   {mouvements.slice(0, 8).map((m) => (
-                    <div key={m.id} className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
+                    <div key={m.id} className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-100 rounded-lg px-2.5 py-1.5">
                       <div className="flex items-center gap-2 min-w-0">
                         {m.type === 'entree' ? (
                           <ArrowUpCircle size={15} className="text-emerald-600 shrink-0" />
@@ -847,83 +886,94 @@ export default function CataloguePretAPorterPage() {
             </div>
           </div>
 
-          {/* LISTE DES ARTICLES REGROUPÉS PAR CATÉGORIE */}
-          <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
-              <input
-                type="text"
-                placeholder="Rechercher par nom, code, couleur, taille..."
-                value={recherche}
-                onChange={(e) => setRecherche(e.target.value)}
-                className="w-full pl-8 pr-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-amber-500 text-slate-900"
-              />
-            </div>
+          {/* LISTE DES ARTICLES REGROUPÉS PAR CATÉGORIE, CHACUNE DANS SON PROPRE BLOC */}
+          <div className="lg:col-span-2 space-y-5">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
+                <input
+                  type="text"
+                  placeholder="Rechercher par nom, code, couleur, taille..."
+                  value={recherche}
+                  onChange={(e) => setRecherche(e.target.value)}
+                  className="w-full pl-8 pr-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white text-slate-900 transition-colors"
+                />
+              </div>
 
-            {/* CHIPS DE FILTRAGE PAR CATÉGORIE */}
-            <div className="flex flex-wrap gap-1.5">
-              <button
-                onClick={() => setCategorieActive('toutes')}
-                className={`px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors cursor-pointer ${
-                  categorieActive === 'toutes' ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                Toutes ({produits.length})
-              </button>
-              {TOUTES_CATEGORIES.map((cat) => {
-                const count = produits.filter((p) =>
-                  cat.id === 'autres' ? !CATEGORIES.some((c) => c.id === p.categorie) : p.categorie === cat.id
-                ).length;
-                if (count === 0) return null;
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => setCategorieActive(cat.id)}
-                    className={`px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors cursor-pointer ${
-                      categorieActive === cat.id ? 'bg-amber-700 text-white border-amber-700' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    {cat.label} ({count})
-                  </button>
-                );
-              })}
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  onClick={() => setCategorieActive('toutes')}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors cursor-pointer ${
+                    categorieActive === 'toutes' ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  Toutes ({produits.length})
+                </button>
+                {TOUTES_CATEGORIES.map((cat) => {
+                  const count = produits.filter((p) =>
+                    cat.id === 'autres' ? !CATEGORIES.some((c) => c.id === p.categorie) : p.categorie === cat.id
+                  ).length;
+                  if (count === 0) return null;
+                  const style = getStyleCategorie(cat.id);
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => setCategorieActive(cat.id)}
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors cursor-pointer flex items-center gap-1.5 ${
+                        categorieActive === cat.id ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${style.pastille}`} />
+                      {cat.label} ({count})
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {loading ? (
-              <div className="flex flex-col items-center justify-center py-12 text-slate-500 gap-2">
+              <div className="bg-white rounded-2xl border border-slate-200 flex flex-col items-center justify-center py-14 text-slate-500 gap-2">
                 <Loader2 size={32} className="animate-spin text-amber-700" />
                 <p className="text-sm font-semibold">Chargement du catalogue...</p>
               </div>
             ) : groupesAffiches.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-slate-500 gap-2 border border-dashed border-slate-300 rounded-xl">
+              <div className="bg-white rounded-2xl border border-dashed border-slate-300 flex flex-col items-center justify-center py-14 text-slate-500 gap-2">
                 <Package size={40} className="stroke-1 text-slate-400" />
                 <p className="text-sm font-medium">
                   {recherche ? 'Aucun article ne correspond à cette recherche.' : 'Aucun article enregistré dans le catalogue.'}
                 </p>
               </div>
             ) : (
-              <div className="space-y-6">
-                {groupesAffiches.map((groupe) => (
-                  <div key={groupe.id} className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-xs font-extrabold text-slate-700 uppercase tracking-wide">{groupe.label}</h3>
-                      <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{groupe.items.length}</span>
+              groupesAffiches.map((groupe) => {
+                const style = getStyleCategorie(groupe.id);
+                return (
+                  <div key={groupe.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                    {/* EN-TÊTE DU BLOC CATÉGORIE */}
+                    <div className={`flex items-center justify-between px-5 py-3.5 border-b ${style.entete}`}>
+                      <div className="flex items-center gap-2.5">
+                        <span className={`w-2.5 h-2.5 rounded-full ${style.pastille}`} />
+                        <h3 className="text-sm font-extrabold text-slate-800">{groupe.label}</h3>
+                        <span className="text-[10px] font-bold text-slate-500 bg-white/70 px-2 py-0.5 rounded-full border border-slate-200">
+                          {groupe.items.length}
+                        </span>
+                      </div>
                     </div>
 
                     {groupe.id === 'autres' && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-[11px] font-semibold text-amber-800 flex items-center gap-2">
+                      <div className="px-5 pt-3 text-[11px] font-semibold text-amber-700 flex items-center gap-2">
                         <AlertTriangle size={13} className="shrink-0" /> Utilisez le menu "Catégorie" sur chaque carte pour classer ces articles.
                       </div>
                     )}
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* CONTENU DU BLOC : GRILLE DES ARTICLES DE CETTE CATÉGORIE */}
+                    <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
                       {groupe.items.map((p) => (
                         <div
                           key={p.id}
                           className={`border rounded-xl p-4 space-y-3 transition-all flex flex-col justify-between ${
                             editingId === p.id
-                              ? 'bg-amber-50/60 border-amber-500 ring-2 ring-amber-500/20'
-                              : 'bg-slate-50/50 border-slate-200 hover:border-amber-500/50'
+                              ? 'bg-amber-50/60 border-amber-400 ring-2 ring-amber-400/20'
+                              : 'bg-slate-50/60 border-slate-200 hover:border-slate-300'
                           }`}
                         >
                           <div className="space-y-2">
@@ -1035,8 +1085,8 @@ export default function CataloguePretAPorterPage() {
                       ))}
                     </div>
                   </div>
-                ))}
-              </div>
+                );
+              })
             )}
           </div>
         </div>
