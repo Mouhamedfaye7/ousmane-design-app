@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Trash2, Plus, ArrowLeft, Package, Loader2, Edit3, X, Check,
-  Search, ArrowUpCircle, ArrowDownCircle, History, BarChart3, AlertTriangle, Sparkles
+  Search, ArrowUpCircle, ArrowDownCircle, History, BarChart3, AlertTriangle
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -12,6 +12,7 @@ interface Produit {
   id: string;
   nom: string;
   categorie: string;
+  code: string;
   prix: number;
   tailles: string[];
   couleurs: string[];
@@ -29,6 +30,27 @@ interface Mouvement {
   motif?: string;
   created_at: string;
 }
+
+interface Categorie {
+  id: string;
+  label: string;
+  code: string;
+}
+
+const CATEGORIES: Categorie[] = [
+  { id: 'diaspora', label: 'Diaspora', code: 'DIA' },
+  { id: 'chemises', label: 'Chemises', code: 'CHM' },
+  { id: 'caftan', label: 'Ensembles Ton sur Ton (Caftan)', code: 'CAF' },
+  { id: 'robes', label: 'Robes', code: 'ROB' },
+  { id: 'chaussures', label: 'Chaussures', code: 'CHA' },
+  { id: 'montres', label: 'Montres', code: 'MON' },
+  { id: 'chapeaux', label: 'Chapeaux', code: 'CHP' },
+  { id: 'parfums', label: 'Parfums', code: 'PAR' },
+  { id: 'accessoires', label: 'Accessoires', code: 'ACC' },
+];
+
+const CATEGORIE_AUTRES: Categorie = { id: 'autres', label: 'Autres Articles', code: 'ART' };
+const TOUTES_CATEGORIES = [...CATEGORIES, CATEGORIE_AUTRES];
 
 // Fonction utilitaire pour associer les noms de couleurs en français aux valeurs CSS
 const getCouleurHex = (couleur: string): string => {
@@ -60,6 +82,17 @@ const getCouleurHex = (couleur: string): string => {
   return dictionary[c] || c;
 };
 
+const genererCode = (categorieId: string, produitsExistants: Produit[]): string => {
+  const cat = CATEGORIES.find((c) => c.id === categorieId);
+  const prefix = cat ? cat.code : 'ART';
+  const numeros = produitsExistants
+    .filter((p) => p.code && p.code.startsWith(prefix + '-'))
+    .map((p) => parseInt(p.code.split('-')[1], 10))
+    .filter((n) => !isNaN(n));
+  const prochain = numeros.length > 0 ? Math.max(...numeros) + 1 : 1;
+  return `${prefix}-${prochain.toString().padStart(3, '0')}`;
+};
+
 type Granularite = 'jour' | 'semaine' | 'mois';
 
 interface Bucket {
@@ -67,6 +100,25 @@ interface Bucket {
   fin: Date;
   label: string;
 }
+
+// Génère un chemin SVG lissé (Catmull-Rom -> Bézier) à partir d'une liste de points
+const courbeLissee = (pts: { x: number; y: number }[]): string => {
+  if (pts.length === 0) return '';
+  if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y}`;
+  let d = `M ${pts[0].x} ${pts[0].y}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i === 0 ? i : i - 1];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2 < pts.length ? i + 2 : i + 1];
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+  }
+  return d;
+};
 
 export default function CataloguePretAPorterPage() {
   const [produits, setProduits] = useState<Produit[]>([]);
@@ -76,15 +128,16 @@ export default function CataloguePretAPorterPage() {
 
   // Formulaire
   const [nom, setNom] = useState('');
-  const [categorie, setCategorie] = useState('Homme');
+  const [categorie, setCategorie] = useState('chemises');
   const [prix, setPrix] = useState<number | ''>('');
   const [quantiteStock, setQuantiteStock] = useState<number | ''>('');
   const [description, setDescription] = useState('');
   const [taillesSelectionnees, setTaillesSelectionnees] = useState<string[]>([]);
   const [saisieCouleurs, setSaisieCouleurs] = useState('');
 
-  // Recherche
+  // Recherche & filtre
   const [recherche, setRecherche] = useState('');
+  const [categorieActive, setCategorieActive] = useState<string>('toutes');
 
   // Mouvements de stock (entrées / sorties)
   const [mouvements, setMouvements] = useState<Mouvement[]>([]);
@@ -96,12 +149,10 @@ export default function CataloguePretAPorterPage() {
 
   const optionsTailles = ['S', 'M', 'L', 'XL', 'XXL', '3XL', 'Sur Mesure'];
 
-  // Calcul du nombre total de produits en stock disponibles
   const totalStock = produits.reduce((sum, p) => sum + (p.quantiteStock || 0), 0);
   const valeurStock = produits.reduce((sum, p) => sum + p.prix * (p.quantiteStock || 0), 0);
   const ruptureCount = produits.filter((p) => p.quantiteStock <= 3).length;
 
-  // Chargement des données depuis Supabase
   const chargerProduits = async () => {
     setLoading(true);
     const { data, error } = await supabase
@@ -117,6 +168,7 @@ export default function CataloguePretAPorterPage() {
           id: item.id,
           nom: item.nom,
           categorie: item.categorie,
+          code: item.code || '',
           prix: Number(item.prix),
           tailles: item.tailles || [],
           couleurs: item.couleurs || [],
@@ -160,7 +212,7 @@ export default function CataloguePretAPorterPage() {
   const reinitialiserFormulaire = () => {
     setEditingId(null);
     setNom('');
-    setCategorie('Homme');
+    setCategorie('chemises');
     setPrix('');
     setQuantiteStock('');
     setDescription('');
@@ -177,8 +229,6 @@ export default function CataloguePretAPorterPage() {
     setDescription(p.description);
     setTaillesSelectionnees(p.tailles);
     setSaisieCouleurs(p.couleurs.join(', '));
-
-    // Scroll vers le formulaire pour faciliter l'expérience sur mobile / petits écrans
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -197,22 +247,19 @@ export default function CataloguePretAPorterPage() {
       .map((c) => c.trim())
       .filter((c) => c.length > 0);
 
-    const payload = {
-      nom,
-      categorie,
-      prix: Number(prix),
-      tailles: taillesSelectionnees.length > 0 ? taillesSelectionnees : ['Standard'],
-      couleurs: listeCouleurs.length > 0 ? listeCouleurs : ['Unique'],
-      quantite_stock: Number(quantiteStock),
-      description,
-    };
-
     if (editingId) {
-      // --- MODE MODIFICATION ---
-      const { error } = await supabase
-        .from('catalogue')
-        .update(payload)
-        .eq('id', editingId);
+      // --- MODE MODIFICATION (le code article ne change pas) ---
+      const payload = {
+        nom,
+        categorie,
+        prix: Number(prix),
+        tailles: taillesSelectionnees.length > 0 ? taillesSelectionnees : ['Standard'],
+        couleurs: listeCouleurs.length > 0 ? listeCouleurs : ['Unique'],
+        quantite_stock: Number(quantiteStock),
+        description,
+      };
+
+      const { error } = await supabase.from('catalogue').update(payload).eq('id', editingId);
 
       if (error) {
         console.error('Erreur lors de la modification :', error.message);
@@ -237,11 +284,21 @@ export default function CataloguePretAPorterPage() {
         reinitialiserFormulaire();
       }
     } else {
-      // --- MODE CREATION ---
-      const { data, error } = await supabase
-        .from('catalogue')
-        .insert([payload])
-        .select();
+      // --- MODE CREATION (génération automatique du code article) ---
+      const codeGenere = genererCode(categorie, produits);
+
+      const payload = {
+        nom,
+        categorie,
+        code: codeGenere,
+        prix: Number(prix),
+        tailles: taillesSelectionnees.length > 0 ? taillesSelectionnees : ['Standard'],
+        couleurs: listeCouleurs.length > 0 ? listeCouleurs : ['Unique'],
+        quantite_stock: Number(quantiteStock),
+        description,
+      };
+
+      const { data, error } = await supabase.from('catalogue').insert([payload]).select();
 
       if (error) {
         console.error('Erreur lors de l’ajout :', error.message);
@@ -252,6 +309,7 @@ export default function CataloguePretAPorterPage() {
           id: p.id,
           nom: p.nom,
           categorie: p.categorie,
+          code: p.code || codeGenere,
           prix: Number(p.prix),
           tailles: p.tailles || [],
           couleurs: p.couleurs || [],
@@ -262,23 +320,21 @@ export default function CataloguePretAPorterPage() {
 
         setProduits([prodAjoute, ...produits]);
 
-        // Enregistre automatiquement une "entrée" de stock correspondant à
-        // l'enregistrement initial de l'article, pour que la courbe
-        // d'évolution reflète la création des articles du catalogue.
+        // Trace automatiquement une "entrée" correspondant à la création de l'article
         if (prodAjoute.quantiteStock > 0) {
           const { data: mvtData, error: errMvt } = await supabase
             .from('mouvements_stock')
             .insert([{
               produit_id: p.id,
-              produit_nom: p.nom,
+              produit_nom: `${prodAjoute.code} — ${p.nom}`,
               type: 'entree',
               quantite: prodAjoute.quantiteStock,
-              motif: 'Enregistrement du produit'
+              motif: 'Enregistrement du produit',
             }])
             .select();
 
           if (!errMvt && mvtData && mvtData[0]) {
-            setMouvements(prev => [mvtData[0], ...prev]);
+            setMouvements((prev) => [mvtData[0], ...prev]);
           }
         }
 
@@ -341,7 +397,7 @@ export default function CataloguePretAPorterPage() {
       .from('mouvements_stock')
       .insert([{
         produit_id: produit.id,
-        produit_nom: produit.nom,
+        produit_nom: `${produit.code ? produit.code + ' — ' : ''}${produit.nom}`,
         type,
         quantite: qte,
         motif: mouvementMotif || null,
@@ -366,12 +422,24 @@ export default function CataloguePretAPorterPage() {
     if (!q) return true;
     return (
       p.nom.toLowerCase().includes(q) ||
-      p.categorie.toLowerCase().includes(q) ||
+      (p.code || '').toLowerCase().includes(q) ||
       p.description.toLowerCase().includes(q) ||
       p.couleurs.some((c) => c.toLowerCase().includes(q)) ||
       p.tailles.some((t) => t.toLowerCase().includes(q))
     );
   });
+
+  // --- REGROUPEMENT PAR CATÉGORIE ---
+  const groupesBruts = TOUTES_CATEGORIES.map((cat) => ({
+    ...cat,
+    items: produitsFiltres.filter((p) =>
+      cat.id === 'autres' ? !CATEGORIES.some((c) => c.id === p.categorie) : p.categorie === cat.id
+    ),
+  }));
+
+  const groupesAffiches = groupesBruts.filter(
+    (g) => g.items.length > 0 && (categorieActive === 'toutes' || categorieActive === g.id)
+  );
 
   // --- COURBE D'ÉVOLUTION : DEPUIS LE PREMIER ARTICLE ENREGISTRÉ, GRANULARITÉ ADAPTATIVE ---
   const construireBuckets = (dateDebut: Date, dateFin: Date, granularite: Granularite): Bucket[] => {
@@ -414,9 +482,7 @@ export default function CataloguePretAPorterPage() {
     return buckets;
   };
 
-  const timestampsProduits = produits
-    .map((p) => new Date(p.createdAt).getTime())
-    .filter((t) => !isNaN(t));
+  const timestampsProduits = produits.map((p) => new Date(p.createdAt).getTime()).filter((t) => !isNaN(t));
 
   const aujourdHui = new Date();
   aujourdHui.setHours(23, 59, 59, 999);
@@ -425,9 +491,7 @@ export default function CataloguePretAPorterPage() {
   dateDebutCatalogue.setHours(0, 0, 0, 0);
 
   const diffJours = Math.max(1, Math.ceil((aujourdHui.getTime() - dateDebutCatalogue.getTime()) / 86400000) + 1);
-
   const granularite: Granularite = diffJours <= 31 ? 'jour' : diffJours <= 180 ? 'semaine' : 'mois';
-
   const buckets = construireBuckets(dateDebutCatalogue, aujourdHui, granularite);
 
   const donneesEvolution = buckets.map((b) => {
@@ -444,7 +508,20 @@ export default function CataloguePretAPorterPage() {
   const totalEntreesPeriode = donneesEvolution.reduce((s, d) => s + d.entrees, 0);
   const totalSortiesPeriode = donneesEvolution.reduce((s, d) => s + d.sorties, 0);
   const nbBuckets = Math.max(1, donneesEvolution.length);
-  const etiquetteStep = Math.max(1, Math.ceil(nbBuckets / 10));
+  const etiquetteStep = Math.max(1, Math.ceil(nbBuckets / 8));
+
+  const largeurGraph = 700;
+  const getX = (i: number) => (nbBuckets <= 1 ? largeurGraph / 2 : (i / (nbBuckets - 1)) * largeurGraph);
+  const getY = (val: number) => 170 - (val / maxEvolution) * 125;
+
+  const pointsEntrees = donneesEvolution.map((d, i) => ({ x: getX(i), y: getY(d.entrees) }));
+  const pointsSorties = donneesEvolution.map((d, i) => ({ x: getX(i), y: getY(d.sorties) }));
+  const cheminEntrees = courbeLissee(pointsEntrees);
+  const cheminSorties = courbeLissee(pointsSorties);
+  const aireEntrees =
+    pointsEntrees.length > 0
+      ? `${cheminEntrees} L ${pointsEntrees[pointsEntrees.length - 1].x} 170 L ${pointsEntrees[0].x} 170 Z`
+      : '';
 
   const formaterDateHeure = (iso: string) =>
     new Date(iso).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -453,68 +530,62 @@ export default function CataloguePretAPorterPage() {
   const libelleDepuis = dateDebutCatalogue.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-100 to-slate-50 p-6 text-slate-800">
+    <div className="min-h-screen bg-slate-50 p-6 text-slate-800">
       <div className="max-w-7xl mx-auto space-y-5">
-        <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors">
+        <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors">
           <ArrowLeft size={16} /> Retour au tableau de bord
         </Link>
 
-        {/* HEADER PREMIUM */}
-        <header className="bg-gradient-to-r from-amber-800 via-amber-700 to-amber-900 rounded-2xl p-6 shadow-lg text-white flex flex-col md:flex-row justify-between md:items-center gap-4">
-          <div className="flex items-center gap-3">
-            <div className="bg-white/15 p-3 rounded-xl backdrop-blur-sm">
-              <Package size={26} />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold flex items-center gap-2">
-                Catalogue & Modèles Prêt-à-Porter <Sparkles size={18} className="text-amber-200" />
-              </h1>
-              <p className="text-sm font-medium text-amber-100">
-                Ousmane Design — Gestion du stock, des entrées / sorties et de la performance du catalogue
-              </p>
-            </div>
+        {/* HEADER ÉPURÉ */}
+        <header className="bg-white rounded-xl border border-slate-200 p-5 flex items-center gap-3">
+          <div className="bg-amber-100 text-amber-700 p-2.5 rounded-lg">
+            <Package size={22} />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-slate-900">Catalogue Prêt-à-Porter</h1>
+            <p className="text-xs font-medium text-slate-500">Ousmane Design — Articles, stock et évolution</p>
           </div>
         </header>
 
-        {/* CARTES DE STATISTIQUES */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-1">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Articles au catalogue</p>
-            <p className="text-2xl font-extrabold text-slate-900">{produits.length}</p>
+        {/* STATS EN LIGNE */}
+        <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-wrap divide-x divide-slate-100">
+          <div className="px-4 pl-0">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Articles</p>
+            <p className="text-lg font-extrabold text-slate-900">{produits.length}</p>
           </div>
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-1">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Unités en stock</p>
-            <p className="text-2xl font-extrabold text-blue-700">{totalStock}</p>
+          <div className="px-4">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Stock total</p>
+            <p className="text-lg font-extrabold text-blue-700">{totalStock}</p>
           </div>
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-1">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Valeur du stock</p>
+          <div className="px-4">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Valeur stock</p>
             <p className="text-lg font-extrabold text-amber-800">{valeurStock.toLocaleString('fr-FR')} FCFA</p>
           </div>
-          <div className={`rounded-xl border shadow-sm p-4 space-y-1 ${ruptureCount > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'}`}>
-            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 flex items-center gap-1">
-              {ruptureCount > 0 && <AlertTriangle size={12} className="text-red-600" />} Stock faible (≤3)
+          <div className="px-4">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 flex items-center gap-1">
+              {ruptureCount > 0 && <AlertTriangle size={11} className="text-red-600" />} Stock faible
             </p>
-            <p className={`text-2xl font-extrabold ${ruptureCount > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{ruptureCount}</p>
+            <p className={`text-lg font-extrabold ${ruptureCount > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{ruptureCount}</p>
           </div>
         </div>
 
-        {/* COURBE D'ÉVOLUTION DES MOUVEMENTS DE STOCK */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3">
+        {/* COURBE D'ÉVOLUTION */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
           <div className="flex flex-wrap justify-between items-center gap-2">
             <div>
               <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <BarChart3 size={16} className="text-amber-700" /> Évolution des Entrées / Sorties
               </h2>
               <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-                Depuis le {libelleDepuis} (premier article enregistré) — vue {libelleGranularite}
+                Depuis le {libelleDepuis} — vue {libelleGranularite}
               </p>
             </div>
             <div className="flex items-center gap-4 text-[11px] font-semibold">
               <span className="flex items-center gap-1.5 text-emerald-700">
-                <span className="w-2.5 h-2.5 rounded-sm bg-emerald-600 inline-block" /> Entrées : {totalEntreesPeriode}
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block" /> Entrées : {totalEntreesPeriode}
               </span>
               <span className="flex items-center gap-1.5 text-red-600">
-                <span className="w-2.5 h-2.5 rounded-sm bg-red-600 inline-block" /> Sorties : {totalSortiesPeriode}
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" /> Sorties : {totalSortiesPeriode}
               </span>
             </div>
           </div>
@@ -525,46 +596,29 @@ export default function CataloguePretAPorterPage() {
             </div>
           ) : (
             <div className="w-full overflow-x-auto">
-              <svg viewBox="0 0 700 230" width="100%" height="220" preserveAspectRatio="none">
-                {/* Lignes de repère horizontales */}
-                <line x1="0" y1="180" x2="700" y2="180" stroke="#e2e8f0" strokeWidth="1" />
-                <line x1="0" y1="115" x2="700" y2="115" stroke="#f1f5f9" strokeWidth="1" strokeDasharray="4 4" />
-                <line x1="0" y1="50" x2="700" y2="50" stroke="#f1f5f9" strokeWidth="1" strokeDasharray="4 4" />
+              <svg viewBox="0 0 700 195" width="100%" height="200" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="degradeEntrees" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#059669" stopOpacity="0.25" />
+                    <stop offset="100%" stopColor="#059669" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
 
-                {(() => {
-                  const largeurBucket = 700 / nbBuckets;
-                  const getX = (i: number) => i * largeurBucket + largeurBucket / 2;
-                  const getY = (val: number) => 180 - (val / maxEvolution) * 130;
+                <line x1="0" y1="170" x2="700" y2="170" stroke="#e2e8f0" strokeWidth="1" />
 
-                  const pointsEntrees = donneesEvolution.map((d, i) => `${getX(i)},${getY(d.entrees)}`).join(' ');
-                  const pointsSorties = donneesEvolution.map((d, i) => `${getX(i)},${getY(d.sorties)}`).join(' ');
+                {aireEntrees && <path d={aireEntrees} fill="url(#degradeEntrees)" stroke="none" />}
+                <path d={cheminEntrees} fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" />
+                <path d={cheminSorties} fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeDasharray="5 4" />
 
-                  return (
-                    <>
-                      {/* Courbe des entrées */}
-                      <polyline points={pointsEntrees} fill="none" stroke="#059669" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-                      {/* Courbe des sorties */}
-                      <polyline points={pointsSorties} fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-
-                      {/* Points + étiquettes de l'axe X */}
-                      {donneesEvolution.map((d, i) => (
-                        <g key={i}>
-                          {d.entrees > 0 && (
-                            <circle cx={getX(i)} cy={getY(d.entrees)} r="3" fill="#059669" stroke="#ffffff" strokeWidth="1.5" />
-                          )}
-                          {d.sorties > 0 && (
-                            <circle cx={getX(i)} cy={getY(d.sorties)} r="3" fill="#dc2626" stroke="#ffffff" strokeWidth="1.5" />
-                          )}
-                          {i % etiquetteStep === 0 && (
-                            <text x={getX(i)} y={198} fontSize="9" fill="#94a3b8" textAnchor="middle" fontWeight="600">
-                              {d.label}
-                            </text>
-                          )}
-                        </g>
-                      ))}
-                    </>
-                  );
-                })()}
+                {donneesEvolution.map((d, i) => (
+                  <g key={i}>
+                    {i % etiquetteStep === 0 && (
+                      <text x={getX(i)} y={188} fontSize="9" fill="#94a3b8" textAnchor="middle" fontWeight="600">
+                        {d.label}
+                      </text>
+                    )}
+                  </g>
+                ))}
               </svg>
             </div>
           )}
@@ -575,15 +629,10 @@ export default function CataloguePretAPorterPage() {
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4 self-start">
             <div className="flex justify-between items-center pb-2 border-b border-slate-200">
               <h2 className="text-lg font-bold text-slate-900">
-                {editingId ? 'Modifier l’Article' : 'Ajouter un Article Prêt-à-Porter'}
+                {editingId ? 'Modifier l’Article' : 'Ajouter un Article'}
               </h2>
               {editingId && (
-                <button
-                  type="button"
-                  onClick={reinitialiserFormulaire}
-                  className="text-slate-400 hover:text-slate-600 p-1 rounded-md"
-                  title="Annuler l'édition"
-                >
+                <button type="button" onClick={reinitialiserFormulaire} className="text-slate-400 hover:text-slate-600 p-1 rounded-md" title="Annuler l'édition">
                   <X size={18} />
                 </button>
               )}
@@ -602,21 +651,29 @@ export default function CataloguePretAPorterPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Catégorie</label>
-                  <select
-                    value={categorie}
-                    onChange={(e) => setCategorie(e.target.value)}
-                    className="w-full bg-white border border-slate-300 text-slate-900 p-2.5 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-amber-600"
-                  >
-                    <option value="Homme">Homme</option>
-                    <option value="Femme">Femme</option>
-                    <option value="Enfant">Enfant</option>
-                    <option value="Accessoires">Accessoires</option>
-                  </select>
-                </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Catégorie</label>
+                <select
+                  value={categorie}
+                  onChange={(e) => setCategorie(e.target.value)}
+                  className="w-full bg-white border border-slate-300 text-slate-900 p-2.5 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-amber-600"
+                >
+                  {CATEGORIES.map((c) => (
+                    <option key={c.id} value={c.id}>{c.label}</option>
+                  ))}
+                </select>
+                {editingId ? (
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Code article : <span className="font-mono font-bold text-slate-600">{produits.find((p) => p.id === editingId)?.code || '—'}</span>
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Code généré automatiquement : <span className="font-mono font-bold text-slate-600">{genererCode(categorie, produits)}</span>
+                  </p>
+                )}
+              </div>
 
+              <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Prix (FCFA)</label>
                   <input
@@ -628,18 +685,17 @@ export default function CataloguePretAPorterPage() {
                     required
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Stock Initial (Quantité)</label>
-                <input
-                  type="number"
-                  placeholder="Ex: 10"
-                  value={quantiteStock}
-                  onChange={(e) => setQuantiteStock(e.target.value === '' ? '' : Number(e.target.value))}
-                  className="w-full bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
-                  required
-                />
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Stock Initial</label>
+                  <input
+                    type="number"
+                    placeholder="Ex: 10"
+                    value={quantiteStock}
+                    onChange={(e) => setQuantiteStock(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="w-full bg-white border border-slate-300 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-600"
+                    required
+                  />
+                </div>
               </div>
 
               <div>
@@ -666,9 +722,7 @@ export default function CataloguePretAPorterPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Couleurs (séparées par une virgule)
-                </label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Couleurs (séparées par une virgule)</label>
                 <input
                   type="text"
                   placeholder="Ex: Blanc, Bleu Marine, Doré, Noir"
@@ -753,22 +807,46 @@ export default function CataloguePretAPorterPage() {
             </div>
           </div>
 
-          {/* LISTE DES ARTICLES */}
+          {/* LISTE DES ARTICLES REGROUPÉS PAR CATÉGORIE */}
           <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4">
-            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 pb-2 border-b border-slate-200">
-              <h2 className="text-lg font-bold text-slate-900">
-                Articles Prêt-à-Porter
-              </h2>
-              <div className="relative w-full sm:w-64">
-                <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
-                <input
-                  type="text"
-                  placeholder="Rechercher un article..."
-                  value={recherche}
-                  onChange={(e) => setRecherche(e.target.value)}
-                  className="w-full pl-8 pr-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-amber-500 text-slate-900"
-                />
-              </div>
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
+              <input
+                type="text"
+                placeholder="Rechercher par nom, code, couleur, taille..."
+                value={recherche}
+                onChange={(e) => setRecherche(e.target.value)}
+                className="w-full pl-8 pr-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-amber-500 text-slate-900"
+              />
+            </div>
+
+            {/* CHIPS DE FILTRAGE PAR CATÉGORIE */}
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setCategorieActive('toutes')}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors cursor-pointer ${
+                  categorieActive === 'toutes' ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                Toutes ({produits.length})
+              </button>
+              {TOUTES_CATEGORIES.map((cat) => {
+                const count = produits.filter((p) =>
+                  cat.id === 'autres' ? !CATEGORIES.some((c) => c.id === p.categorie) : p.categorie === cat.id
+                ).length;
+                if (count === 0) return null;
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => setCategorieActive(cat.id)}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors cursor-pointer ${
+                      categorieActive === cat.id ? 'bg-amber-700 text-white border-amber-700' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {cat.label} ({count})
+                  </button>
+                );
+              })}
             </div>
 
             {loading ? (
@@ -776,7 +854,7 @@ export default function CataloguePretAPorterPage() {
                 <Loader2 size={32} className="animate-spin text-amber-700" />
                 <p className="text-sm font-semibold">Chargement du catalogue...</p>
               </div>
-            ) : produitsFiltres.length === 0 ? (
+            ) : groupesAffiches.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-slate-500 gap-2 border border-dashed border-slate-300 rounded-xl">
                 <Package size={40} className="stroke-1 text-slate-400" />
                 <p className="text-sm font-medium">
@@ -784,114 +862,115 @@ export default function CataloguePretAPorterPage() {
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {produitsFiltres.map((p) => (
-                  <div
-                    key={p.id}
-                    className={`border rounded-xl p-4 space-y-3 transition-all flex flex-col justify-between ${
-                      editingId === p.id
-                        ? 'bg-amber-50/60 border-amber-500 ring-2 ring-amber-500/20'
-                        : 'bg-slate-50/50 border-slate-200 hover:border-amber-500/50'
-                    }`}
-                  >
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-start">
-                        <span className="text-xs font-bold uppercase tracking-wide px-2 py-0.5 rounded bg-amber-100 text-amber-900">
-                          {p.categorie}
-                        </span>
-
-                        {/* ACTIONS : MODIFIER & SUPPRIMER */}
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => editerProduit(p)}
-                            className="text-slate-400 hover:text-amber-600 transition-colors p-1.5 rounded-lg hover:bg-amber-100/60 cursor-pointer"
-                            title="Modifier cet article"
-                          >
-                            <Edit3 size={16} />
-                          </button>
-                          <button
-                            onClick={() => supprimerProduit(p.id)}
-                            className="text-slate-400 hover:text-red-600 transition-colors p-1.5 rounded-lg hover:bg-red-50 cursor-pointer"
-                            title="Supprimer cet article"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div>
-                        <h3 className="text-base font-bold text-slate-900">{p.nom}</h3>
-                        <p className="text-sm font-extrabold text-amber-800">
-                          {p.prix.toLocaleString('fr-FR')} FCFA
-                        </p>
-                      </div>
-
-                      <p className="text-xs text-slate-600 line-clamp-2">{p.description || 'Aucune description'}</p>
+              <div className="space-y-6">
+                {groupesAffiches.map((groupe) => (
+                  <div key={groupe.id} className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-xs font-extrabold text-slate-700 uppercase tracking-wide">{groupe.label}</h3>
+                      <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{groupe.items.length}</span>
                     </div>
 
-                    <div className="space-y-2 pt-2 border-t border-slate-200 text-xs">
-                      {/* TAILLES */}
-                      <div className="flex items-center gap-1 flex-wrap">
-                        <span className="font-bold text-slate-700">Tailles :</span>
-                        <div className="flex flex-wrap gap-1">
-                          {p.tailles.map((t) => (
-                            <span key={t} className="bg-white border border-slate-200 px-1.5 py-0.5 rounded text-slate-800 font-semibold">
-                              {t}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* COULEURS AVEC CERCLAGE COLORÉ */}
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-bold text-slate-700">Couleurs :</span>
-                        {p.couleurs.length === 0 ? (
-                          <span className="text-slate-500 italic">Non spécifié</span>
-                        ) : (
-                          p.couleurs.map((couleur, idx) => (
-                            <span
-                              key={idx}
-                              className="inline-flex items-center gap-1 bg-white border border-slate-200 px-2 py-0.5 rounded text-slate-800 text-xs font-medium shadow-2xs"
-                            >
-                              <span
-                                className="w-3 h-3 rounded-full border border-slate-300 shrink-0 inline-block"
-                                style={{ backgroundColor: getCouleurHex(couleur) }}
-                              />
-                              {couleur}
-                            </span>
-                          ))
-                        )}
-                      </div>
-
-                      {/* QUANTITE EN STOCK */}
-                      <div className="flex justify-between items-center pt-1 font-semibold">
-                        <span className="text-slate-700">Quantité en Stock :</span>
-                        <span
-                          className={`px-2 py-0.5 rounded font-bold ${
-                            p.quantiteStock > 3
-                              ? 'bg-emerald-100 text-emerald-900'
-                              : 'bg-red-100 text-red-900'
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {groupe.items.map((p) => (
+                        <div
+                          key={p.id}
+                          className={`border rounded-xl p-4 space-y-3 transition-all flex flex-col justify-between ${
+                            editingId === p.id
+                              ? 'bg-amber-50/60 border-amber-500 ring-2 ring-amber-500/20'
+                              : 'bg-slate-50/50 border-slate-200 hover:border-amber-500/50'
                           }`}
                         >
-                          {p.quantiteStock} dispo.
-                        </span>
-                      </div>
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-start">
+                              <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-white">
+                                {p.code || '—'}
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => editerProduit(p)}
+                                  className="text-slate-400 hover:text-amber-600 transition-colors p-1.5 rounded-lg hover:bg-amber-100/60 cursor-pointer"
+                                  title="Modifier cet article"
+                                >
+                                  <Edit3 size={16} />
+                                </button>
+                                <button
+                                  onClick={() => supprimerProduit(p.id)}
+                                  className="text-slate-400 hover:text-red-600 transition-colors p-1.5 rounded-lg hover:bg-red-50 cursor-pointer"
+                                  title="Supprimer cet article"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            </div>
 
-                      {/* ENTRÉE / SORTIE RAPIDE DE STOCK */}
-                      <div className="flex gap-2 pt-1">
-                        <button
-                          onClick={() => ouvrirMouvement(p, 'entree')}
-                          className="flex-1 flex items-center justify-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold py-1.5 rounded-lg text-[11px] transition-colors cursor-pointer"
-                        >
-                          <ArrowUpCircle size={13} /> Entrée
-                        </button>
-                        <button
-                          onClick={() => ouvrirMouvement(p, 'sortie')}
-                          className="flex-1 flex items-center justify-center gap-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-bold py-1.5 rounded-lg text-[11px] transition-colors cursor-pointer"
-                        >
-                          <ArrowDownCircle size={13} /> Sortie
-                        </button>
-                      </div>
+                            <div>
+                              <h3 className="text-base font-bold text-slate-900">{p.nom}</h3>
+                              <p className="text-sm font-extrabold text-amber-800">{p.prix.toLocaleString('fr-FR')} FCFA</p>
+                            </div>
+
+                            <p className="text-xs text-slate-600 line-clamp-2">{p.description || 'Aucune description'}</p>
+                          </div>
+
+                          <div className="space-y-2 pt-2 border-t border-slate-200 text-xs">
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <span className="font-bold text-slate-700">Tailles :</span>
+                              <div className="flex flex-wrap gap-1">
+                                {p.tailles.map((t) => (
+                                  <span key={t} className="bg-white border border-slate-200 px-1.5 py-0.5 rounded text-slate-800 font-semibold">
+                                    {t}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-slate-700">Couleurs :</span>
+                              {p.couleurs.length === 0 ? (
+                                <span className="text-slate-500 italic">Non spécifié</span>
+                              ) : (
+                                p.couleurs.map((couleur, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="inline-flex items-center gap-1 bg-white border border-slate-200 px-2 py-0.5 rounded text-slate-800 text-xs font-medium shadow-2xs"
+                                  >
+                                    <span
+                                      className="w-3 h-3 rounded-full border border-slate-300 shrink-0 inline-block"
+                                      style={{ backgroundColor: getCouleurHex(couleur) }}
+                                    />
+                                    {couleur}
+                                  </span>
+                                ))
+                              )}
+                            </div>
+
+                            <div className="flex justify-between items-center pt-1 font-semibold">
+                              <span className="text-slate-700">Quantité en Stock :</span>
+                              <span
+                                className={`px-2 py-0.5 rounded font-bold ${
+                                  p.quantiteStock > 3 ? 'bg-emerald-100 text-emerald-900' : 'bg-red-100 text-red-900'
+                                }`}
+                              >
+                                {p.quantiteStock} dispo.
+                              </span>
+                            </div>
+
+                            <div className="flex gap-2 pt-1">
+                              <button
+                                onClick={() => ouvrirMouvement(p, 'entree')}
+                                className="flex-1 flex items-center justify-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold py-1.5 rounded-lg text-[11px] transition-colors cursor-pointer"
+                              >
+                                <ArrowUpCircle size={13} /> Entrée
+                              </button>
+                              <button
+                                onClick={() => ouvrirMouvement(p, 'sortie')}
+                                className="flex-1 flex items-center justify-center gap-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-bold py-1.5 rounded-lg text-[11px] transition-colors cursor-pointer"
+                              >
+                                <ArrowDownCircle size={13} /> Sortie
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}
@@ -915,7 +994,9 @@ export default function CataloguePretAPorterPage() {
 
             <div className="space-y-3 text-xs">
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
-                <p className="font-bold text-slate-900">{mouvementModal.produit.nom}</p>
+                <p className="font-bold text-slate-900">
+                  <span className="font-mono text-slate-500">{mouvementModal.produit.code}</span> — {mouvementModal.produit.nom}
+                </p>
                 <p className="text-slate-500">Stock actuel : <strong>{mouvementModal.produit.quantiteStock}</strong></p>
               </div>
 
