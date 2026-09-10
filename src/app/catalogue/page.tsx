@@ -152,6 +152,7 @@ export default function CataloguePretAPorterPage() {
   const totalStock = produits.reduce((sum, p) => sum + (p.quantiteStock || 0), 0);
   const valeurStock = produits.reduce((sum, p) => sum + p.prix * (p.quantiteStock || 0), 0);
   const ruptureCount = produits.filter((p) => p.quantiteStock <= 3).length;
+  const nonClassesCount = produits.filter((p) => !CATEGORIES.some((c) => c.id === p.categorie)).length;
 
   const chargerProduits = async () => {
     setLoading(true);
@@ -223,7 +224,7 @@ export default function CataloguePretAPorterPage() {
   const editerProduit = (p: Produit) => {
     setEditingId(p.id);
     setNom(p.nom);
-    setCategorie(p.categorie);
+    setCategorie(CATEGORIES.some((c) => c.id === p.categorie) ? p.categorie : 'chemises');
     setPrix(p.prix);
     setQuantiteStock(p.quantiteStock);
     setDescription(p.description);
@@ -248,10 +249,17 @@ export default function CataloguePretAPorterPage() {
       .filter((c) => c.length > 0);
 
     if (editingId) {
-      // --- MODE MODIFICATION (le code article ne change pas) ---
+      // --- MODE MODIFICATION ---
+      const produitActuel = produits.find((p) => p.id === editingId);
+      const codeFinal =
+        produitActuel && produitActuel.code && produitActuel.code.trim() !== ''
+          ? produitActuel.code
+          : genererCode(categorie, produits);
+
       const payload = {
         nom,
         categorie,
+        code: codeFinal,
         prix: Number(prix),
         tailles: taillesSelectionnees.length > 0 ? taillesSelectionnees : ['Standard'],
         couleurs: listeCouleurs.length > 0 ? listeCouleurs : ['Unique'],
@@ -272,6 +280,7 @@ export default function CataloguePretAPorterPage() {
                   ...p,
                   nom,
                   categorie,
+                  code: codeFinal,
                   prix: Number(prix),
                   tailles: payload.tailles,
                   couleurs: payload.couleurs,
@@ -320,7 +329,6 @@ export default function CataloguePretAPorterPage() {
 
         setProduits([prodAjoute, ...produits]);
 
-        // Trace automatiquement une "entrée" correspondant à la création de l'article
         if (prodAjoute.quantiteStock > 0) {
           const { data: mvtData, error: errMvt } = await supabase
             .from('mouvements_stock')
@@ -359,6 +367,27 @@ export default function CataloguePretAPorterPage() {
         }
       }
     }
+  };
+
+  // --- RECLASSEMENT RAPIDE DEPUIS LA CARTE (sans ouvrir le formulaire) ---
+  const reclasserCategorie = async (produit: Produit, nouvelleCategorieId: string) => {
+    const codeFinal =
+      produit.code && produit.code.trim() !== '' ? produit.code : genererCode(nouvelleCategorieId, produits);
+
+    const { error } = await supabase
+      .from('catalogue')
+      .update({ categorie: nouvelleCategorieId, code: codeFinal })
+      .eq('id', produit.id);
+
+    if (error) {
+      console.error('Erreur reclassement :', error.message);
+      alert('Erreur lors du reclassement de l’article.');
+      return;
+    }
+
+    setProduits((prev) =>
+      prev.map((p) => (p.id === produit.id ? { ...p, categorie: nouvelleCategorieId, code: codeFinal } : p))
+    );
   };
 
   // --- GESTION DES MOUVEMENTS DE STOCK (ENTRÉES / SORTIES) ---
@@ -547,6 +576,17 @@ export default function CataloguePretAPorterPage() {
           </div>
         </header>
 
+        {/* ALERTE ARTICLES À CLASSER */}
+        {nonClassesCount > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
+            <AlertTriangle size={20} className="text-amber-600 shrink-0" />
+            <p className="text-xs font-semibold text-amber-800">
+              {nonClassesCount} article{nonClassesCount > 1 ? 's' : ''} n’{nonClassesCount > 1 ? 'ont' : 'a'} pas encore de catégorie précise.
+              Utilisez le menu déroulant sur chaque carte (section "Autres Articles" ci-dessous) pour les classer en un clic.
+            </p>
+          </div>
+        )}
+
         {/* STATS EN LIGNE */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-wrap divide-x divide-slate-100">
           <div className="px-4 pl-0">
@@ -664,7 +704,7 @@ export default function CataloguePretAPorterPage() {
                 </select>
                 {editingId ? (
                   <p className="text-[10px] text-slate-400 mt-1">
-                    Code article : <span className="font-mono font-bold text-slate-600">{produits.find((p) => p.id === editingId)?.code || '—'}</span>
+                    Code article : <span className="font-mono font-bold text-slate-600">{produits.find((p) => p.id === editingId)?.code || genererCode(categorie, produits)}</span>
                   </p>
                 ) : (
                   <p className="text-[10px] text-slate-400 mt-1">
@@ -870,6 +910,12 @@ export default function CataloguePretAPorterPage() {
                       <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{groupe.items.length}</span>
                     </div>
 
+                    {groupe.id === 'autres' && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-[11px] font-semibold text-amber-800 flex items-center gap-2">
+                        <AlertTriangle size={13} className="shrink-0" /> Utilisez le menu "Catégorie" sur chaque carte pour classer ces articles.
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {groupe.items.map((p) => (
                         <div
@@ -881,11 +927,27 @@ export default function CataloguePretAPorterPage() {
                           }`}
                         >
                           <div className="space-y-2">
-                            <div className="flex justify-between items-start">
-                              <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-white">
-                                {p.code || '—'}
+                            <div className="flex justify-between items-start gap-2">
+                              <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-white shrink-0">
+                                {p.code || 'Sans code'}
                               </span>
-                              <div className="flex items-center gap-1">
+
+                              <select
+                                value={CATEGORIES.some((c) => c.id === p.categorie) ? p.categorie : ''}
+                                onChange={(e) => e.target.value && reclasserCategorie(p, e.target.value)}
+                                className={`text-[10px] font-bold border rounded-md px-1.5 py-1 outline-none cursor-pointer ${
+                                  CATEGORIES.some((c) => c.id === p.categorie)
+                                    ? 'bg-white text-slate-700 border-slate-300'
+                                    : 'bg-amber-100 text-amber-800 border-amber-300'
+                                }`}
+                              >
+                                <option value="" disabled>Catégorie...</option>
+                                {CATEGORIES.map((c) => (
+                                  <option key={c.id} value={c.id}>{c.label}</option>
+                                ))}
+                              </select>
+
+                              <div className="flex items-center gap-1 shrink-0">
                                 <button
                                   onClick={() => editerProduit(p)}
                                   className="text-slate-400 hover:text-amber-600 transition-colors p-1.5 rounded-lg hover:bg-amber-100/60 cursor-pointer"
@@ -995,7 +1057,7 @@ export default function CataloguePretAPorterPage() {
             <div className="space-y-3 text-xs">
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
                 <p className="font-bold text-slate-900">
-                  <span className="font-mono text-slate-500">{mouvementModal.produit.code}</span> — {mouvementModal.produit.nom}
+                  <span className="font-mono text-slate-500">{mouvementModal.produit.code || 'Sans code'}</span> — {mouvementModal.produit.nom}
                 </p>
                 <p className="text-slate-500">Stock actuel : <strong>{mouvementModal.produit.quantiteStock}</strong></p>
               </div>
