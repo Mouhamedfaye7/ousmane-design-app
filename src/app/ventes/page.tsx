@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft, Search, Printer, MapPin, Phone,
-  X, Download, Trash2, Package, PlusCircle, CheckSquare, Square, Tag, Send, FileText, Pencil
+  X, Download, Trash2, Package, PlusCircle, CheckSquare, Square, Tag, Send, FileText, Pencil, ShoppingCart
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -65,6 +65,16 @@ interface SelectedCommandeDetail {
   reste: number;
 }
 
+// Un article du catalogue retenu dans le panier (avec sa taille/couleur/quantité propres)
+interface PanierItem {
+  id: string;
+  nom: string;
+  prix: number;
+  quantite: number;
+  taille: string;
+  couleur: string;
+}
+
 const NAVY = '#1B3B6F';
 const GOLD = '#C9A24B';
 const ORANGE = '#C1502E';
@@ -83,6 +93,12 @@ export default function VentesPage() {
   const [selectedCatItem, setSelectedCatItem] = useState<CatalogueItem | null>(null);
   const [selectedTaille, setSelectedTaille] = useState<string>('');
   const [selectedCouleur, setSelectedCouleur] = useState<string>('');
+  const [selectedQuantite, setSelectedQuantite] = useState<number>(1);
+
+  // Panier multi-articles du catalogue (permet de composer une seule facture avec plusieurs articles)
+  const [panier, setPanier] = useState<PanierItem[]>([]);
+  // Détail figé du panier, une fois la facture "validée", pour affichage dans le formulaire final
+  const [selectedCatalogueDetails, setSelectedCatalogueDetails] = useState<PanierItem[]>([]);
 
   const [selectedCommandesIds, setSelectedCommandesIds] = useState<string[]>([]);
   const [importSearch, setImportSearch] = useState('');
@@ -99,7 +115,6 @@ export default function VentesPage() {
 
   const [formData, setFormData] = useState({
     commande_ids: [] as string[],
-    article_id: '',
     client_nom: '',
     client_tel: '',
     mode_commande: 'Vente Libérale',
@@ -142,10 +157,16 @@ export default function VentesPage() {
 
   const qtyNum = Number(formData.quantite) || 0;
   const puNum = Number(formData.prix_unitaire) || 0;
-  // Pour un solde de commande(s), le total réel est la somme des commandes
-  // sélectionnées (montants potentiellement différents), pas qty * prix unitaire.
+  // Pour un solde de commande(s), le total réel est la somme des commandes sélectionnées.
   const commandesTotalSum = selectedCommandesDetails.reduce((acc, d) => acc + d.total, 0);
-  const montantTotalCalcul = formData.commande_ids.length > 0 ? commandesTotalSum : qtyNum * puNum;
+  // Pour une facture catalogue composée de plusieurs articles, le total est la somme (prix x quantité) de chacun.
+  const catalogueTotalSum = selectedCatalogueDetails.reduce((acc, d) => acc + d.prix * d.quantite, 0);
+  const montantTotalCalcul =
+    formData.commande_ids.length > 0
+      ? commandesTotalSum
+      : selectedCatalogueDetails.length > 0
+        ? catalogueTotalSum
+        : qtyNum * puNum;
   const avanceNum = Number(formData.avance) || 0;
   const resteCalcul = Math.max(0, montantTotalCalcul - avanceNum);
 
@@ -172,11 +193,17 @@ export default function VentesPage() {
     return details.join(' | ');
   };
 
+  const closeVenteForm = () => {
+    setShowAddModal(false);
+    setSelectedCatalogueDetails([]);
+  };
+
   const handleOpenVenteLiberale = () => {
     setSelectedCommandesDetails([]);
+    setSelectedCatalogueDetails([]);
+    setPanier([]);
     setFormData({
       commande_ids: [],
-      article_id: '',
       client_nom: '',
       client_tel: '',
       mode_commande: 'Vente Libérale',
@@ -217,6 +244,9 @@ export default function VentesPage() {
     const selectedCmds = commandesPending.filter(c => selectedCommandesIds.includes(c.id));
     if (selectedCmds.length === 0) return;
 
+    setSelectedCatalogueDetails([]);
+    setPanier([]);
+
     // Construction du détail par commande, affiché dans le formulaire final
     const details: SelectedCommandeDetail[] = selectedCmds.map(cmd => {
       const { total, acompte, reste } = getCommandeFinancials(cmd);
@@ -231,7 +261,6 @@ export default function VentesPage() {
 
       setFormData({
         commande_ids: [cmd.id],
-        article_id: '',
         client_nom: cmd.client_nom || '',
         client_tel: cmd.client_tel || '',
         mode_commande: 'Sur Mesure',
@@ -254,7 +283,6 @@ export default function VentesPage() {
 
       setFormData({
         commande_ids: selectedCmds.map(c => c.id),
-        article_id: '',
         client_nom: firstClient.client_nom || '',
         client_tel: firstClient.client_tel || '',
         mode_commande: 'Sur Mesure (Groupé)',
@@ -280,37 +308,85 @@ export default function VentesPage() {
     if (item.couleur) setSelectedCouleur(item.couleur);
     else if (Array.isArray(item.couleurs) && item.couleurs.length > 0) setSelectedCouleur(item.couleurs[0]);
     else setSelectedCouleur('');
+
+    setSelectedQuantite(1);
   };
 
-  const handleConfirmCatalogueItem = () => {
+  // Quantité déjà réservée dans le panier pour un article donné (toutes tailles/couleurs confondues)
+  const getQtyDejaAuPanier = (itemId: string) =>
+    panier.filter(p => p.id === itemId).reduce((s, p) => s + p.quantite, 0);
+
+  // --- AJOUTE L'ARTICLE CONFIGURÉ (TAILLE/COULEUR/QUANTITÉ) AU PANIER ---
+  const ajouterAuPanier = () => {
     if (!selectedCatItem) return;
     const item = selectedCatItem;
 
     let price = Number(item.prix) || 0;
     if (price > 0 && price < 1000) price = price * 1000;
-    const priceStr = price > 0 ? price.toString() : '';
 
-    const specParts = [];
-    if (selectedTaille) specParts.push(`Taille: ${selectedTaille}`);
-    if (selectedCouleur) specParts.push(`Couleur: ${selectedCouleur}`);
-    const specsStr = specParts.length > 0 ? ` (${specParts.join(', ')})` : '';
+    const qtyDejaAuPanier = getQtyDejaAuPanier(item.id);
+    const stockRestant = Math.max(0, item.quantite_stock - qtyDejaAuPanier);
 
-    setSelectedCommandesDetails([]);
-    setFormData({
-      commande_ids: [],
-      article_id: item.id,
-      client_nom: '',
-      client_tel: '',
-      mode_commande: 'Prêt-à-porter',
-      mode_paiement: 'Espèces',
-      designation: `${item.nom}${specsStr}`,
-      quantite: '1',
-      prix_unitaire: priceStr,
-      avance: priceStr,
-      observations: `Achat Catalogue - ${item.categorie || 'Prêt-à-porter'}`
+    if (stockRestant <= 0) {
+      alert('Stock insuffisant pour cet article (déjà entièrement réservé dans le panier).');
+      return;
+    }
+
+    const qty = Math.max(1, Math.min(selectedQuantite || 1, stockRestant));
+
+    setPanier(prev => {
+      const idx = prev.findIndex(p => p.id === item.id && p.taille === selectedTaille && p.couleur === selectedCouleur);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = { ...copy[idx], quantite: Math.min(item.quantite_stock, copy[idx].quantite + qty) };
+        return copy;
+      }
+      return [...prev, { id: item.id, nom: item.nom, prix: price, quantite: qty, taille: selectedTaille, couleur: selectedCouleur }];
     });
 
     setSelectedCatItem(null);
+    setSelectedTaille('');
+    setSelectedCouleur('');
+    setSelectedQuantite(1);
+  };
+
+  const retirerDuPanier = (idx: number) => {
+    setPanier(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const updatePanierQuantite = (idx: number, qty: number) => {
+    setPanier(prev => prev.map((p, i) => (i === idx ? { ...p, quantite: Math.max(1, qty || 1) } : p)));
+  };
+
+  // --- VALIDE LE PANIER : construit la facture unique (désignation, total, avance par défaut) ---
+  const validerPanier = () => {
+    if (panier.length === 0) return;
+
+    const total = panier.reduce((s, p) => s + p.prix * p.quantite, 0);
+    const totalQte = panier.reduce((s, p) => s + p.quantite, 0);
+    const designationCombined = panier
+      .map(p => {
+        const specs = [p.taille ? `Taille: ${p.taille}` : '', p.couleur ? `Couleur: ${p.couleur}` : ''].filter(Boolean).join(', ');
+        return `${p.nom}${specs ? ` (${specs})` : ''} x${p.quantite}`;
+      })
+      .join(' | ');
+
+    setSelectedCommandesDetails([]);
+    setSelectedCatalogueDetails(panier);
+    setFormData({
+      commande_ids: [],
+      client_nom: '',
+      client_tel: '',
+      mode_commande: panier.length > 1 ? 'Prêt-à-porter (Panier)' : 'Prêt-à-porter',
+      mode_paiement: 'Espèces',
+      designation: designationCombined,
+      quantite: totalQte.toString(),
+      prix_unitaire: '',
+      avance: total.toString(),
+      observations: panier.length > 1 ? `Achat Catalogue - ${panier.length} article(s)` : `Achat Catalogue - ${panier[0].nom}`
+    });
+
+    setPanier([]);
     setShowCatalogueModal(false);
     setShowAddModal(true);
   };
@@ -350,25 +426,27 @@ export default function VentesPage() {
       await supabase.from('ventes').insert([fallbackPayload]);
     }
 
-    if (formData.article_id) {
-      const { data: catItem } = await supabase.from('catalogue').select('quantite_stock, nom').eq('id', formData.article_id).single();
-      if (catItem) {
-        const nouveauStock = Math.max(0, Number(catItem.quantite_stock) - qtyNum);
-        const updatePayload: { quantite_stock: number; statut?: string } = { quantite_stock: nouveauStock };
-        if (nouveauStock === 0) {
-          updatePayload.statut = 'Vendu';
-        }
-        await supabase.from('catalogue').update(updatePayload).eq('id', formData.article_id);
+    // Vente issue du panier catalogue : on décrémente le stock et on trace un mouvement
+    // de sortie pour CHAQUE article retenu (avec sa propre quantité).
+    if (selectedCatalogueDetails.length > 0) {
+      for (const item of selectedCatalogueDetails) {
+        const { data: catItem } = await supabase.from('catalogue').select('quantite_stock, nom').eq('id', item.id).single();
+        if (catItem) {
+          const nouveauStock = Math.max(0, Number(catItem.quantite_stock) - item.quantite);
+          const updatePayload: { quantite_stock: number; statut?: string } = { quantite_stock: nouveauStock };
+          if (nouveauStock === 0) {
+            updatePayload.statut = 'Vendu';
+          }
+          await supabase.from('catalogue').update(updatePayload).eq('id', item.id);
 
-        // Enregistre automatiquement une "sortie" de stock liée à cette vente
-        // catalogue, pour que la courbe d'évolution du catalogue reflète les ventes.
-        await supabase.from('mouvements_stock').insert([{
-          produit_id: formData.article_id,
-          produit_nom: catItem.nom || formData.designation,
-          type: 'sortie',
-          quantite: qtyNum,
-          motif: `Vente catalogue - ${formData.client_nom}`
-        }]);
+          await supabase.from('mouvements_stock').insert([{
+            produit_id: item.id,
+            produit_nom: catItem.nom || item.nom,
+            type: 'sortie',
+            quantite: item.quantite,
+            motif: `Vente catalogue - ${formData.client_nom}`
+          }]);
+        }
       }
     }
 
@@ -389,6 +467,7 @@ export default function VentesPage() {
     setShowAddModal(false);
     setSelectedCommandesIds([]);
     setSelectedCommandesDetails([]);
+    setSelectedCatalogueDetails([]);
     fetchVentes();
     fetchCommandesToImport();
     fetchCatalogue();
@@ -549,6 +628,13 @@ export default function VentesPage() {
       { total: 0, acompte: 0, reste: 0 }
     );
 
+  // Quantité restante disponible pour l'article en cours de configuration (avant ajout au panier)
+  const stockRestantSelectedItem = selectedCatItem
+    ? Math.max(0, selectedCatItem.quantite_stock - getQtyDejaAuPanier(selectedCatItem.id))
+    : 0;
+
+  const panierTotal = panier.reduce((s, p) => s + p.prix * p.quantite, 0);
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F8FC' }}>
       <style jsx global>{`
@@ -695,21 +781,24 @@ export default function VentesPage() {
         </div>
       </div>
 
-      {/* MODAL CATALOGUE */}
+      {/* MODAL CATALOGUE — sélection multi-articles avec panier */}
       {showCatalogueModal && (
-        <div onClick={() => { setShowCatalogueModal(false); setSelectedCatItem(null); }} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative border border-slate-200 font-body">
+        <div
+          onClick={() => { setShowCatalogueModal(false); setSelectedCatItem(null); setPanier([]); }}
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto"
+        >
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative border border-slate-200 font-body max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
               <div className="flex items-center gap-3">
                 <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#FBF3E2', color: GOLD }}>
                   <Package size={18} />
                 </span>
                 <div>
-                  <h2 className="font-display font-semibold text-lg" style={{ color: NAVY }}>Vendre un article du Catalogue</h2>
-                  <p className="text-xs text-slate-500">Sélectionnez le modèle. Le stock sera déduit automatiquement à la validation.</p>
+                  <h2 className="font-display font-semibold text-lg" style={{ color: NAVY }}>Vendre du Catalogue</h2>
+                  <p className="text-xs text-slate-500">Ajoutez un ou plusieurs articles au panier (taille, couleur, quantité), puis validez pour générer une facture unique.</p>
                 </div>
               </div>
-              <button onClick={() => { setShowCatalogueModal(false); setSelectedCatItem(null); }} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X size={20} /></button>
+              <button onClick={() => { setShowCatalogueModal(false); setSelectedCatItem(null); setPanier([]); }} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X size={20} /></button>
             </div>
 
             <div className="relative mb-4">
@@ -718,58 +807,113 @@ export default function VentesPage() {
             </div>
 
             {!selectedCatItem ? (
-              <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl">
-                {filteredCatalogue.length === 0 ? (
-                  <p className="p-4 text-center text-xs text-slate-400">Aucun article trouvé dans le catalogue.</p>
-                ) : filteredCatalogue.map((item) => {
-                  const isVendu = item.quantite_stock <= 0 || item.statut === 'Vendu';
-                  const detailsText = formatCatalogueDetails(item);
+              <>
+                <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl">
+                  {filteredCatalogue.length === 0 ? (
+                    <p className="p-4 text-center text-xs text-slate-400">Aucun article trouvé dans le catalogue.</p>
+                  ) : filteredCatalogue.map((item) => {
+                    const qtyInPanier = getQtyDejaAuPanier(item.id);
+                    const stockRestant = Math.max(0, item.quantite_stock - qtyInPanier);
+                    const isVendu = stockRestant <= 0 || item.statut === 'Vendu';
+                    const detailsText = formatCatalogueDetails(item);
 
-                  return (
-                    <div key={item.id} className={`p-3.5 flex items-center justify-between transition-colors ${isVendu ? 'bg-slate-50 opacity-75' : 'hover:bg-[#EAF1FB]/40'}`}>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-900 text-xs">{item.nom}</span>
-                          {isVendu ? (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1" style={{ backgroundColor: '#FBEAE3', color: ORANGE, borderColor: `${ORANGE}33` }}>
-                              <Tag size={10} /> VENDU
-                            </span>
-                          ) : (
-                            <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                              Stock : {item.quantite_stock}
-                            </span>
+                    return (
+                      <div key={item.id} className={`p-3.5 flex items-center justify-between transition-colors ${isVendu ? 'bg-slate-50 opacity-75' : 'hover:bg-[#EAF1FB]/40'}`}>
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-slate-900 text-xs">{item.nom}</span>
+                            {isVendu ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1" style={{ backgroundColor: '#FBEAE3', color: ORANGE, borderColor: `${ORANGE}33` }}>
+                                <Tag size={10} /> {item.statut === 'Vendu' ? 'VENDU' : 'ÉPUISÉ'}
+                              </span>
+                            ) : (
+                              <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                Stock : {stockRestant}
+                              </span>
+                            )}
+                            {qtyInPanier > 0 && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1" style={{ backgroundColor: '#EAF1FB', color: NAVY }}>
+                                <ShoppingCart size={10} /> x{qtyInPanier} au panier
+                              </span>
+                            )}
+                          </div>
+
+                          {detailsText && (
+                            <p className="text-[11px] text-slate-600 font-medium">
+                              {detailsText}
+                            </p>
                           )}
+
+                          <p className="text-[11px] font-bold font-mono-tape" style={{ color: GOLD }}>
+                            Prix : {formatAmount(item.prix)} FCFA
+                          </p>
                         </div>
 
-                        {detailsText && (
-                          <p className="text-[11px] text-slate-600 font-medium">
-                            {detailsText}
-                          </p>
-                        )}
-
-                        <p className="text-[11px] font-bold font-mono-tape" style={{ color: GOLD }}>
-                          Prix : {formatAmount(item.prix)} FCFA
-                        </p>
+                        <button
+                          onClick={() => handlePrepareCatalogueItem(item)}
+                          disabled={isVendu}
+                          className="font-bold text-xs px-3.5 py-2 rounded-full cursor-pointer transition-colors shrink-0 disabled:bg-slate-300 disabled:text-slate-500"
+                          style={!isVendu ? { backgroundColor: GOLD, color: NAVY } : undefined}
+                        >
+                          {isVendu ? (item.statut === 'Vendu' ? 'Épuisé' : 'Complet') : 'Choisir'}
+                        </button>
                       </div>
+                    );
+                  })}
+                </div>
 
-                      <button
-                        onClick={() => handlePrepareCatalogueItem(item)}
-                        disabled={isVendu}
-                        className="font-bold text-xs px-3.5 py-2 rounded-full cursor-pointer transition-colors shrink-0 disabled:bg-slate-300 disabled:text-slate-500"
-                        style={!isVendu ? { backgroundColor: GOLD, color: NAVY } : undefined}
-                      >
-                        {isVendu ? 'Épuisé' : 'Choisir'}
-                      </button>
+                {/* PANIER */}
+                {panier.length > 0 && (
+                  <div className="mt-4 rounded-xl p-4 space-y-3" style={{ backgroundColor: '#EAF1FB', border: `1px solid ${NAVY}22` }}>
+                    <p className="font-bold text-[11px] uppercase tracking-wide flex items-center gap-1.5" style={{ color: NAVY }}>
+                      <ShoppingCart size={13} /> Panier ({panier.length} article{panier.length > 1 ? 's' : ''})
+                    </p>
+                    <div className="space-y-1.5">
+                      {panier.map((p, idx) => (
+                        <div key={idx} className="bg-white border border-slate-200 rounded-lg p-2.5 flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-800 text-xs truncate">{p.nom}</p>
+                            <p className="text-[10px] text-slate-500">
+                              {[p.taille && `Taille: ${p.taille}`, p.couleur && `Couleur: ${p.couleur}`].filter(Boolean).join(' · ') || 'Sans spécification'}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <input
+                              type="number"
+                              min={1}
+                              value={p.quantite}
+                              onChange={(e) => updatePanierQuantite(idx, Number(e.target.value))}
+                              className="w-14 p-1 text-xs border border-slate-300 rounded text-center font-mono-tape font-bold"
+                            />
+                            <span className="font-mono-tape text-xs font-bold text-slate-700 w-24 text-right">{formatAmount(p.prix * p.quantite)} F</span>
+                            <button onClick={() => retirerDuPanier(idx)} className="text-slate-400 hover:text-rose-600 cursor-pointer p-1" title="Retirer du panier">
+                              <X size={15} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  );
-                })}
-              </div>
+                    <div className="flex justify-between items-center pt-2 border-t border-slate-200 text-xs font-bold">
+                      <span style={{ color: NAVY }}>Total panier</span>
+                      <span className="font-mono-tape" style={{ color: NAVY }}>{formatAmount(panierTotal)} FCFA</span>
+                    </div>
+                    <button
+                      onClick={validerPanier}
+                      className="w-full py-2.5 rounded-full font-bold text-xs cursor-pointer transition-all hover:-translate-y-0.5"
+                      style={{ backgroundColor: GOLD, color: NAVY }}
+                    >
+                      Valider la facture ({panier.length} article{panier.length > 1 ? 's' : ''})
+                    </button>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="rounded-xl space-y-4 p-4" style={{ backgroundColor: '#FBF3E2', border: `1px solid ${GOLD}44` }}>
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="font-display font-semibold text-slate-900 text-sm">{selectedCatItem.nom}</h3>
                     <p className="text-xs font-bold font-mono-tape" style={{ color: GOLD }}>{formatAmount(selectedCatItem.prix)} FCFA</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">{stockRestantSelectedItem} unité(s) disponible(s)</p>
                   </div>
                   <button onClick={() => setSelectedCatItem(null)} className="text-xs text-slate-500 underline cursor-pointer">Changer d'article</button>
                 </div>
@@ -802,9 +946,28 @@ export default function VentesPage() {
                   </div>
                 </div>
 
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1 text-xs">Quantité :</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={stockRestantSelectedItem || 1}
+                    value={selectedQuantite}
+                    onChange={(e) => setSelectedQuantite(Number(e.target.value) || 1)}
+                    className="w-full p-2 border border-slate-300 rounded-lg bg-white font-bold font-mono-tape text-xs"
+                  />
+                </div>
+
                 <div className="flex justify-end gap-2 pt-2">
                   <button onClick={() => setSelectedCatItem(null)} className="px-3.5 py-2 rounded-full bg-slate-200 text-xs font-bold cursor-pointer">Retour</button>
-                  <button onClick={handleConfirmCatalogueItem} className="px-4 py-2 rounded-full text-xs font-bold cursor-pointer transition-all hover:-translate-y-0.5" style={{ backgroundColor: GOLD, color: NAVY }}>Valider la sélection</button>
+                  <button
+                    onClick={ajouterAuPanier}
+                    disabled={stockRestantSelectedItem <= 0}
+                    className="px-4 py-2 rounded-full text-xs font-bold cursor-pointer transition-all hover:-translate-y-0.5 disabled:opacity-50 flex items-center gap-1.5"
+                    style={{ backgroundColor: GOLD, color: NAVY }}
+                  >
+                    <ShoppingCart size={13} /> Ajouter au panier
+                  </button>
                 </div>
               </div>
             )}
@@ -922,13 +1085,17 @@ export default function VentesPage() {
 
       {/* MODAL FORMULAIRE DE VENTE */}
       {showAddModal && (
-        <div onClick={() => setShowAddModal(false)} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+        <div onClick={closeVenteForm} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
           <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl relative border border-slate-200 text-slate-900 font-body">
             <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
               <h2 className="font-display italic font-semibold text-lg" style={{ color: NAVY }}>
-                {formData.commande_ids.length > 0 ? 'Solder & Générer Facture' : formData.mode_commande === 'Vente Libérale' ? 'Nouvelle Vente Libérale' : 'Vente Catalogue'}
+                {formData.commande_ids.length > 0
+                  ? 'Solder & Générer Facture'
+                  : selectedCatalogueDetails.length > 0
+                    ? 'Facture Catalogue'
+                    : formData.mode_commande === 'Vente Libérale' ? 'Nouvelle Vente Libérale' : 'Vente Catalogue'}
               </h2>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X size={20} /></button>
+              <button onClick={closeVenteForm} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X size={20} /></button>
             </div>
             <form onSubmit={handleCreateVente} className="space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
@@ -942,7 +1109,7 @@ export default function VentesPage() {
                 </div>
               </div>
 
-              {/* DÉTAIL DES COMMANDES SOLDÉES (visible uniquement quand cette vente provient d'un solde de commande(s)) */}
+              {/* DÉTAIL DES COMMANDES SOLDÉES */}
               {formData.commande_ids.length > 0 && selectedCommandesDetails.length > 0 && (
                 <div className="rounded-lg p-3 space-y-2" style={{ backgroundColor: '#FBF3E2', border: `1px solid ${GOLD}44` }}>
                   <p className="font-bold text-slate-700 text-[11px] uppercase tracking-wide">
@@ -959,6 +1126,30 @@ export default function VentesPage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* DÉTAIL DES ARTICLES CATALOGUE (visible uniquement pour une facture issue du panier) */}
+              {selectedCatalogueDetails.length > 0 && (
+                <div className="rounded-lg p-3 space-y-2" style={{ backgroundColor: '#EAF1FB', border: `1px solid ${NAVY}22` }}>
+                  <p className="font-bold text-slate-700 text-[11px] uppercase tracking-wide">
+                    Détail des articles du catalogue inclus dans cette facture
+                  </p>
+                  <div className="space-y-1.5">
+                    {selectedCatalogueDetails.map((d, idx) => {
+                      const specs = [d.taille && `Taille: ${d.taille}`, d.couleur && `Couleur: ${d.couleur}`].filter(Boolean).join(', ');
+                      return (
+                        <div key={idx} className="bg-white border border-slate-200 rounded-md p-2 flex flex-col gap-0.5">
+                          <p className="text-slate-800 font-semibold text-[11px]">{d.nom}{specs ? ` (${specs})` : ''}</p>
+                          <div className="flex flex-wrap gap-x-3 text-[10px] font-mono-tape">
+                            <span className="text-slate-600">Quantité: <strong>{d.quantite}</strong></span>
+                            <span className="text-slate-600">Prix unitaire: <strong>{formatAmount(d.prix)} FCFA</strong></span>
+                            <span className="font-bold" style={{ color: NAVY }}>Sous-total: <strong>{formatAmount(d.prix * d.quantite)} FCFA</strong></span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -994,6 +1185,16 @@ export default function VentesPage() {
                     Les commandes ayant des prix différents, le total est calculé automatiquement à partir du détail ci-dessus (pas de prix unitaire unique).
                   </p>
                 </div>
+              ) : selectedCatalogueDetails.length > 0 ? (
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Montant Total ({selectedCatalogueDetails.length} article{selectedCatalogueDetails.length > 1 ? 's' : ''} du catalogue)
+                  </label>
+                  <input type="text" readOnly value={`${formatAmount(montantTotalCalcul)} FCFA`} className="font-mono-tape w-full p-2.5 border border-slate-200 rounded-lg bg-slate-100 font-bold text-slate-900" />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Total calculé automatiquement à partir des articles et quantités sélectionnés ci-dessus.
+                  </p>
+                </div>
               ) : (
                 <div className="grid grid-cols-3 gap-3">
                   <div>
@@ -1022,7 +1223,7 @@ export default function VentesPage() {
                 </div>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 rounded-full bg-slate-200 font-bold cursor-pointer">Annuler</button>
+                <button type="button" onClick={closeVenteForm} className="px-4 py-2 rounded-full bg-slate-200 font-bold cursor-pointer">Annuler</button>
                 <button type="submit" className="px-4 py-2 rounded-full font-bold cursor-pointer transition-all hover:-translate-y-0.5" style={{ backgroundColor: GOLD, color: NAVY }}>Enregistrer la vente</button>
               </div>
             </form>
