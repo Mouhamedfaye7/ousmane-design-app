@@ -358,6 +358,11 @@ export default function VentesPage() {
     setPanier(prev => prev.map((p, i) => (i === idx ? { ...p, quantite: Math.max(1, qty || 1) } : p)));
   };
 
+  // Permet de modifier le prix de vente d'un article du panier (ex: prix négocié / réduit pour un client)
+  const updatePanierPrix = (idx: number, prix: number) => {
+    setPanier(prev => prev.map((p, i) => (i === idx ? { ...p, prix: Math.max(0, prix || 0) } : p)));
+  };
+
   // --- VALIDE LE PANIER : construit la facture unique (désignation, total, avance par défaut) ---
   const validerPanier = () => {
     if (panier.length === 0) return;
@@ -878,13 +883,28 @@ export default function VentesPage() {
                             </p>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
-                            <input
-                              type="number"
-                              min={1}
-                              value={p.quantite}
-                              onChange={(e) => updatePanierQuantite(idx, Number(e.target.value))}
-                              className="w-14 p-1 text-xs border border-slate-300 rounded text-center font-mono-tape font-bold"
-                            />
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="text-[9px] text-slate-400 font-semibold">Qté</span>
+                              <input
+                                type="number"
+                                min={1}
+                                value={p.quantite}
+                                onChange={(e) => updatePanierQuantite(idx, Number(e.target.value))}
+                                className="w-14 p-1 text-xs border border-slate-300 rounded text-center font-mono-tape font-bold"
+                              />
+                            </div>
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="text-[9px] text-slate-400 font-semibold">Prix unit.</span>
+                              <input
+                                type="number"
+                                min={0}
+                                value={p.prix}
+                                onChange={(e) => updatePanierPrix(idx, Number(e.target.value))}
+                                className="w-20 p-1 text-xs border rounded text-center font-mono-tape font-bold"
+                                style={{ borderColor: `${GOLD}88`, color: GOLD }}
+                                title="Modifier le prix de vente (ex: réduction accordée au client)"
+                              />
+                            </div>
                             <span className="font-mono-tape text-xs font-bold text-slate-700 w-24 text-right">{formatAmount(p.prix * p.quantite)} F</span>
                             <button onClick={() => retirerDuPanier(idx)} className="text-slate-400 hover:text-rose-600 cursor-pointer p-1" title="Retirer du panier">
                               <X size={15} />
