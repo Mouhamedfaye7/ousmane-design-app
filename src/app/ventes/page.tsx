@@ -647,6 +647,16 @@ export default function VentesPage() {
         .font-display { font-family: 'Fraunces', ui-serif, Georgia, serif; }
         .font-body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
         .font-mono-tape { font-family: 'Space Mono', ui-monospace, monospace; }
+        .stitch-line {
+          height: 1px;
+          background-image: repeating-linear-gradient(
+            to right,
+            ${GOLD} 0px,
+            ${GOLD} 7px,
+            transparent 7px,
+            transparent 14px
+          );
+        }
       `}</style>
 
       {/* HEADER — bandeau navy premium */}
@@ -1251,7 +1261,8 @@ export default function VentesPage() {
         </div>
       )}
 
-      {/* MODAL FACTURE */}
+      {/* MODAL FACTURE — en-tête sticky (les boutons restent toujours visibles),
+          corps défilant, facture au format proche A4 pour un rendu "page entière" harmonisé */}
       {selectedVente && (() => {
         let total = selectedVente.montant_total || 0;
         let avance = selectedVente.avance || 0;
@@ -1263,10 +1274,13 @@ export default function VentesPage() {
         const dateFormatted = selectedVente.created_at ? new Date(selectedVente.created_at).toLocaleDateString('fr-FR') : new Date().toLocaleDateString('fr-FR');
 
         return (
-          <div onClick={() => setSelectedVente(null)} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-            <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative border border-slate-200 my-8 font-body">
-              
-              <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3 print:hidden">
+          <div onClick={() => setSelectedVente(null)} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl max-w-3xl w-full shadow-2xl relative border border-slate-200 font-body flex flex-col max-h-[92vh] print:max-h-none"
+            >
+              {/* BARRE D'ACTIONS — fixe en haut, ne défile jamais hors de vue */}
+              <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 print:hidden shrink-0 bg-white rounded-t-2xl">
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={() => handleDownloadPDF(selectedVente)}
@@ -1292,89 +1306,131 @@ export default function VentesPage() {
                   </button>
                 </div>
 
-                <button onClick={() => setSelectedVente(null)} className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 cursor-pointer">
+                <button onClick={() => setSelectedVente(null)} className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 cursor-pointer shrink-0">
                   <X size={20} />
                 </button>
               </div>
 
-              <div ref={invoiceRef} className="p-6 border-2 border-amber-800/20 rounded-xl bg-white space-y-5 text-slate-900 font-sans">
-                <div className="flex justify-between items-start border-b border-amber-900/20 pb-4">
-                  <div>
-                    <h2 className="text-2xl font-serif font-extrabold text-amber-900 tracking-wide">Ousmane Design</h2>
-                    <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Création & Couture Contemporaine</p>
-                    <p className="text-xs text-slate-600 mt-1 flex items-center gap-1"><MapPin size={12} className="text-amber-800" /> Hann Maristes, Dakar, Sénégal</p>
-                    <p className="text-xs text-slate-600 flex items-center gap-1"><Phone size={12} className="text-amber-800" /> 77 646 21 02 / 70 348 26 82</p>
-                  </div>
-                  <div className="text-right">
-                    <span className="inline-block bg-amber-900 text-white text-xs font-bold px-3 py-1 rounded-md uppercase tracking-wider">Facture</span>
-                    <p className="text-xs font-semibold text-slate-500 mt-2">Date : {dateFormatted}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 bg-amber-50/50 p-3.5 rounded-lg border border-amber-100 text-xs">
-                  <div>
-                    <p className="text-slate-500 font-medium">Client :</p>
-                    <p className="font-bold text-slate-900 text-sm">{selectedVente.client_nom}</p>
-                    <p className="text-slate-600">Tél : {selectedVente.client_tel || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-500 font-medium">Détails de règlement :</p>
-                    <p className="font-semibold text-slate-800">Mode de commande : <span className="font-bold">{selectedVente.mode_commande || 'Sur Mesure'}</span></p>
-                    <p className="font-semibold text-slate-800">Mode de paiement : <span className="font-bold">{selectedVente.mode_paiement || 'Espèces'}</span></p>
-                  </div>
-                </div>
-
-                <div className="border border-slate-200 rounded-lg overflow-hidden text-xs">
-                  <table className="w-full text-left">
-                    <thead className="bg-amber-900 text-white font-bold uppercase text-[10px]">
-                      <tr>
-                        <th className="p-2.5">Désignation</th>
-                        <th className="p-2.5 text-center">Quantité</th>
-                        <th className="p-2.5 text-right">Prix Unitaire</th>
-                        <th className="p-2.5 text-right">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      <tr>
-                        <td className="p-2.5 font-medium text-slate-800">{getItemName(selectedVente)}</td>
-                        <td className="p-2.5 text-center font-bold text-slate-700">{qte}</td>
-                        <td className="p-2.5 text-right font-medium text-slate-700">{formatAmount(pu)} FCFA</td>
-                        <td className="p-2.5 text-right font-bold text-slate-900">{formatAmount(total)} FCFA</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                {selectedVente.observations && (
-                  <div className="text-xs bg-slate-50 p-2.5 rounded border border-slate-200">
-                    <span className="font-bold text-slate-700">Observations : </span>
-                    <span className="text-slate-600">{selectedVente.observations}</span>
-                  </div>
-                )}
-
-                <div className="flex justify-end pt-1 text-xs">
-                  <div className="w-64 space-y-1.5 border-t-2 border-amber-900/20 pt-2">
-                    <div className="flex justify-between text-slate-600">
-                      <span>Montant Total :</span>
-                      <strong className="text-slate-900">{formatAmount(total)} FCFA</strong>
-                    </div>
-                    <div className="flex justify-between text-emerald-700 font-semibold">
-                      <span>Montant Réglé :</span>
-                      <strong>{formatAmount(avance)} FCFA</strong>
-                    </div>
-                    <div className="flex justify-between text-amber-800 font-bold border-t border-slate-200 pt-1 text-sm">
-                      <span>Reste à Payer :</span>
-                      <span>{formatAmount(reste)} FCFA</span>
+              {/* CORPS DÉFILANT — la facture reste toujours accessible même sur petit écran */}
+              <div className="overflow-y-auto p-6 print:overflow-visible print:p-0">
+                <div
+                  ref={invoiceRef}
+                  style={{ aspectRatio: '210 / 297', borderColor: `${NAVY}1A` }}
+                  className="w-full bg-white rounded-xl overflow-hidden border flex flex-col font-sans mx-auto"
+                >
+                  {/* BANDEAU D'EN-TÊTE */}
+                  <div className="px-8 pt-8 pb-6 shrink-0" style={{ backgroundColor: NAVY }}>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h2 className="font-display italic font-semibold text-3xl" style={{ color: '#FFFFFF' }}>Ousmane Design</h2>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] mt-1.5" style={{ color: GOLD }}>
+                          Création & Couture Contemporaine
+                        </p>
+                        <div className="mt-4 space-y-1 text-[11px]" style={{ color: 'rgba(255,255,255,0.75)' }}>
+                          <p className="flex items-center gap-1.5"><MapPin size={11} /> Hann Maristes, Dakar, Sénégal</p>
+                          <p className="flex items-center gap-1.5"><Phone size={11} /> 77 646 21 02 / 70 348 26 82</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span
+                          className="inline-block text-[10px] font-bold px-3.5 py-1.5 rounded-full uppercase tracking-wider"
+                          style={{ backgroundColor: GOLD, color: NAVY }}
+                        >
+                          Facture
+                        </span>
+                        <p className="text-[11px] font-semibold mt-3" style={{ color: 'rgba(255,255,255,0.75)' }}>
+                          Date : {dateFormatted}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-4 text-[10px] text-slate-500 pt-8 border-t border-slate-200 uppercase font-bold text-center">
-                  <div>Signature du client</div>
-                  <div>Ousmane Design (Signature & Cachet)</div>
+                  <div className="stitch-line shrink-0" />
+
+                  {/* CORPS — s'étire pour occuper la page, le total est poussé vers le bas */}
+                  <div className="flex-1 px-8 py-7 flex flex-col gap-6">
+                    <div className="grid grid-cols-2 gap-6 text-xs shrink-0">
+                      <div className="border-l-2 pl-3.5" style={{ borderColor: GOLD }}>
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Facturé à</p>
+                        <p className="font-display font-semibold text-slate-900 text-base mt-1">{selectedVente.client_nom}</p>
+                        <p className="text-slate-500 mt-0.5">Tél : {selectedVente.client_tel || '-'}</p>
+                      </div>
+                      <div className="border-l-2 pl-3.5" style={{ borderColor: NAVY }}>
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Détails de règlement</p>
+                        <p className="font-semibold text-slate-800 mt-1">
+                          Mode : <span className="font-bold" style={{ color: NAVY }}>{selectedVente.mode_commande || 'Sur Mesure'}</span>
+                        </p>
+                        <p className="font-semibold text-slate-800">
+                          Paiement : <span className="font-bold" style={{ color: NAVY }}>{selectedVente.mode_paiement || 'Espèces'}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg overflow-hidden border shrink-0" style={{ borderColor: '#E2E8F0' }}>
+                      <table className="w-full text-left text-xs">
+                        <thead style={{ backgroundColor: NAVY }}>
+                          <tr className="text-white uppercase text-[10px]">
+                            <th className="p-3 font-bold">Désignation</th>
+                            <th className="p-3 font-bold text-center">Qté</th>
+                            <th className="p-3 font-bold text-right">Prix Unitaire</th>
+                            <th className="p-3 font-bold text-right">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          <tr>
+                            <td className="p-3 font-medium text-slate-800">{getItemName(selectedVente)}</td>
+                            <td className="p-3 text-center font-mono-tape font-bold text-slate-700">{qte}</td>
+                            <td className="p-3 text-right font-mono-tape text-slate-700">{formatAmount(pu)} FCFA</td>
+                            <td className="p-3 text-right font-mono-tape font-bold text-slate-900">{formatAmount(total)} FCFA</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {selectedVente.observations && (
+                      <div className="text-xs rounded-lg p-3.5 shrink-0" style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                        <span className="font-bold text-slate-700">Observations : </span>
+                        <span className="text-slate-600">{selectedVente.observations}</span>
+                      </div>
+                    )}
+
+                    {/* espace flexible qui pousse le total vers le bas de la page */}
+                    <div className="flex-1" />
+
+                    <div className="flex justify-end shrink-0">
+                      <div className="w-72 rounded-xl p-4 space-y-2" style={{ backgroundColor: '#F8FAFC', border: `1px solid ${NAVY}1A` }}>
+                        <div className="flex justify-between text-xs text-slate-600">
+                          <span>Montant Total</span>
+                          <strong className="font-mono-tape text-slate-900">{formatAmount(total)} FCFA</strong>
+                        </div>
+                        <div className="flex justify-between text-xs font-semibold text-emerald-700">
+                          <span>Montant Réglé</span>
+                          <strong className="font-mono-tape">{formatAmount(avance)} FCFA</strong>
+                        </div>
+                        <div
+                          className="flex justify-between items-center pt-2 border-t font-bold text-sm"
+                          style={{ borderColor: `${NAVY}22`, color: ORANGE }}
+                        >
+                          <span>Reste à Payer</span>
+                          <span className="font-mono-tape">{formatAmount(reste)} FCFA</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* PIED DE PAGE */}
+                  <div className="px-8 pb-8 pt-2 shrink-0">
+                    <div className="stitch-line mb-6" />
+                    <p className="text-center italic font-display text-xs text-slate-400 mb-6">
+                      Merci d'avoir choisi Ousmane Design pour votre élégance.
+                    </p>
+                    <div className="grid grid-cols-2 gap-8 text-[10px] text-slate-400 uppercase font-bold text-center">
+                      <div className="pt-6 border-t" style={{ borderColor: '#E2E8F0' }}>Signature du client</div>
+                      <div className="pt-6 border-t" style={{ borderColor: '#E2E8F0' }}>Ousmane Design (Signature & Cachet)</div>
+                    </div>
+                  </div>
                 </div>
               </div>
-
             </div>
           </div>
         );
