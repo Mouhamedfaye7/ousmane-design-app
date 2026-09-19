@@ -1425,8 +1425,29 @@ export default function VentesPage() {
                       Merci d'avoir choisi Ousmane Design pour votre élégance.
                     </p>
                     <div className="grid grid-cols-2 gap-8 text-[10px] text-slate-400 uppercase font-bold text-center">
-                      <div className="pt-6 border-t" style={{ borderColor: '#E2E8F0' }}>Signature du client</div>
-                      <div className="pt-6 border-t" style={{ borderColor: '#E2E8F0' }}>Ousmane Design (Signature & Cachet)</div>
+                      <div className="pt-6 border-t flex flex-col items-center gap-1" style={{ borderColor: '#E2E8F0' }}>
+                        <span className="h-14" />
+                        Signature du client
+                      </div>
+                      <div className="pt-2 border-t flex flex-col items-center gap-1" style={{ borderColor: '#E2E8F0' }}>
+                        <div className="relative h-14 flex items-center justify-center">
+                          {/* Cachet, légèrement en arrière-plan */}
+                          <img
+                            src="/cachet-od.png"
+                            alt="Cachet Ousmane Design"
+                            className="absolute h-14 w-14 object-contain opacity-90"
+                            style={{ left: '50%', transform: 'translateX(-65%) rotate(-6deg)' }}
+                          />
+                          {/* Signature, superposée au-dessus du cachet */}
+                          <img
+                            src="/signature.png"
+                            alt="Signature Ousmane Design"
+                            className="relative h-10 object-contain"
+                            style={{ transform: 'translateX(20%)' }}
+                          />
+                        </div>
+                        Ousmane Design (Signature & Cachet)
+                      </div>
                     </div>
                   </div>
                 </div>
