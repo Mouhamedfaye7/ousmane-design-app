@@ -1316,8 +1316,21 @@ export default function VentesPage() {
                 <div
                   ref={invoiceRef}
                   style={{ aspectRatio: '210 / 297', borderColor: `${NAVY}1A` }}
-                  className="w-full bg-white rounded-xl overflow-hidden border flex flex-col font-sans mx-auto"
+                  className="relative w-full bg-white rounded-xl overflow-hidden border flex flex-col font-sans mx-auto"
                 >
+                  {/* FILIGRANE — "Ousmane Design" en oblique, discret, derrière tout le contenu */}
+                  <div
+                    className="absolute inset-0 flex items-center justify-center pointer-events-none select-none overflow-hidden"
+                    style={{ zIndex: 0 }}
+                  >
+                    <span
+                      className="font-display italic font-bold whitespace-nowrap"
+                      style={{ fontSize: '92px', color: NAVY, opacity: 0.055, transform: 'rotate(-32deg)' }}
+                    >
+                      Ousmane Design
+                    </span>
+                  </div>
+
                   {/* BANDEAU D'EN-TÊTE */}
                   <div className="px-8 pt-8 pb-6 shrink-0" style={{ backgroundColor: NAVY }}>
                     <div className="flex justify-between items-start">
@@ -1419,35 +1432,29 @@ export default function VentesPage() {
                   </div>
 
                   {/* PIED DE PAGE */}
-                  <div className="px-8 pb-8 pt-2 shrink-0">
+                  <div className="relative px-8 pb-8 pt-2 shrink-0" style={{ zIndex: 1 }}>
                     <div className="stitch-line mb-6" />
-                    <p className="text-center italic font-display text-xs text-slate-400 mb-6">
+                    <p className="text-center italic font-display text-xs text-slate-400 mb-4">
                       Merci d'avoir choisi Ousmane Design pour votre élégance.
                     </p>
-                    <div className="grid grid-cols-2 gap-8 text-[10px] text-slate-400 uppercase font-bold text-center">
-                      <div className="pt-6 border-t flex flex-col items-center gap-1" style={{ borderColor: '#E2E8F0' }}>
-                        <span className="h-14" />
-                        Signature du client
+                    <div className="flex flex-col items-center gap-1.5 text-[10px] text-slate-400 uppercase font-bold text-center border-t pt-3" style={{ borderColor: '#E2E8F0' }}>
+                      <div className="relative h-24 flex items-center justify-center mb-1">
+                        {/* Cachet, légèrement en arrière-plan */}
+                        <img
+                          src="/cachet-od.png"
+                          alt="Cachet Ousmane Design"
+                          className="absolute h-24 w-24 object-contain opacity-90"
+                          style={{ left: '50%', transform: 'translateX(-60%) rotate(-6deg)' }}
+                        />
+                        {/* Signature, superposée au-dessus du cachet */}
+                        <img
+                          src="/signature.png"
+                          alt="Signature Ousmane Design"
+                          className="relative h-16 object-contain"
+                          style={{ transform: 'translateX(25%)' }}
+                        />
                       </div>
-                      <div className="pt-2 border-t flex flex-col items-center gap-1" style={{ borderColor: '#E2E8F0' }}>
-                        <div className="relative h-14 flex items-center justify-center">
-                          {/* Cachet, légèrement en arrière-plan */}
-                          <img
-                            src="/cachet-od.png"
-                            alt="Cachet Ousmane Design"
-                            className="absolute h-14 w-14 object-contain opacity-90"
-                            style={{ left: '50%', transform: 'translateX(-65%) rotate(-6deg)' }}
-                          />
-                          {/* Signature, superposée au-dessus du cachet */}
-                          <img
-                            src="/signature.png"
-                            alt="Signature Ousmane Design"
-                            className="relative h-10 object-contain"
-                            style={{ transform: 'translateX(20%)' }}
-                          />
-                        </div>
-                        Ousmane Design (Signature & Cachet)
-                      </div>
+                      Ousmane Design (Signature & Cachet)
                     </div>
                   </div>
                 </div>
