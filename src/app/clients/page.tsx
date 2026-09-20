@@ -278,8 +278,10 @@ export default function ClientsPage() {
         renderWidth = renderHeight * ratio;
       }
 
+      // Calé en haut (pas centré) : le bandeau bleu touche le bord superieur de la page,
+      // et s'il reste de l'espace, il se retrouve uniquement en bas (sous la signature/cachet).
       const offsetX = (pageWidth - renderWidth) / 2;
-      const offsetY = (pageHeight - renderHeight) / 2;
+      const offsetY = 0;
 
       pdf.addImage(imgData, 'JPEG', offsetX, offsetY, renderWidth, renderHeight);
       pdf.save(`Fiche_Mesures_${(selectedClient.nom || 'Client').replace(/\s+/g, '_')}.pdf`);
