@@ -265,9 +265,24 @@ export default function ClientsPage() {
       const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgHeight = (canvas.height * pageWidth) / canvas.width;
 
-      // La fiche a un ratio A4 (210/297), donc elle remplit toute la page sans marge.
-      pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
+      // La fiche s'étire désormais selon son contenu réel : si elle dépasse
+      // une page A4, on la découpe sur plusieurs pages (rien n'est coupé,
+      // notamment la signature et le cachet en bas de page).
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'JPEG', 0, position, pageWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, pageWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
       pdf.save(`Fiche_Mesures_${(selectedClient.nom || 'Client').replace(/\s+/g, '_')}.pdf`);
     } catch (err) {
       console.error('Erreur génération fiche PDF :', err);
@@ -576,8 +591,7 @@ export default function ClientsPage() {
       {selectedClient && (
         <div
           ref={ficheRef}
-          style={{ aspectRatio: '210 / 297' }}
-          className="fixed top-0 left-[-10000px] w-[750px] bg-white text-slate-900 font-sans relative overflow-hidden flex flex-col"
+          className="fixed top-0 left-[-10000px] w-[750px] bg-white text-slate-900 font-sans relative flex flex-col"
         >
           {/* FILIGRANE — "Ousmane Design" en oblique, discret, derrière tout le contenu */}
           <div
