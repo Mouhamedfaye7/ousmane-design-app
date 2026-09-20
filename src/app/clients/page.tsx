@@ -246,7 +246,7 @@ export default function ClientsPage() {
     });
   };
 
-  // --- GÉNÉRATION FICHE PDF COMPLÈTE (A4 plein format, soignée et professionnelle) ---
+  // --- GÉNÉRATION FICHE PDF COMPLÈTE (une seule page A4, quel que soit le contenu) ---
   const downloadFichePDF = async () => {
     if (!selectedClient) return;
     try {
@@ -268,7 +268,7 @@ export default function ClientsPage() {
 
       // La fiche tient TOUJOURS sur une seule page : on calcule un facteur
       // d'échelle "contain" qui fait entrer tout le contenu dans la page A4,
-      // quitte à légèrement réduire la fiche si elle est plus longue que large.
+      // et on le cale en haut (le bandeau bleu touche le bord supérieur).
       const ratio = canvas.width / canvas.height;
       let renderWidth = pageWidth;
       let renderHeight = renderWidth / ratio;
@@ -278,8 +278,6 @@ export default function ClientsPage() {
         renderWidth = renderHeight * ratio;
       }
 
-      // Calé en haut (pas centré) : le bandeau bleu touche le bord superieur de la page,
-      // et s'il reste de l'espace, il se retrouve uniquement en bas (sous la signature/cachet).
       const offsetX = (pageWidth - renderWidth) / 2;
       const offsetY = 0;
 
@@ -588,13 +586,15 @@ export default function ClientsPage() {
         )}
       </div>
 
-      {/* CONTENU CACHÉ POUR GÉNÉRATION DE LA FICHE PDF COMPLÈTE — format A4 plein, filigrane, cachet & signature */}
+      {/* CONTENU CACHÉ POUR GÉNÉRATION DE LA FICHE PDF COMPLÈTE — inspiré de la mise en page des factures :
+          bandeau navy tout en haut, contenu, puis signature/cachet centrés tout en bas de la page. */}
       {selectedClient && (
         <div
           ref={ficheRef}
+          style={{ minHeight: '1061px' }}
           className="fixed top-0 left-[-10000px] w-[750px] bg-white text-slate-900 font-sans relative flex flex-col"
         >
-          {/* FILIGRANE — "Ousmane Design" en oblique, discret, derrière tout le contenu */}
+          {/* FILIGRANE — "Ousmane Design" en oblique, derrière tout le contenu */}
           <div
             className="absolute inset-0 flex items-center justify-center pointer-events-none select-none overflow-hidden"
             style={{ zIndex: 0 }}
@@ -607,7 +607,7 @@ export default function ClientsPage() {
             </span>
           </div>
 
-          {/* BANDEAU D'EN-TÊTE */}
+          {/* BANDEAU D'EN-TÊTE — tout en haut de la page, comme sur la facture */}
           <div className="px-10 pt-10 pb-7 shrink-0 relative" style={{ backgroundColor: NAVY, zIndex: 1 }}>
             <div className="flex justify-between items-start">
               <div>
@@ -616,8 +616,8 @@ export default function ClientsPage() {
                   Création & Couture Contemporaine
                 </p>
                 <div className="mt-5 space-y-1 text-xs" style={{ color: 'rgba(255,255,255,0.75)' }}>
-                  <p>Hann Maristes, Dakar, Sénégal</p>
-                  <p>77 646 21 02 / 70 348 26 82</p>
+                  <p className="flex items-center gap-1.5"><MapPin size={11} /> Hann Maristes, Dakar, Sénégal</p>
+                  <p className="flex items-center gap-1.5"><Phone size={11} /> 77 646 21 02 / 70 348 26 82</p>
                 </div>
               </div>
               <div className="text-right">
@@ -636,20 +636,28 @@ export default function ClientsPage() {
 
           <div className="stitch-line shrink-0 relative" style={{ zIndex: 1 }} />
 
-          {/* CORPS — s'étire pour occuper toute la page */}
+          {/* CORPS — s'étire pour occuper toute la page ; un espaceur pousse la signature tout en bas */}
           <div className="flex-1 px-10 py-6 flex flex-col gap-5 relative" style={{ zIndex: 1 }}>
             {/* Identité du client */}
-            <div className="border-l-2 pl-4" style={{ borderColor: GOLD }}>
+            <div className="border-l-2 pl-4 shrink-0" style={{ borderColor: GOLD }}>
               <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Fiche client</p>
               <p className="font-display font-semibold text-slate-900 text-2xl mt-1">{selectedClient.nom || 'Sans nom'}</p>
               <div className="flex flex-wrap gap-x-6 gap-y-1 mt-2 text-xs text-slate-600">
-                {selectedClient.telephone && <span>Tél : {selectedClient.telephone}</span>}
-                {selectedClient.adresse && <span>Adresse : {selectedClient.adresse}</span>}
+                {selectedClient.telephone && (
+                  <span className="flex items-center gap-1.5">
+                    <Phone size={11} style={{ color: NAVY, opacity: 0.5 }} /> {selectedClient.telephone}
+                  </span>
+                )}
+                {selectedClient.adresse && (
+                  <span className="flex items-center gap-1.5">
+                    <MapPin size={11} style={{ color: NAVY, opacity: 0.5 }} /> {selectedClient.adresse}
+                  </span>
+                )}
               </div>
             </div>
 
-            {/* Mesures, groupées par zone du corps */}
-            <div className="space-y-4 flex-1">
+            {/* Mesures, groupées par zone du corps, format compact */}
+            <div className="space-y-4 shrink-0">
               {mesureGroups.map((group) => {
                 const filledInGroup = group.keys
                   .map(k => fieldByKey[k])
@@ -693,7 +701,7 @@ export default function ClientsPage() {
 
             {/* Notes */}
             {selectedClient.notes && (
-              <div>
+              <div className="shrink-0">
                 <h2 className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-2">
                   Notes & Particularités
                 </h2>
@@ -706,16 +714,18 @@ export default function ClientsPage() {
               </div>
             )}
 
-            {/* VALIDATION — compacte et collée au contenu (jamais isolée en bas de page,
-                donc jamais coupée par un saut de page lors de la génération du PDF) */}
-            <div className="flex items-end justify-between gap-4 border-t pt-3 mt-1" style={{ borderColor: '#E2E8F0' }}>
-              <p className="text-[10px] italic font-display text-slate-400 max-w-[55%] leading-snug">
+            {/* ESPACEUR — pousse le pied de page tout en bas quand le contenu est court */}
+            <div className="flex-1" />
+
+            {/* PIED DE PAGE — même esprit que la facture : liseré, texte italique centré,
+                puis cachet et signature superposés, centrés, tout en bas de page. */}
+            <div className="shrink-0">
+              <div className="stitch-line mb-5" />
+              <p className="text-center italic font-display text-xs text-slate-400 mb-4">
                 Document confidentiel — carnet de mesures personnalisé Ousmane Design.
               </p>
-              <div className="flex flex-col items-end shrink-0">
-                {/* Cachet et signature superposes : le cachet sert de fond, la signature
-                    manuscrite est posee directement par-dessus, au meme endroit. */}
-                <div className="relative h-16 w-16">
+              <div className="flex flex-col items-center">
+                <div className="relative h-16 w-16 mb-1.5">
                   <img
                     src="/cachet-od.png"
                     alt="Cachet Ousmane Design"
@@ -729,7 +739,7 @@ export default function ClientsPage() {
                     style={{ top: '50%', left: '50%', transform: 'translate(-50%, -50%) rotate(-4deg)' }}
                   />
                 </div>
-                <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wide mt-1.5">
+                <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wide">
                   Ousmane Design (Signature &amp; Cachet)
                 </p>
               </div>
