@@ -265,24 +265,23 @@ export default function ClientsPage() {
       const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
-      const imgHeight = (canvas.height * pageWidth) / canvas.width;
 
-      // La fiche s'étire désormais selon son contenu réel : si elle dépasse
-      // une page A4, on la découpe sur plusieurs pages (rien n'est coupé,
-      // notamment la signature et le cachet en bas de page).
-      let heightLeft = imgHeight;
-      let position = 0;
+      // La fiche tient TOUJOURS sur une seule page : on calcule un facteur
+      // d'échelle "contain" qui fait entrer tout le contenu dans la page A4,
+      // quitte à légèrement réduire la fiche si elle est plus longue que large.
+      const ratio = canvas.width / canvas.height;
+      let renderWidth = pageWidth;
+      let renderHeight = renderWidth / ratio;
 
-      pdf.addImage(imgData, 'JPEG', 0, position, pageWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, position, pageWidth, imgHeight);
-        heightLeft -= pageHeight;
+      if (renderHeight > pageHeight) {
+        renderHeight = pageHeight;
+        renderWidth = renderHeight * ratio;
       }
 
+      const offsetX = (pageWidth - renderWidth) / 2;
+      const offsetY = (pageHeight - renderHeight) / 2;
+
+      pdf.addImage(imgData, 'JPEG', offsetX, offsetY, renderWidth, renderHeight);
       pdf.save(`Fiche_Mesures_${(selectedClient.nom || 'Client').replace(/\s+/g, '_')}.pdf`);
     } catch (err) {
       console.error('Erreur génération fiche PDF :', err);
@@ -636,7 +635,7 @@ export default function ClientsPage() {
           <div className="stitch-line shrink-0 relative" style={{ zIndex: 1 }} />
 
           {/* CORPS — s'étire pour occuper toute la page */}
-          <div className="flex-1 px-10 py-8 flex flex-col gap-7 relative" style={{ zIndex: 1 }}>
+          <div className="flex-1 px-10 py-6 flex flex-col gap-5 relative" style={{ zIndex: 1 }}>
             {/* Identité du client */}
             <div className="border-l-2 pl-4" style={{ borderColor: GOLD }}>
               <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Fiche client</p>
@@ -648,7 +647,7 @@ export default function ClientsPage() {
             </div>
 
             {/* Mesures, groupées par zone du corps */}
-            <div className="space-y-6 flex-1">
+            <div className="space-y-4 flex-1">
               {mesureGroups.map((group) => {
                 const filledInGroup = group.keys
                   .map(k => fieldByKey[k])
@@ -662,21 +661,21 @@ export default function ClientsPage() {
                 return (
                   <div key={group.title}>
                     <h2
-                      className="text-xs font-bold uppercase tracking-wide pb-2 mb-3 border-b"
+                      className="text-xs font-bold uppercase tracking-wide pb-1.5 mb-2 border-b"
                       style={{ color: NAVY, borderColor: '#E2E8F0' }}
                     >
                       {group.title}
                     </h2>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-3 gap-2">
                       {filledInGroup.map((m) => (
                         <div
                           key={m.key}
-                          className="rounded-lg px-4 py-3"
+                          className="rounded-md px-2.5 py-1.5"
                           style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}
                         >
-                          <p className="text-[10px] font-semibold text-slate-500">{m.shortLabel}</p>
-                          <p className="font-mono-tape text-lg font-bold mt-1" style={{ color: NAVY }}>
-                            {selectedClient[m.key]} <span className="text-xs font-normal text-slate-400">cm</span>
+                          <p className="text-[9px] font-semibold text-slate-500 leading-tight">{m.shortLabel}</p>
+                          <p className="font-mono-tape text-sm font-bold mt-0.5 leading-tight" style={{ color: NAVY }}>
+                            {selectedClient[m.key]} <span className="text-[10px] font-normal text-slate-400">cm</span>
                           </p>
                         </div>
                       ))}
@@ -707,26 +706,28 @@ export default function ClientsPage() {
 
             {/* VALIDATION — compacte et collée au contenu (jamais isolée en bas de page,
                 donc jamais coupée par un saut de page lors de la génération du PDF) */}
-            <div className="flex items-end justify-between gap-4 border-t pt-4 mt-1" style={{ borderColor: '#E2E8F0' }}>
+            <div className="flex items-end justify-between gap-4 border-t pt-3 mt-1" style={{ borderColor: '#E2E8F0' }}>
               <p className="text-[10px] italic font-display text-slate-400 max-w-[55%] leading-snug">
                 Document confidentiel — carnet de mesures personnalisé Ousmane Design.
               </p>
               <div className="flex flex-col items-end shrink-0">
-                <div className="flex items-center gap-1">
+                {/* Cachet et signature superposes : le cachet sert de fond, la signature
+                    manuscrite est posee directement par-dessus, au meme endroit. */}
+                <div className="relative h-16 w-16">
                   <img
                     src="/cachet-od.png"
                     alt="Cachet Ousmane Design"
-                    className="h-14 w-14 object-contain opacity-90"
+                    className="absolute inset-0 h-16 w-16 object-contain opacity-90"
                     style={{ transform: 'rotate(-6deg)' }}
                   />
                   <img
                     src="/signature.png"
                     alt="Signature Ousmane Design"
-                    className="h-9 object-contain"
-                    style={{ transform: 'translateX(-10px)' }}
+                    className="absolute h-9 object-contain"
+                    style={{ top: '50%', left: '50%', transform: 'translate(-50%, -50%) rotate(-4deg)' }}
                   />
                 </div>
-                <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wide mt-1">
+                <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wide mt-1.5">
                   Ousmane Design (Signature &amp; Cachet)
                 </p>
               </div>
