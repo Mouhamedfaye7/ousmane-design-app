@@ -704,30 +704,32 @@ export default function ClientsPage() {
                 </p>
               </div>
             )}
-          </div>
 
-          {/* PIED DE PAGE — cachet & signature, centrés, agrandis */}
-          <div className="px-10 pb-10 pt-2 shrink-0 relative" style={{ zIndex: 1 }}>
-            <div className="stitch-line mb-6" />
-            <p className="text-center italic font-display text-xs text-slate-400 mb-4">
-              Document confidentiel — carnet de mesures personnalisé Ousmane Design.
-            </p>
-            <div className="flex flex-col items-center gap-1.5 text-[10px] text-slate-400 uppercase font-bold text-center border-t pt-4" style={{ borderColor: '#E2E8F0' }}>
-              <div className="relative h-24 flex items-center justify-center mb-1">
-                <img
-                  src="/cachet-od.png"
-                  alt="Cachet Ousmane Design"
-                  className="absolute h-24 w-24 object-contain opacity-90"
-                  style={{ left: '50%', transform: 'translateX(-60%) rotate(-6deg)' }}
-                />
-                <img
-                  src="/signature.png"
-                  alt="Signature Ousmane Design"
-                  className="relative h-16 object-contain"
-                  style={{ transform: 'translateX(25%)' }}
-                />
+            {/* VALIDATION — compacte et collée au contenu (jamais isolée en bas de page,
+                donc jamais coupée par un saut de page lors de la génération du PDF) */}
+            <div className="flex items-end justify-between gap-4 border-t pt-4 mt-1" style={{ borderColor: '#E2E8F0' }}>
+              <p className="text-[10px] italic font-display text-slate-400 max-w-[55%] leading-snug">
+                Document confidentiel — carnet de mesures personnalisé Ousmane Design.
+              </p>
+              <div className="flex flex-col items-end shrink-0">
+                <div className="flex items-center gap-1">
+                  <img
+                    src="/cachet-od.png"
+                    alt="Cachet Ousmane Design"
+                    className="h-14 w-14 object-contain opacity-90"
+                    style={{ transform: 'rotate(-6deg)' }}
+                  />
+                  <img
+                    src="/signature.png"
+                    alt="Signature Ousmane Design"
+                    className="h-9 object-contain"
+                    style={{ transform: 'translateX(-10px)' }}
+                  />
+                </div>
+                <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wide mt-1">
+                  Ousmane Design (Signature &amp; Cachet)
+                </p>
               </div>
-              Ousmane Design (Signature & Cachet)
             </div>
           </div>
         </div>
