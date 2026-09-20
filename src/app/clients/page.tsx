@@ -586,7 +586,7 @@ export default function ClientsPage() {
           >
             <span
               className="font-display italic font-bold whitespace-nowrap"
-              style={{ fontSize: '92px', color: NAVY, opacity: 0.055, transform: 'rotate(-32deg)' }}
+              style={{ fontSize: '92px', color: NAVY, opacity: 0.12, transform: 'rotate(-32deg)' }}
             >
               Ousmane Design
             </span>
@@ -613,7 +613,7 @@ export default function ClientsPage() {
                   Carnet de Mesures
                 </span>
                 <p className="text-xs font-semibold mt-3" style={{ color: 'rgba(255,255,255,0.75)' }}>
-                  Généré le {dateGeneration}
+                  Enregistré le {dateGeneration}
                 </p>
               </div>
             </div>
