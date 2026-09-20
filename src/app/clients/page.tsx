@@ -246,7 +246,7 @@ export default function ClientsPage() {
     });
   };
 
-  // --- GÉNÉRATION FICHE PDF COMPLÈTE (A4, soignée et lisible) ---
+  // --- GÉNÉRATION FICHE PDF COMPLÈTE (A4 plein format, soignée et professionnelle) ---
   const downloadFichePDF = async () => {
     if (!selectedClient) return;
     try {
@@ -264,11 +264,10 @@ export default function ClientsPage() {
       const imgData = canvas.toDataURL('image/jpeg', 0.98);
       const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
       const pageWidth = pdf.internal.pageSize.getWidth();
-      const margin = 10;
-      const usableWidth = pageWidth - margin * 2;
-      const imgHeight = (canvas.height * usableWidth) / canvas.width;
+      const pageHeight = pdf.internal.pageSize.getHeight();
 
-      pdf.addImage(imgData, 'JPEG', margin, margin, usableWidth, imgHeight);
+      // La fiche a un ratio A4 (210/297), donc elle remplit toute la page sans marge.
+      pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
       pdf.save(`Fiche_Mesures_${(selectedClient.nom || 'Client').replace(/\s+/g, '_')}.pdf`);
     } catch (err) {
       console.error('Erreur génération fiche PDF :', err);
@@ -327,6 +326,16 @@ export default function ClientsPage() {
         .font-display { font-family: 'Fraunces', ui-serif, Georgia, serif; }
         .font-body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
         .font-mono-tape { font-family: 'Space Mono', ui-monospace, monospace; }
+        .stitch-line {
+          height: 1px;
+          background-image: repeating-linear-gradient(
+            to right,
+            ${GOLD} 0px,
+            ${GOLD} 7px,
+            transparent 7px,
+            transparent 14px
+          );
+        }
       `}</style>
 
       {/* HEADER — bandeau navy premium */}
@@ -563,69 +572,149 @@ export default function ClientsPage() {
         )}
       </div>
 
-      {/* CONTENU CACHÉ POUR GÉNÉRATION DE LA FICHE PDF COMPLÈTE */}
+      {/* CONTENU CACHÉ POUR GÉNÉRATION DE LA FICHE PDF COMPLÈTE — format A4 plein, filigrane, cachet & signature */}
       {selectedClient && (
         <div
           ref={ficheRef}
-          className="fixed top-0 left-[-10000px] w-[750px] bg-white p-8 text-slate-900 font-sans space-y-6"
+          style={{ aspectRatio: '210 / 297' }}
+          className="fixed top-0 left-[-10000px] w-[750px] bg-white text-slate-900 font-sans relative overflow-hidden flex flex-col"
         >
-          {/* En-tête */}
-          <div className="flex justify-between items-start border-b-2 border-amber-900/20 pb-4">
-            <div>
-              <h1 className="text-2xl font-serif font-extrabold text-amber-900 tracking-wide">Ousmane Design</h1>
-              <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Création & Couture Contemporaine</p>
-              <p className="text-xs text-slate-600 mt-1">Hann Maristes, Dakar, Sénégal · 77 646 21 02 / 70 348 26 82</p>
-            </div>
-            <div className="text-right">
-              <span className="inline-block bg-amber-900 text-white text-xs font-bold px-3 py-1 rounded-md uppercase tracking-wider">
-                Carnet de Mesures
-              </span>
-              <p className="text-xs font-semibold text-slate-500 mt-2">Généré le {dateGeneration}</p>
+          {/* FILIGRANE — "Ousmane Design" en oblique, discret, derrière tout le contenu */}
+          <div
+            className="absolute inset-0 flex items-center justify-center pointer-events-none select-none overflow-hidden"
+            style={{ zIndex: 0 }}
+          >
+            <span
+              className="font-display italic font-bold whitespace-nowrap"
+              style={{ fontSize: '92px', color: NAVY, opacity: 0.055, transform: 'rotate(-32deg)' }}
+            >
+              Ousmane Design
+            </span>
+          </div>
+
+          {/* BANDEAU D'EN-TÊTE */}
+          <div className="px-10 pt-10 pb-7 shrink-0 relative" style={{ backgroundColor: NAVY, zIndex: 1 }}>
+            <div className="flex justify-between items-start">
+              <div>
+                <h1 className="font-display italic font-semibold text-4xl" style={{ color: '#FFFFFF' }}>Ousmane Design</h1>
+                <p className="text-[11px] font-bold uppercase tracking-[0.2em] mt-2" style={{ color: GOLD }}>
+                  Création & Couture Contemporaine
+                </p>
+                <div className="mt-5 space-y-1 text-xs" style={{ color: 'rgba(255,255,255,0.75)' }}>
+                  <p>Hann Maristes, Dakar, Sénégal</p>
+                  <p>77 646 21 02 / 70 348 26 82</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <span
+                  className="inline-block text-[11px] font-bold px-4 py-2 rounded-full uppercase tracking-wider"
+                  style={{ backgroundColor: GOLD, color: NAVY }}
+                >
+                  Carnet de Mesures
+                </span>
+                <p className="text-xs font-semibold mt-3" style={{ color: 'rgba(255,255,255,0.75)' }}>
+                  Généré le {dateGeneration}
+                </p>
+              </div>
             </div>
           </div>
 
-          {/* Identité du client */}
-          <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-4">
-            <p className="text-2xl font-bold text-slate-900">{selectedClient.nom || 'Sans nom'}</p>
-            <div className="flex flex-wrap gap-x-6 gap-y-1 mt-2 text-xs text-slate-600">
-              {selectedClient.telephone && <span>📞 {selectedClient.telephone}</span>}
-              {selectedClient.adresse && <span>📍 {selectedClient.adresse}</span>}
-            </div>
-          </div>
+          <div className="stitch-line shrink-0 relative" style={{ zIndex: 1 }} />
 
-          {/* Tableau des mesures (2 colonnes, uniquement les mesures renseignées) */}
-          <div>
-            <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-3">
-              Mesures Corporelles
-            </h2>
-            {getFilledMeasures(selectedClient).length === 0 ? (
-              <p className="text-xs text-slate-400 italic">Aucune mesure enregistrée pour ce client.</p>
-            ) : (
-              <div className="grid grid-cols-2 gap-3">
-                {getFilledMeasures(selectedClient).map((m) => (
-                  <div key={m.key} className="flex justify-between items-center bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5">
-                    <span className="text-xs font-semibold text-slate-600">{m.shortLabel}</span>
-                    <span className="text-sm font-bold text-amber-800">{selectedClient[m.key]} cm</span>
+          {/* CORPS — s'étire pour occuper toute la page */}
+          <div className="flex-1 px-10 py-8 flex flex-col gap-7 relative" style={{ zIndex: 1 }}>
+            {/* Identité du client */}
+            <div className="border-l-2 pl-4" style={{ borderColor: GOLD }}>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Fiche client</p>
+              <p className="font-display font-semibold text-slate-900 text-2xl mt-1">{selectedClient.nom || 'Sans nom'}</p>
+              <div className="flex flex-wrap gap-x-6 gap-y-1 mt-2 text-xs text-slate-600">
+                {selectedClient.telephone && <span>Tél : {selectedClient.telephone}</span>}
+                {selectedClient.adresse && <span>Adresse : {selectedClient.adresse}</span>}
+              </div>
+            </div>
+
+            {/* Mesures, groupées par zone du corps */}
+            <div className="space-y-6 flex-1">
+              {mesureGroups.map((group) => {
+                const filledInGroup = group.keys
+                  .map(k => fieldByKey[k])
+                  .filter(m => {
+                    const v = selectedClient[m.key];
+                    return v !== undefined && v !== null && v !== '';
+                  });
+
+                if (filledInGroup.length === 0) return null;
+
+                return (
+                  <div key={group.title}>
+                    <h2
+                      className="text-xs font-bold uppercase tracking-wide pb-2 mb-3 border-b"
+                      style={{ color: NAVY, borderColor: '#E2E8F0' }}
+                    >
+                      {group.title}
+                    </h2>
+                    <div className="grid grid-cols-3 gap-3">
+                      {filledInGroup.map((m) => (
+                        <div
+                          key={m.key}
+                          className="rounded-lg px-4 py-3"
+                          style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}
+                        >
+                          <p className="text-[10px] font-semibold text-slate-500">{m.shortLabel}</p>
+                          <p className="font-mono-tape text-lg font-bold mt-1" style={{ color: NAVY }}>
+                            {selectedClient[m.key]} <span className="text-xs font-normal text-slate-400">cm</span>
+                          </p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ))}
+                );
+              })}
+
+              {getFilledMeasures(selectedClient).length === 0 && (
+                <p className="text-xs text-slate-400 italic">Aucune mesure enregistrée pour ce client.</p>
+              )}
+            </div>
+
+            {/* Notes */}
+            {selectedClient.notes && (
+              <div>
+                <h2 className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-2">
+                  Notes & Particularités
+                </h2>
+                <p
+                  className="text-xs text-slate-700 rounded-lg p-4 leading-relaxed"
+                  style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}
+                >
+                  {selectedClient.notes}
+                </p>
               </div>
             )}
           </div>
 
-          {/* Notes */}
-          {selectedClient.notes && (
-            <div>
-              <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2">
-                Notes & Particularités
-              </h2>
-              <p className="text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg p-3 leading-relaxed">
-                {selectedClient.notes}
-              </p>
+          {/* PIED DE PAGE — cachet & signature, centrés, agrandis */}
+          <div className="px-10 pb-10 pt-2 shrink-0 relative" style={{ zIndex: 1 }}>
+            <div className="stitch-line mb-6" />
+            <p className="text-center italic font-display text-xs text-slate-400 mb-4">
+              Document confidentiel — carnet de mesures personnalisé Ousmane Design.
+            </p>
+            <div className="flex flex-col items-center gap-1.5 text-[10px] text-slate-400 uppercase font-bold text-center border-t pt-4" style={{ borderColor: '#E2E8F0' }}>
+              <div className="relative h-24 flex items-center justify-center mb-1">
+                <img
+                  src="/cachet-od.png"
+                  alt="Cachet Ousmane Design"
+                  className="absolute h-24 w-24 object-contain opacity-90"
+                  style={{ left: '50%', transform: 'translateX(-60%) rotate(-6deg)' }}
+                />
+                <img
+                  src="/signature.png"
+                  alt="Signature Ousmane Design"
+                  className="relative h-16 object-contain"
+                  style={{ transform: 'translateX(25%)' }}
+                />
+              </div>
+              Ousmane Design (Signature & Cachet)
             </div>
-          )}
-
-          <div className="text-[9px] text-slate-400 text-center pt-4 border-t border-slate-200">
-            Fiche de mesures confidentielle — Ousmane Design — {dateGeneration}
           </div>
         </div>
       )}
