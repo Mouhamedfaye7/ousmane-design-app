@@ -38,6 +38,10 @@ interface Categorie {
   code: string;
 }
 
+const NAVY = '#1B3B6F';
+const GOLD = '#C9A24B';
+const ORANGE = '#C1502E';
+
 const CATEGORIES: Categorie[] = [
   { id: 'diaspora', label: 'Diaspora', code: 'DIA' },
   { id: 'chemises', label: 'Chemises', code: 'CHM' },
@@ -53,7 +57,8 @@ const CATEGORIES: Categorie[] = [
 const CATEGORIE_AUTRES: Categorie = { id: 'autres', label: 'Autres Articles', code: 'ART' };
 const TOUTES_CATEGORIES = [...CATEGORIES, CATEGORIE_AUTRES];
 
-// Palette d'accent par catégorie, pour distinguer visuellement chaque bloc
+// Palette d'accent par catégorie (micro-palette interne, distincte de la palette globale
+// navy/or/orange, utilisée uniquement pour distinguer visuellement les blocs de catégories)
 const getStyleCategorie = (id: string) => {
   switch (id) {
     case 'diaspora':
@@ -79,8 +84,6 @@ const getStyleCategorie = (id: string) => {
   }
 };
 
-// Équivalent hexadécimal de la palette ci-dessus, pour les barres dessinées dans le PDF
-// (html2canvas capture correctement les couleurs inline sur un fond hors-écran).
 const CATEGORIE_HEX: Record<string, string> = {
   diaspora: '#2563eb',
   chemises: '#0891b2',
@@ -94,7 +97,6 @@ const CATEGORIE_HEX: Record<string, string> = {
   autres: '#f59e0b',
 };
 
-// Fonction utilitaire pour associer les noms de couleurs en français aux valeurs CSS
 const getCouleurHex = (couleur: string): string => {
   const c = couleur.trim().toLowerCase();
   const dictionary: Record<string, string> = {
@@ -143,7 +145,6 @@ interface Bucket {
   label: string;
 }
 
-// Génère un chemin SVG lissé (Catmull-Rom -> Bézier) à partir d'une liste de points
 const courbeLissee = (pts: { x: number; y: number }[]): string => {
   if (pts.length === 0) return '';
   if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y}`;
@@ -162,7 +163,6 @@ const courbeLissee = (pts: { x: number; y: number }[]): string => {
   return d;
 };
 
-// --- BILAN DE STOCK TÉLÉCHARGEABLE (PDF) ---
 type PeriodKey = 'mois' | 'trimestre' | 'semestre' | 'annee';
 
 interface PeriodDef {
@@ -179,8 +179,6 @@ const PERIODS: PeriodDef[] = [
   { key: 'annee', label: 'Annuel', sublabel: '12 derniers mois', days: 365 },
 ];
 
-// Nombre de lignes de tableau par "bloc" capturé pour la génération PDF — tient toujours
-// confortablement sur une page A4, ce qui évite qu'une ligne soit coupée entre deux pages.
 const ROWS_PER_CHUNK = 16;
 
 function chunkArray<T>(arr: T[], size: number): T[][] {
@@ -198,7 +196,6 @@ export default function CataloguePretAPorterPage() {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Formulaire
   const [nom, setNom] = useState('');
   const [categorie, setCategorie] = useState('chemises');
   const [prix, setPrix] = useState<number | ''>('');
@@ -207,11 +204,9 @@ export default function CataloguePretAPorterPage() {
   const [taillesSelectionnees, setTaillesSelectionnees] = useState<string[]>([]);
   const [saisieCouleurs, setSaisieCouleurs] = useState('');
 
-  // Recherche & filtre
   const [recherche, setRecherche] = useState('');
   const [categorieActive, setCategorieActive] = useState<string>('toutes');
 
-  // Mouvements de stock (entrées / sorties)
   const [mouvements, setMouvements] = useState<Mouvement[]>([]);
   const [loadingMouvements, setLoadingMouvements] = useState(true);
   const [mouvementModal, setMouvementModal] = useState<{ produit: Produit; type: 'entree' | 'sortie' } | null>(null);
@@ -219,7 +214,6 @@ export default function CataloguePretAPorterPage() {
   const [mouvementMotif, setMouvementMotif] = useState('');
   const [mouvementSubmitting, setMouvementSubmitting] = useState(false);
 
-  // Bilan de stock périodique téléchargeable
   const [bilanPeriod, setBilanPeriod] = useState<PeriodKey | null>(null);
   const bilanRef = useRef<HTMLDivElement>(null);
 
@@ -325,7 +319,6 @@ export default function CataloguePretAPorterPage() {
       .filter((c) => c.length > 0);
 
     if (editingId) {
-      // --- MODE MODIFICATION ---
       const produitActuel = produits.find((p) => p.id === editingId);
       const codeFinal =
         produitActuel && produitActuel.code && produitActuel.code.trim() !== ''
@@ -369,7 +362,6 @@ export default function CataloguePretAPorterPage() {
         reinitialiserFormulaire();
       }
     } else {
-      // --- MODE CREATION (génération automatique du code article) ---
       const codeGenere = genererCode(categorie, produits);
 
       const payload = {
@@ -445,7 +437,6 @@ export default function CataloguePretAPorterPage() {
     }
   };
 
-  // --- RECLASSEMENT RAPIDE DEPUIS LA CARTE (sans ouvrir le formulaire) ---
   const reclasserCategorie = async (produit: Produit, nouvelleCategorieId: string) => {
     const codeFinal =
       produit.code && produit.code.trim() !== '' ? produit.code : genererCode(nouvelleCategorieId, produits);
@@ -466,7 +457,6 @@ export default function CataloguePretAPorterPage() {
     );
   };
 
-  // --- GESTION DES MOUVEMENTS DE STOCK (ENTRÉES / SORTIES) ---
   const ouvrirMouvement = (produit: Produit, type: 'entree' | 'sortie') => {
     setMouvementModal({ produit, type });
     setMouvementQuantite('');
@@ -521,7 +511,6 @@ export default function CataloguePretAPorterPage() {
     setMouvementSubmitting(false);
   };
 
-  // --- RECHERCHE ---
   const produitsFiltres = produits.filter((p) => {
     const q = recherche.trim().toLowerCase();
     if (!q) return true;
@@ -534,7 +523,6 @@ export default function CataloguePretAPorterPage() {
     );
   });
 
-  // --- REGROUPEMENT PAR CATÉGORIE ---
   const groupesBruts = TOUTES_CATEGORIES.map((cat) => ({
     ...cat,
     items: produitsFiltres.filter((p) =>
@@ -546,7 +534,6 @@ export default function CataloguePretAPorterPage() {
     (g) => g.items.length > 0 && (categorieActive === 'toutes' || categorieActive === g.id)
   );
 
-  // --- COURBE D'ÉVOLUTION : DEPUIS LE PREMIER ARTICLE ENREGISTRÉ, GRANULARITÉ ADAPTATIVE ---
   const construireBuckets = (dateDebut: Date, dateFin: Date, granularite: Granularite): Bucket[] => {
     const buckets: Bucket[] = [];
 
@@ -634,7 +621,6 @@ export default function CataloguePretAPorterPage() {
   const libelleGranularite = granularite === 'jour' ? 'par jour' : granularite === 'semaine' ? 'par semaine' : 'par mois';
   const libelleDepuis = dateDebutCatalogue.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-  // --- CALCULS DU BILAN DE STOCK PÉRIODIQUE (pour le PDF) ---
   const getPeriodStartDate = (days: number) => {
     const d = new Date();
     d.setDate(d.getDate() - days);
@@ -684,7 +670,6 @@ export default function CataloguePretAPorterPage() {
       : '';
   const bilanEtiquetteStep = Math.max(1, Math.ceil(bilanNbBuckets / 6));
 
-  // Répartition du stock actuel par catégorie (instantané, indépendant de la période)
   const categorieBreakdown = TOUTES_CATEGORIES.map((cat) => {
     const items = produits.filter((p) =>
       cat.id === 'autres' ? !CATEGORIES.some((c) => c.id === p.categorie) : p.categorie === cat.id
@@ -709,7 +694,6 @@ export default function CataloguePretAPorterPage() {
   const dateDebutPeriodeStr = bilanDateDebut.toLocaleDateString('fr-FR');
   const dateFinPeriodeStr = new Date().toLocaleDateString('fr-FR');
 
-  // --- GÉNÉRATION DU PDF DE BILAN DE STOCK (par blocs, pour ne jamais couper une ligne) ---
   const downloadBilanStockPDF = async () => {
     const { default: html2canvas } = await import('html2canvas-pro');
     const { default: jsPDF } = await import('jspdf');
@@ -788,29 +772,74 @@ export default function CataloguePretAPorterPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bilanPeriod]);
 
+  // Composant filigrane réutilisé sur chaque bloc du PDF, comme sur la facture et la fiche de mesures
+  const Filigrane = ({ size = 58 }: { size?: number }) => (
+    <div
+      className="absolute inset-0 flex items-center justify-center pointer-events-none select-none overflow-hidden"
+      style={{ zIndex: 0 }}
+    >
+      <span
+        className="font-display italic font-bold whitespace-nowrap"
+        style={{ fontSize: `${size}px`, color: NAVY, opacity: 0.05, transform: 'rotate(-32deg)' }}
+      >
+        Ousmane Design
+      </span>
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-slate-50 p-6 text-slate-800">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors">
-          <ArrowLeft size={16} /> Retour au tableau de bord
-        </Link>
+    <div className="min-h-screen" style={{ backgroundColor: '#F5F8FC' }}>
+      <style jsx global>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
+        .font-display { font-family: 'Fraunces', ui-serif, Georgia, serif; }
+        .font-body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
+        .font-mono-tape { font-family: 'Space Mono', ui-monospace, monospace; }
+        .stitch-line {
+          height: 1px;
+          background-image: repeating-linear-gradient(
+            to right,
+            ${GOLD} 0px,
+            ${GOLD} 7px,
+            transparent 7px,
+            transparent 14px
+          );
+        }
+      `}</style>
 
-        {/* HEADER ÉPURÉ */}
-        <header className="flex items-center gap-3">
-          <div className="bg-amber-700 text-white p-3 rounded-xl shadow-sm">
-            <Package size={22} />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Catalogue Prêt-à-Porter</h1>
-            <p className="text-xs font-medium text-slate-500">Ousmane Design — Articles, stock et évolution</p>
-          </div>
-        </header>
+      {/* HEADER — bandeau navy premium, identique aux pages Ventes / Clients */}
+      <div className="relative overflow-hidden" style={{ backgroundColor: NAVY }}>
+        <div
+          className="pointer-events-none absolute -top-20 -right-20 h-72 w-72 rounded-full opacity-20 blur-3xl"
+          style={{ background: `radial-gradient(circle, ${GOLD}, transparent 70%)` }}
+        />
+        <div className="max-w-7xl mx-auto px-6 pt-8 pb-16 md:pb-20 relative">
+          <Link
+            href="/"
+            className="font-body text-xs font-semibold flex items-center gap-1.5 mb-4 transition-opacity hover:opacity-80"
+            style={{ color: 'rgba(255,255,255,0.75)' }}
+          >
+            <ArrowLeft size={14} /> Retour au tableau de bord
+          </Link>
 
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-5">
+            <div>
+              <h1 className="font-display italic font-semibold text-2xl md:text-3xl" style={{ color: '#FFFFFF' }}>
+                Catalogue Prêt-à-Porter
+              </h1>
+              <p className="font-body text-sm mt-1.5" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                Ousmane Design — Articles, stock et évolution
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-6 -mt-10 relative z-10 pb-16 space-y-6 font-body">
         {/* ALERTE ARTICLES À CLASSER */}
         {nonClassesCount > 0 && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
-            <AlertTriangle size={18} className="text-amber-600 shrink-0" />
-            <p className="text-xs font-semibold text-amber-800">
+          <div className="rounded-2xl p-4 flex items-center gap-3 border" style={{ backgroundColor: '#FBF3E2', borderColor: `${GOLD}55` }}>
+            <AlertTriangle size={18} style={{ color: GOLD }} className="shrink-0" />
+            <p className="text-xs font-semibold" style={{ color: '#8A6A1E' }}>
               {nonClassesCount} article{nonClassesCount > 1 ? 's' : ''} n’{nonClassesCount > 1 ? 'ont' : 'a'} pas encore de catégorie précise
               — reclassez-{nonClassesCount > 1 ? 'les' : 'le'} depuis le bloc "Autres Articles" ci-dessous.
             </p>
@@ -819,55 +848,61 @@ export default function CataloguePretAPorterPage() {
 
         {/* CARTES DE STATISTIQUES */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-3">
-            <div className="bg-slate-100 text-slate-600 p-2.5 rounded-lg"><Layers size={17} /></div>
+          <div className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.15)] p-4 flex items-center gap-3">
+            <div className="p-2.5 rounded-lg" style={{ backgroundColor: '#EAF1FB', color: NAVY }}><Layers size={17} /></div>
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Articles</p>
-              <p className="text-lg font-extrabold text-slate-900">{produits.length}</p>
+              <p className="text-lg font-extrabold text-slate-900 font-mono-tape">{produits.length}</p>
             </div>
           </div>
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-3">
-            <div className="bg-blue-50 text-blue-600 p-2.5 rounded-lg"><Package size={17} /></div>
+          <div className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.15)] p-4 flex items-center gap-3">
+            <div className="p-2.5 rounded-lg" style={{ backgroundColor: '#EAF1FB', color: NAVY }}><Package size={17} /></div>
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Stock total</p>
-              <p className="text-lg font-extrabold text-blue-700">{totalStock}</p>
+              <p className="text-lg font-extrabold font-mono-tape" style={{ color: NAVY }}>{totalStock}</p>
             </div>
           </div>
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-3">
-            <div className="bg-amber-50 text-amber-700 p-2.5 rounded-lg"><Wallet size={17} /></div>
+          <div className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.15)] p-4 flex items-center gap-3">
+            <div className="p-2.5 rounded-lg" style={{ backgroundColor: '#FBF3E2', color: GOLD }}><Wallet size={17} /></div>
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Valeur stock</p>
-              <p className="text-base font-extrabold text-amber-800">{valeurStock.toLocaleString('fr-FR')} FCFA</p>
+              <p className="text-base font-extrabold font-mono-tape" style={{ color: GOLD }}>{valeurStock.toLocaleString('fr-FR')} FCFA</p>
             </div>
           </div>
-          <div className={`bg-white rounded-2xl border p-4 flex items-center gap-3 ${ruptureCount > 0 ? 'border-red-200' : 'border-slate-200'}`}>
-            <div className={`p-2.5 rounded-lg ${ruptureCount > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+          <div
+            className="bg-white rounded-2xl border shadow-[0_10px_30px_-15px_rgba(23,27,46,0.15)] p-4 flex items-center gap-3"
+            style={{ borderColor: ruptureCount > 0 ? `${ORANGE}44` : 'rgba(0,0,0,0.05)' }}
+          >
+            <div
+              className="p-2.5 rounded-lg"
+              style={ruptureCount > 0 ? { backgroundColor: '#FBEAE3', color: ORANGE } : { backgroundColor: '#ECFDF5', color: '#059669' }}
+            >
               <AlertTriangle size={17} />
             </div>
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Stock faible</p>
-              <p className={`text-lg font-extrabold ${ruptureCount > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{ruptureCount}</p>
+              <p className="text-lg font-extrabold font-mono-tape" style={{ color: ruptureCount > 0 ? ORANGE : '#059669' }}>{ruptureCount}</p>
             </div>
           </div>
         </div>
 
         {/* COURBE D'ÉVOLUTION */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+        <div className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.15)] p-5 space-y-3">
           <div className="flex flex-wrap justify-between items-center gap-2">
             <div>
               <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <BarChart3 size={16} className="text-amber-700" /> Évolution des Entrées / Sorties
+                <BarChart3 size={16} style={{ color: GOLD }} /> Évolution des Entrées / Sorties
               </h2>
               <p className="text-[11px] text-slate-400 font-medium mt-0.5">
                 Depuis le {libelleDepuis} — vue {libelleGranularite}
               </p>
             </div>
-            <div className="flex items-center gap-4 text-[11px] font-semibold">
+            <div className="flex items-center gap-4 text-[11px] font-semibold font-mono-tape">
               <span className="flex items-center gap-1.5 text-emerald-700">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block" /> Entrées : {totalEntreesPeriode}
               </span>
-              <span className="flex items-center gap-1.5 text-red-600">
-                <span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" /> Sorties : {totalSortiesPeriode}
+              <span className="flex items-center gap-1.5" style={{ color: ORANGE }}>
+                <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: ORANGE }} /> Sorties : {totalSortiesPeriode}
               </span>
             </div>
           </div>
@@ -890,7 +925,7 @@ export default function CataloguePretAPorterPage() {
 
                 {aireEntrees && <path d={aireEntrees} fill="url(#degradeEntrees)" stroke="none" />}
                 <path d={cheminEntrees} fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" />
-                <path d={cheminSorties} fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeDasharray="5 4" />
+                <path d={cheminSorties} fill="none" stroke={ORANGE} strokeWidth="2" strokeLinecap="round" strokeDasharray="5 4" />
 
                 {donneesEvolution.map((d, i) => (
                   <g key={i}>
@@ -907,10 +942,10 @@ export default function CataloguePretAPorterPage() {
         </div>
 
         {/* BILAN DE STOCK TÉLÉCHARGEABLE */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+        <div className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.15)] p-5 space-y-4">
           <div>
             <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <CalendarRange size={16} className="text-amber-700" /> Inventaire de Stock Téléchargeable
+              <CalendarRange size={16} style={{ color: GOLD }} /> Inventaire de Stock Téléchargeable
             </h2>
             <p className="text-[11px] text-slate-400 font-medium mt-0.5">
               PDF complet : indicateurs clés, courbe entrées/sorties, répartition par catégorie, détail des mouvements et inventaire actuel.
@@ -926,14 +961,15 @@ export default function CataloguePretAPorterPage() {
                   <div>
                     <h3 className="font-bold text-slate-800 text-sm">{p.label}</h3>
                     <p className="text-[11px] text-slate-500">{p.sublabel}</p>
-                    <p className="text-xs text-slate-600 mt-2">
-                      {quick.count} mouvement(s) · <span className="text-emerald-600 font-semibold">+{quick.entrees}</span> / <span className="text-red-600 font-semibold">−{quick.sorties}</span>
+                    <p className="text-xs text-slate-600 mt-2 font-mono-tape">
+                      {quick.count} mvt · <span className="text-emerald-600 font-semibold">+{quick.entrees}</span> / <span className="font-semibold" style={{ color: ORANGE }}>−{quick.sorties}</span>
                     </p>
                   </div>
                   <button
                     onClick={() => handleDownloadBilan(p.key)}
                     disabled={bilanPeriod !== null}
-                    className="w-full bg-amber-700 hover:bg-amber-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs px-3 py-2 rounded-lg flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                    className="w-full disabled:opacity-50 disabled:cursor-not-allowed text-xs font-bold px-3 py-2 rounded-full flex items-center justify-center gap-1.5 cursor-pointer transition-all hover:-translate-y-0.5"
+                    style={{ backgroundColor: GOLD, color: NAVY }}
                   >
                     {isGenerating ? (
                       <>
@@ -953,9 +989,9 @@ export default function CataloguePretAPorterPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* FORMULAIRE */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 space-y-4 self-start">
+          <div className="bg-white p-6 rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.15)] space-y-4 self-start">
             <div className="flex justify-between items-center pb-3 border-b border-slate-100">
-              <h2 className="text-base font-bold text-slate-900">
+              <h2 className="text-base font-bold text-slate-900 font-display">
                 {editingId ? 'Modifier l’Article' : 'Ajouter un Article'}
               </h2>
               {editingId && (
@@ -973,7 +1009,8 @@ export default function CataloguePretAPorterPage() {
                   placeholder="Ex: Ensemble Tunique Brodé"
                   value={nom}
                   onChange={(e) => setNom(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-colors"
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:bg-white transition-colors"
+                  style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                   required
                 />
               </div>
@@ -983,7 +1020,8 @@ export default function CataloguePretAPorterPage() {
                 <select
                   value={categorie}
                   onChange={(e) => setCategorie(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 p-2.5 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-colors"
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 p-2.5 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:bg-white transition-colors"
+                  style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                 >
                   {CATEGORIES.map((c) => (
                     <option key={c.id} value={c.id}>{c.label}</option>
@@ -991,11 +1029,11 @@ export default function CataloguePretAPorterPage() {
                 </select>
                 {editingId ? (
                   <p className="text-[10px] text-slate-400 mt-1.5 flex items-center gap-1">
-                    <Tag size={11} /> Code article : <span className="font-mono font-bold text-slate-600">{produits.find((p) => p.id === editingId)?.code || genererCode(categorie, produits)}</span>
+                    <Tag size={11} /> Code article : <span className="font-mono-tape font-bold text-slate-600">{produits.find((p) => p.id === editingId)?.code || genererCode(categorie, produits)}</span>
                   </p>
                 ) : (
                   <p className="text-[10px] text-slate-400 mt-1.5 flex items-center gap-1">
-                    <Tag size={11} /> Code généré : <span className="font-mono font-bold text-slate-600">{genererCode(categorie, produits)}</span>
+                    <Tag size={11} /> Code généré : <span className="font-mono-tape font-bold text-slate-600">{genererCode(categorie, produits)}</span>
                   </p>
                 )}
               </div>
@@ -1008,7 +1046,8 @@ export default function CataloguePretAPorterPage() {
                     placeholder="Ex: 25000"
                     value={prix}
                     onChange={(e) => setPrix(e.target.value === '' ? '' : Number(e.target.value))}
-                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-colors"
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:bg-white transition-colors"
+                    style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                     required
                   />
                 </div>
@@ -1019,7 +1058,8 @@ export default function CataloguePretAPorterPage() {
                     placeholder="Ex: 10"
                     value={quantiteStock}
                     onChange={(e) => setQuantiteStock(e.target.value === '' ? '' : Number(e.target.value))}
-                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-colors"
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:bg-white transition-colors"
+                    style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                     required
                   />
                 </div>
@@ -1035,11 +1075,12 @@ export default function CataloguePretAPorterPage() {
                         type="button"
                         key={t}
                         onClick={() => toggleTaille(t)}
-                        className={`px-2.5 py-1 text-xs rounded-md font-bold border transition-all cursor-pointer ${
+                        className="px-2.5 py-1 text-xs rounded-full font-bold border transition-all cursor-pointer"
+                        style={
                           estSelectionne
-                            ? 'bg-amber-700 text-white border-amber-700'
-                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                        }`}
+                            ? { backgroundColor: GOLD, color: NAVY, borderColor: GOLD }
+                            : { backgroundColor: '#F8FAFC', color: '#475569', borderColor: '#E2E8F0' }
+                        }
                       >
                         {t}
                       </button>
@@ -1055,7 +1096,8 @@ export default function CataloguePretAPorterPage() {
                   placeholder="Ex: Blanc, Bleu Marine, Doré, Noir"
                   value={saisieCouleurs}
                   onChange={(e) => setSaisieCouleurs(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-colors"
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:bg-white transition-colors"
+                  style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                 />
               </div>
 
@@ -1065,7 +1107,8 @@ export default function CataloguePretAPorterPage() {
                   placeholder="Ex: Tissu Bazin riche, col officier, coupe ajustée"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm h-20 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-colors"
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 p-2.5 rounded-lg text-sm h-20 focus:outline-none focus:ring-2 focus:bg-white transition-colors"
+                  style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                 />
               </div>
 
@@ -1073,7 +1116,8 @@ export default function CataloguePretAPorterPage() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full bg-amber-700 hover:bg-amber-800 disabled:opacity-50 text-white py-2.5 rounded-lg font-bold text-sm shadow-sm transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full disabled:opacity-50 py-2.5 rounded-full font-bold text-sm shadow-xs transition-all hover:-translate-y-0.5 flex items-center justify-center gap-2 cursor-pointer"
+                  style={{ backgroundColor: GOLD, color: NAVY }}
                 >
                   {isSubmitting ? (
                     <Loader2 size={18} className="animate-spin" />
@@ -1092,7 +1136,7 @@ export default function CataloguePretAPorterPage() {
                   <button
                     type="button"
                     onClick={reinitialiserFormulaire}
-                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-2 rounded-lg font-semibold text-xs transition-colors cursor-pointer"
+                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-2 rounded-full font-semibold text-xs transition-colors cursor-pointer"
                   >
                     Annuler la modification
                   </button>
@@ -1103,7 +1147,7 @@ export default function CataloguePretAPorterPage() {
             {/* HISTORIQUE DES MOUVEMENTS RÉCENTS */}
             <div className="pt-4 border-t border-slate-100 space-y-2">
               <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
-                <History size={14} className="text-amber-700" /> Mouvements récents
+                <History size={14} style={{ color: GOLD }} /> Mouvements récents
               </h3>
               {loadingMouvements ? (
                 <p className="text-xs text-slate-400">Chargement...</p>
@@ -1117,14 +1161,14 @@ export default function CataloguePretAPorterPage() {
                         {m.type === 'entree' ? (
                           <ArrowUpCircle size={15} className="text-emerald-600 shrink-0" />
                         ) : (
-                          <ArrowDownCircle size={15} className="text-red-600 shrink-0" />
+                          <ArrowDownCircle size={15} className="shrink-0" style={{ color: ORANGE }} />
                         )}
                         <div className="min-w-0">
                           <p className="text-[11px] font-bold text-slate-800 truncate">{m.produit_nom}</p>
                           <p className="text-[10px] text-slate-400">{formaterDateHeure(m.created_at)}</p>
                         </div>
                       </div>
-                      <span className={`text-xs font-extrabold shrink-0 ${m.type === 'entree' ? 'text-emerald-600' : 'text-red-600'}`}>
+                      <span className="text-xs font-extrabold shrink-0 font-mono-tape" style={{ color: m.type === 'entree' ? '#059669' : ORANGE }}>
                         {m.type === 'entree' ? '+' : '−'}{m.quantite}
                       </span>
                     </div>
@@ -1134,26 +1178,30 @@ export default function CataloguePretAPorterPage() {
             </div>
           </div>
 
-          {/* LISTE DES ARTICLES REGROUPÉS PAR CATÉGORIE, CHACUNE DANS SON PROPRE BLOC */}
+          {/* LISTE DES ARTICLES REGROUPÉS PAR CATÉGORIE */}
           <div className="lg:col-span-2 space-y-5">
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 space-y-3">
+            <div className="bg-white p-4 rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.15)] space-y-3">
               <div className="relative">
-                <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2" size={15} style={{ color: NAVY, opacity: 0.5 }} />
                 <input
                   type="text"
                   placeholder="Rechercher par nom, code, couleur, taille..."
                   value={recherche}
                   onChange={(e) => setRecherche(e.target.value)}
-                  className="w-full pl-8 pr-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white text-slate-900 transition-colors"
+                  className="w-full pl-9 pr-3 py-2.5 text-xs border border-slate-200 rounded-full bg-slate-50 outline-none focus:ring-2 focus:bg-white text-slate-900 transition-colors"
+                  style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                 />
               </div>
 
               <div className="flex flex-wrap gap-1.5">
                 <button
                   onClick={() => setCategorieActive('toutes')}
-                  className={`px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors cursor-pointer ${
-                    categorieActive === 'toutes' ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                  }`}
+                  className="px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors cursor-pointer"
+                  style={
+                    categorieActive === 'toutes'
+                      ? { backgroundColor: NAVY, color: '#FFFFFF', borderColor: NAVY }
+                      : { backgroundColor: '#F8FAFC', color: '#475569', borderColor: '#E2E8F0' }
+                  }
                 >
                   Toutes ({produits.length})
                 </button>
@@ -1167,9 +1215,12 @@ export default function CataloguePretAPorterPage() {
                     <button
                       key={cat.id}
                       onClick={() => setCategorieActive(cat.id)}
-                      className={`px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors cursor-pointer flex items-center gap-1.5 ${
-                        categorieActive === cat.id ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                      }`}
+                      className="px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors cursor-pointer flex items-center gap-1.5"
+                      style={
+                        categorieActive === cat.id
+                          ? { backgroundColor: NAVY, color: '#FFFFFF', borderColor: NAVY }
+                          : { backgroundColor: '#F8FAFC', color: '#475569', borderColor: '#E2E8F0' }
+                      }
                     >
                       <span className={`w-2 h-2 rounded-full ${style.pastille}`} />
                       {cat.label} ({count})
@@ -1180,8 +1231,8 @@ export default function CataloguePretAPorterPage() {
             </div>
 
             {loading ? (
-              <div className="bg-white rounded-2xl border border-slate-200 flex flex-col items-center justify-center py-14 text-slate-500 gap-2">
-                <Loader2 size={32} className="animate-spin text-amber-700" />
+              <div className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.15)] flex flex-col items-center justify-center py-14 text-slate-500 gap-2">
+                <Loader2 size={32} className="animate-spin" style={{ color: GOLD }} />
                 <p className="text-sm font-semibold">Chargement du catalogue...</p>
               </div>
             ) : groupesAffiches.length === 0 ? (
@@ -1195,49 +1246,49 @@ export default function CataloguePretAPorterPage() {
               groupesAffiches.map((groupe) => {
                 const style = getStyleCategorie(groupe.id);
                 return (
-                  <div key={groupe.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-                    {/* EN-TÊTE DU BLOC CATÉGORIE */}
+                  <div key={groupe.id} className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.15)] overflow-hidden">
                     <div className={`flex items-center justify-between px-5 py-3.5 border-b ${style.entete}`}>
                       <div className="flex items-center gap-2.5">
                         <span className={`w-2.5 h-2.5 rounded-full ${style.pastille}`} />
-                        <h3 className="text-sm font-extrabold text-slate-800">{groupe.label}</h3>
-                        <span className="text-[10px] font-bold text-slate-500 bg-white/70 px-2 py-0.5 rounded-full border border-slate-200">
+                        <h3 className="text-sm font-extrabold text-slate-800 font-display">{groupe.label}</h3>
+                        <span className="text-[10px] font-bold text-slate-500 bg-white/70 px-2 py-0.5 rounded-full border border-slate-200 font-mono-tape">
                           {groupe.items.length}
                         </span>
                       </div>
                     </div>
 
                     {groupe.id === 'autres' && (
-                      <div className="px-5 pt-3 text-[11px] font-semibold text-amber-700 flex items-center gap-2">
+                      <div className="px-5 pt-3 text-[11px] font-semibold flex items-center gap-2" style={{ color: GOLD }}>
                         <AlertTriangle size={13} className="shrink-0" /> Utilisez le menu "Catégorie" sur chaque carte pour classer ces articles.
                       </div>
                     )}
 
-                    {/* CONTENU DU BLOC : GRILLE DES ARTICLES DE CETTE CATÉGORIE */}
                     <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
                       {groupe.items.map((p) => (
                         <div
                           key={p.id}
-                          className={`border rounded-xl p-4 space-y-3 transition-all flex flex-col justify-between ${
+                          className="border rounded-xl p-4 space-y-3 transition-all flex flex-col justify-between"
+                          style={
                             editingId === p.id
-                              ? 'bg-amber-50/60 border-amber-400 ring-2 ring-amber-400/20'
-                              : 'bg-slate-50/60 border-slate-200 hover:border-slate-300'
-                          }`}
+                              ? { backgroundColor: '#FBF3E2', borderColor: `${GOLD}88`, boxShadow: `0 0 0 2px ${GOLD}33` }
+                              : { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' }
+                          }
                         >
                           <div className="space-y-2">
                             <div className="flex justify-between items-start gap-2">
-                              <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-white shrink-0">
+                              <span className="font-mono-tape text-[10px] font-bold px-2 py-0.5 rounded shrink-0" style={{ backgroundColor: NAVY, color: '#FFFFFF' }}>
                                 {p.code || 'Sans code'}
                               </span>
 
                               <select
                                 value={CATEGORIES.some((c) => c.id === p.categorie) ? p.categorie : ''}
                                 onChange={(e) => e.target.value && reclasserCategorie(p, e.target.value)}
-                                className={`text-[10px] font-bold border rounded-md px-1.5 py-1 outline-none cursor-pointer ${
+                                className="text-[10px] font-bold border rounded-md px-1.5 py-1 outline-none cursor-pointer"
+                                style={
                                   CATEGORIES.some((c) => c.id === p.categorie)
-                                    ? 'bg-white text-slate-700 border-slate-300'
-                                    : 'bg-amber-100 text-amber-800 border-amber-300'
-                                }`}
+                                    ? { backgroundColor: '#FFFFFF', color: '#475569', borderColor: '#CBD5E1' }
+                                    : { backgroundColor: '#FBF3E2', color: '#8A6A1E', borderColor: `${GOLD}88` }
+                                }
                               >
                                 <option value="" disabled>Catégorie...</option>
                                 {CATEGORIES.map((c) => (
@@ -1248,14 +1299,15 @@ export default function CataloguePretAPorterPage() {
                               <div className="flex items-center gap-1 shrink-0">
                                 <button
                                   onClick={() => editerProduit(p)}
-                                  className="text-slate-400 hover:text-amber-600 transition-colors p-1.5 rounded-lg hover:bg-amber-100/60 cursor-pointer"
+                                  className="text-slate-400 transition-colors p-1.5 rounded-lg hover:bg-slate-200/60 cursor-pointer"
+                                  style={{ color: '#94A3B8' }}
                                   title="Modifier cet article"
                                 >
                                   <Edit3 size={16} />
                                 </button>
                                 <button
                                   onClick={() => supprimerProduit(p.id)}
-                                  className="text-slate-400 hover:text-red-600 transition-colors p-1.5 rounded-lg hover:bg-red-50 cursor-pointer"
+                                  className="text-slate-400 hover:text-rose-600 transition-colors p-1.5 rounded-lg hover:bg-rose-50 cursor-pointer"
                                   title="Supprimer cet article"
                                 >
                                   <Trash2 size={16} />
@@ -1264,8 +1316,8 @@ export default function CataloguePretAPorterPage() {
                             </div>
 
                             <div>
-                              <h3 className="text-base font-bold text-slate-900">{p.nom}</h3>
-                              <p className="text-sm font-extrabold text-amber-800">{p.prix.toLocaleString('fr-FR')} FCFA</p>
+                              <h3 className="text-base font-bold text-slate-900 font-display">{p.nom}</h3>
+                              <p className="text-sm font-extrabold font-mono-tape" style={{ color: GOLD }}>{p.prix.toLocaleString('fr-FR')} FCFA</p>
                             </div>
 
                             <p className="text-xs text-slate-600 line-clamp-2">{p.description || 'Aucune description'}</p>
@@ -1306,9 +1358,12 @@ export default function CataloguePretAPorterPage() {
                             <div className="flex justify-between items-center pt-1 font-semibold">
                               <span className="text-slate-700">Quantité en Stock :</span>
                               <span
-                                className={`px-2 py-0.5 rounded font-bold ${
-                                  p.quantiteStock > 3 ? 'bg-emerald-100 text-emerald-900' : 'bg-red-100 text-red-900'
-                                }`}
+                                className="px-2 py-0.5 rounded font-bold font-mono-tape"
+                                style={
+                                  p.quantiteStock > 3
+                                    ? { backgroundColor: '#ECFDF5', color: '#047857' }
+                                    : { backgroundColor: '#FBEAE3', color: ORANGE }
+                                }
                               >
                                 {p.quantiteStock} dispo.
                               </span>
@@ -1317,13 +1372,14 @@ export default function CataloguePretAPorterPage() {
                             <div className="flex gap-2 pt-1">
                               <button
                                 onClick={() => ouvrirMouvement(p, 'entree')}
-                                className="flex-1 flex items-center justify-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold py-1.5 rounded-lg text-[11px] transition-colors cursor-pointer"
+                                className="flex-1 flex items-center justify-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold py-1.5 rounded-full text-[11px] transition-colors cursor-pointer"
                               >
                                 <ArrowUpCircle size={13} /> Entrée
                               </button>
                               <button
                                 onClick={() => ouvrirMouvement(p, 'sortie')}
-                                className="flex-1 flex items-center justify-center gap-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-bold py-1.5 rounded-lg text-[11px] transition-colors cursor-pointer"
+                                className="flex-1 flex items-center justify-center gap-1 font-bold py-1.5 rounded-full text-[11px] transition-colors cursor-pointer border"
+                                style={{ backgroundColor: '#FBEAE3', color: ORANGE, borderColor: `${ORANGE}44` }}
                               >
                                 <ArrowDownCircle size={13} /> Sortie
                               </button>
@@ -1343,9 +1399,12 @@ export default function CataloguePretAPorterPage() {
       {/* MODAL MOUVEMENT DE STOCK */}
       {mouvementModal && (
         <div onClick={() => setMouvementModal(null)} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl relative border border-slate-200">
-            <div className="flex justify-between items-center mb-4 border-b pb-3">
-              <h2 className={`text-base font-bold flex items-center gap-2 ${mouvementModal.type === 'entree' ? 'text-emerald-700' : 'text-red-700'}`}>
+          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl relative border border-slate-200 font-body">
+            <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
+              <h2
+                className="text-base font-bold flex items-center gap-2 font-display"
+                style={{ color: mouvementModal.type === 'entree' ? '#047857' : ORANGE }}
+              >
                 {mouvementModal.type === 'entree' ? <ArrowUpCircle size={18} /> : <ArrowDownCircle size={18} />}
                 {mouvementModal.type === 'entree' ? 'Entrée de Stock' : 'Sortie de Stock'}
               </h2>
@@ -1355,9 +1414,9 @@ export default function CataloguePretAPorterPage() {
             <div className="space-y-3 text-xs">
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
                 <p className="font-bold text-slate-900">
-                  <span className="font-mono text-slate-500">{mouvementModal.produit.code || 'Sans code'}</span> — {mouvementModal.produit.nom}
+                  <span className="font-mono-tape text-slate-500">{mouvementModal.produit.code || 'Sans code'}</span> — {mouvementModal.produit.nom}
                 </p>
-                <p className="text-slate-500">Stock actuel : <strong>{mouvementModal.produit.quantiteStock}</strong></p>
+                <p className="text-slate-500">Stock actuel : <strong className="font-mono-tape">{mouvementModal.produit.quantiteStock}</strong></p>
               </div>
 
               <div>
@@ -1368,7 +1427,8 @@ export default function CataloguePretAPorterPage() {
                   autoFocus
                   value={mouvementQuantite}
                   onChange={(e) => setMouvementQuantite(e.target.value === '' ? '' : Number(e.target.value))}
-                  className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 outline-none"
+                  className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-slate-900 outline-none focus:ring-2"
+                  style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                 />
               </div>
 
@@ -1379,19 +1439,19 @@ export default function CataloguePretAPorterPage() {
                   value={mouvementMotif}
                   onChange={(e) => setMouvementMotif(e.target.value)}
                   placeholder={mouvementModal.type === 'entree' ? 'Ex: Réapprovisionnement' : 'Ex: Perte, casse, ajustement'}
-                  className="w-full p-2 border border-slate-300 rounded-md bg-white text-slate-900 outline-none"
+                  className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-slate-900 outline-none focus:ring-2"
+                  style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                 />
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setMouvementModal(null)} className="px-4 py-2 rounded-lg bg-slate-200 font-bold cursor-pointer">Annuler</button>
+                <button type="button" onClick={() => setMouvementModal(null)} className="px-4 py-2 rounded-full bg-slate-200 font-bold cursor-pointer">Annuler</button>
                 <button
                   type="button"
                   onClick={confirmerMouvement}
                   disabled={mouvementSubmitting}
-                  className={`px-4 py-2 rounded-lg text-white font-bold cursor-pointer disabled:opacity-50 flex items-center gap-2 ${
-                    mouvementModal.type === 'entree' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'
-                  }`}
+                  className="px-4 py-2 rounded-full text-white font-bold cursor-pointer disabled:opacity-50 flex items-center gap-2 transition-all hover:-translate-y-0.5"
+                  style={{ backgroundColor: mouvementModal.type === 'entree' ? '#059669' : ORANGE }}
                 >
                   {mouvementSubmitting && <Loader2 size={14} className="animate-spin" />}
                   Valider
@@ -1402,63 +1462,79 @@ export default function CataloguePretAPorterPage() {
         </div>
       )}
 
-      {/* CONTENU CACHÉ POUR GÉNÉRATION DU PDF D'INVENTAIRE (capturé bloc par bloc) */}
+      {/* CONTENU CACHÉ POUR GÉNÉRATION DU PDF D'INVENTAIRE — bandeau navy, filigrane, cachet & signature */}
       <div
         ref={bilanRef}
         className="fixed top-0 left-[-10000px] w-[800px] bg-white text-slate-900 font-sans space-y-3"
       >
-        {/* Bloc En-tête + KPI */}
-        <div className="pdf-block bg-white p-6 space-y-4">
-          <div className="flex justify-between items-start border-b-2 border-amber-900/20 pb-4">
-            <div>
-              <h1 className="text-2xl font-serif font-extrabold text-amber-900 tracking-wide">Ousmane Design</h1>
-              <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Catalogue Prêt-à-Porter — Inventaire de Stock</p>
-              <p className="text-xs text-slate-600 mt-1">Hann Maristes, Dakar, Sénégal · 77 646 21 02 / 70 348 26 82</p>
-            </div>
-            <div className="text-right">
-              <span className="inline-block bg-amber-900 text-white text-xs font-bold px-3 py-1 rounded-md uppercase tracking-wider">
-                Inventaire {activePeriodDef.label}
-              </span>
-              <p className="text-xs font-semibold text-slate-500 mt-2">Mouvements du {dateDebutPeriodeStr} au {dateFinPeriodeStr}</p>
-              <p className="text-[10px] text-slate-400">Généré le {dateGeneration}</p>
+        {/* Bloc En-tête — bandeau navy premium, identique à la facture / fiche de mesures */}
+        <div className="pdf-block relative overflow-hidden">
+          <Filigrane size={50} />
+          <div className="relative px-8 pt-8 pb-6" style={{ backgroundColor: NAVY, zIndex: 1 }}>
+            <div className="flex justify-between items-start">
+              <div>
+                <h1 className="font-display italic font-semibold text-3xl" style={{ color: '#FFFFFF' }}>Ousmane Design</h1>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] mt-1.5" style={{ color: GOLD }}>
+                  Catalogue Prêt-à-Porter — Inventaire de Stock
+                </p>
+                <div className="mt-4 space-y-1 text-[11px]" style={{ color: 'rgba(255,255,255,0.75)' }}>
+                  <p>Hann Maristes, Dakar, Sénégal</p>
+                  <p>77 646 21 02 / 70 348 26 82</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <span
+                  className="inline-block text-[10px] font-bold px-3.5 py-1.5 rounded-full uppercase tracking-wider"
+                  style={{ backgroundColor: GOLD, color: NAVY }}
+                >
+                  Inventaire {activePeriodDef.label}
+                </span>
+                <p className="text-[11px] font-semibold mt-3" style={{ color: 'rgba(255,255,255,0.75)' }}>
+                  Du {dateDebutPeriodeStr} au {dateFinPeriodeStr}
+                </p>
+                <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.55)' }}>Généré le {dateGeneration}</p>
+              </div>
             </div>
           </div>
-
-          <div className="grid grid-cols-4 gap-3 text-xs">
-            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-              <p className="text-slate-500 font-medium">Articles</p>
-              <p className="text-base font-bold text-slate-900 mt-1">{produits.length}</p>
-            </div>
-            <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
-              <p className="text-blue-700 font-medium">Stock Total</p>
-              <p className="text-base font-bold text-blue-700 mt-1">{totalStock}</p>
-            </div>
-            <div className="bg-amber-50 p-3 rounded-lg border border-amber-100">
-              <p className="text-amber-800 font-medium">Valeur Stock</p>
-              <p className="text-base font-bold text-amber-800 mt-1">{valeurStock.toLocaleString('fr-FR')} F</p>
-            </div>
-            <div className={`p-3 rounded-lg border ${ruptureCount > 0 ? 'bg-red-50 border-red-100' : 'bg-emerald-50 border-emerald-100'}`}>
-              <p className={`font-medium ${ruptureCount > 0 ? 'text-red-700' : 'text-emerald-700'}`}>Stock Faible</p>
-              <p className={`text-base font-bold mt-1 ${ruptureCount > 0 ? 'text-red-700' : 'text-emerald-700'}`}>{ruptureCount}</p>
+          <div className="stitch-line relative" style={{ zIndex: 1 }} />
+          <div className="relative p-6 pt-5" style={{ zIndex: 1 }}>
+            <div className="grid grid-cols-4 gap-3 text-xs">
+              <div className="rounded-lg p-3" style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                <p className="text-slate-500 font-medium">Articles</p>
+                <p className="text-base font-bold text-slate-900 mt-1 font-mono-tape">{produits.length}</p>
+              </div>
+              <div className="rounded-lg p-3" style={{ backgroundColor: '#EAF1FB', border: `1px solid ${NAVY}22` }}>
+                <p className="font-medium" style={{ color: NAVY }}>Stock Total</p>
+                <p className="text-base font-bold mt-1 font-mono-tape" style={{ color: NAVY }}>{totalStock}</p>
+              </div>
+              <div className="rounded-lg p-3" style={{ backgroundColor: '#FBF3E2', border: `1px solid ${GOLD}44` }}>
+                <p className="font-medium" style={{ color: '#8A6A1E' }}>Valeur Stock</p>
+                <p className="text-base font-bold mt-1 font-mono-tape" style={{ color: '#8A6A1E' }}>{valeurStock.toLocaleString('fr-FR')} F</p>
+              </div>
+              <div className="rounded-lg p-3" style={{ backgroundColor: ruptureCount > 0 ? '#FBEAE3' : '#ECFDF5', border: `1px solid ${ruptureCount > 0 ? ORANGE : '#059669'}33` }}>
+                <p className="font-medium" style={{ color: ruptureCount > 0 ? ORANGE : '#047857' }}>Stock Faible</p>
+                <p className="text-base font-bold mt-1 font-mono-tape" style={{ color: ruptureCount > 0 ? ORANGE : '#047857' }}>{ruptureCount}</p>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Bloc Graphique évolution période + Répartition par catégorie */}
-        <div className="pdf-block bg-white p-6 space-y-4">
-          <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5">
+        {/* Bloc Graphique évolution + Répartition par catégorie */}
+        <div className="pdf-block bg-white p-6 space-y-4 relative">
+          <Filigrane size={44} />
+          <h2 className="relative text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5" style={{ zIndex: 1 }}>
             Aperçu Visuel de la Période
           </h2>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="relative grid grid-cols-2 gap-4" style={{ zIndex: 1 }}>
             <div>
               <p className="text-[11px] font-semibold text-slate-600 mb-2 text-center">
-                Entrées <span className="text-emerald-600">(+{bilanEntrees})</span> / Sorties <span className="text-red-600">(−{bilanSorties})</span>
+                Entrées <span className="text-emerald-600">(+{bilanEntrees})</span> / Sorties <span style={{ color: ORANGE }}>(−{bilanSorties})</span>
               </p>
               <svg viewBox="0 0 320 140" width="100%" height="150">
                 <line x1="0" y1={bilanChartBase} x2="320" y2={bilanChartBase} stroke="#eef2f7" strokeWidth="1" />
                 {bilanAireEntrees && <path d={bilanAireEntrees} fill="#05966922" stroke="none" />}
                 <path d={bilanCheminEntrees} fill="none" stroke="#059669" strokeWidth="2" strokeLinecap="round" />
-                <path d={bilanCheminSorties} fill="none" stroke="#dc2626" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="4 3" />
+                <path d={bilanCheminSorties} fill="none" stroke={ORANGE} strokeWidth="1.5" strokeLinecap="round" strokeDasharray="4 3" />
                 {bilanDonneesEvolution.map((d, i) => (
                   <g key={i}>
                     {i % bilanEtiquetteStep === 0 && (
@@ -1482,7 +1558,7 @@ export default function CataloguePretAPorterPage() {
                         style={{ width: `${(c.stockQty / maxStockQtyCategorie) * 100}%`, backgroundColor: c.hex }}
                       />
                     </div>
-                    <span className="text-[9px] font-bold text-slate-700 w-8 text-right">{c.stockQty}</span>
+                    <span className="text-[9px] font-bold text-slate-700 w-8 text-right font-mono-tape">{c.stockQty}</span>
                   </div>
                 ))}
               </div>
@@ -1492,22 +1568,24 @@ export default function CataloguePretAPorterPage() {
 
         {/* Blocs Mouvements de la période */}
         {mouvementsChunks.length === 0 ? (
-          <div className="pdf-block bg-white p-6">
-            <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2">
+          <div className="pdf-block bg-white p-6 relative">
+            <Filigrane size={44} />
+            <h2 className="relative text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2" style={{ zIndex: 1 }}>
               Mouvements de Stock de la Période (0)
             </h2>
-            <p className="text-[10px] text-slate-400 italic">Aucun mouvement sur cette période.</p>
+            <p className="relative text-[10px] text-slate-400 italic" style={{ zIndex: 1 }}>Aucun mouvement sur cette période.</p>
           </div>
         ) : (
           mouvementsChunks.map((chunk, idx) => (
-            <div key={`mvt-chunk-${idx}`} className="pdf-block bg-white p-6">
+            <div key={`mvt-chunk-${idx}`} className="pdf-block bg-white p-6 relative">
+              <Filigrane size={44} />
               {idx === 0 && (
-                <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2">
+                <h2 className="relative text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2" style={{ zIndex: 1 }}>
                   Mouvements de Stock de la Période ({bilanMouvements.length})
                 </h2>
               )}
-              <table className="w-full text-left text-[10px]">
-                <thead className="bg-amber-900 text-white font-bold uppercase">
+              <table className="relative w-full text-left text-[10px]" style={{ zIndex: 1 }}>
+                <thead style={{ backgroundColor: NAVY }} className="text-white font-bold uppercase">
                   <tr>
                     <th className="p-1.5">Date</th>
                     <th className="p-1.5">Article</th>
@@ -1519,12 +1597,12 @@ export default function CataloguePretAPorterPage() {
                 <tbody className="divide-y divide-slate-100">
                   {chunk.map((m) => (
                     <tr key={m.id}>
-                      <td className="p-1.5">{formaterDateHeure(m.created_at)}</td>
+                      <td className="p-1.5 font-mono-tape">{formaterDateHeure(m.created_at)}</td>
                       <td className="p-1.5 font-semibold">{m.produit_nom}</td>
-                      <td className={`p-1.5 font-bold ${m.type === 'entree' ? 'text-emerald-700' : 'text-red-700'}`}>
+                      <td className="p-1.5 font-bold" style={{ color: m.type === 'entree' ? '#047857' : ORANGE }}>
                         {m.type === 'entree' ? 'Entrée' : 'Sortie'}
                       </td>
-                      <td className={`p-1.5 text-right font-bold ${m.type === 'entree' ? 'text-emerald-700' : 'text-red-700'}`}>
+                      <td className="p-1.5 text-right font-bold font-mono-tape" style={{ color: m.type === 'entree' ? '#047857' : ORANGE }}>
                         {m.type === 'entree' ? '+' : '−'}{m.quantite}
                       </td>
                       <td className="p-1.5 text-slate-500">{m.motif || '-'}</td>
@@ -1538,22 +1616,24 @@ export default function CataloguePretAPorterPage() {
 
         {/* Blocs Inventaire actuel complet */}
         {inventaireChunks.length === 0 ? (
-          <div className="pdf-block bg-white p-6">
-            <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2">
+          <div className="pdf-block bg-white p-6 relative">
+            <Filigrane size={44} />
+            <h2 className="relative text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2" style={{ zIndex: 1 }}>
               Inventaire Actuel du Catalogue (0)
             </h2>
-            <p className="text-[10px] text-slate-400 italic">Aucun article dans le catalogue.</p>
+            <p className="relative text-[10px] text-slate-400 italic" style={{ zIndex: 1 }}>Aucun article dans le catalogue.</p>
           </div>
         ) : (
           inventaireChunks.map((chunk, idx) => (
-            <div key={`inv-chunk-${idx}`} className="pdf-block bg-white p-6">
+            <div key={`inv-chunk-${idx}`} className="pdf-block bg-white p-6 relative">
+              <Filigrane size={44} />
               {idx === 0 && (
-                <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2">
+                <h2 className="relative text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2" style={{ zIndex: 1 }}>
                   Inventaire Actuel du Catalogue ({produits.length} article(s), {totalStock} unité(s))
                 </h2>
               )}
-              <table className="w-full text-left text-[10px]">
-                <thead className="bg-amber-900 text-white font-bold uppercase">
+              <table className="relative w-full text-left text-[10px]" style={{ zIndex: 1 }}>
+                <thead style={{ backgroundColor: NAVY }} className="text-white font-bold uppercase">
                   <tr>
                     <th className="p-1.5">Code</th>
                     <th className="p-1.5">Article</th>
@@ -1568,12 +1648,12 @@ export default function CataloguePretAPorterPage() {
                     const catLabel = TOUTES_CATEGORIES.find((c) => c.id === p.categorie)?.label || 'Autres Articles';
                     return (
                       <tr key={p.id}>
-                        <td className="p-1.5 font-mono">{p.code || '-'}</td>
+                        <td className="p-1.5 font-mono-tape">{p.code || '-'}</td>
                         <td className="p-1.5 font-semibold">{p.nom}</td>
                         <td className="p-1.5">{catLabel}</td>
-                        <td className="p-1.5 text-right">{p.prix.toLocaleString('fr-FR')} F</td>
-                        <td className={`p-1.5 text-right font-semibold ${p.quantiteStock <= 3 ? 'text-red-600' : ''}`}>{p.quantiteStock}</td>
-                        <td className="p-1.5 text-right font-semibold">{(p.prix * p.quantiteStock).toLocaleString('fr-FR')} F</td>
+                        <td className="p-1.5 text-right font-mono-tape">{p.prix.toLocaleString('fr-FR')} F</td>
+                        <td className="p-1.5 text-right font-semibold font-mono-tape" style={{ color: p.quantiteStock <= 3 ? ORANGE : undefined }}>{p.quantiteStock}</td>
+                        <td className="p-1.5 text-right font-semibold font-mono-tape">{(p.prix * p.quantiteStock).toLocaleString('fr-FR')} F</td>
                       </tr>
                     );
                   })}
@@ -1583,14 +1663,38 @@ export default function CataloguePretAPorterPage() {
           ))
         )}
 
-        {/* Bloc Total et pied de page */}
-        <div className="pdf-block bg-white p-6">
-          <div className="flex justify-end items-center gap-3 text-xs font-bold pt-2 border-t-2 border-amber-900/20 mb-4">
-            <span className="text-slate-700">Valeur totale du stock :</span>
-            <span className="text-amber-800">{valeurStock.toLocaleString('fr-FR')} F</span>
-          </div>
-          <div className="text-[9px] text-slate-400 text-center pt-2 border-t border-slate-200">
-            Document généré automatiquement par l'outil de gestion Ousmane Design — {dateGeneration}
+        {/* Bloc Total, cachet & signature, pied de page */}
+        <div className="pdf-block bg-white p-8 relative">
+          <Filigrane size={44} />
+          <div className="relative" style={{ zIndex: 1 }}>
+            <div className="flex justify-end items-center gap-3 text-xs font-bold pt-2 border-t-2 mb-8" style={{ borderColor: `${NAVY}22` }}>
+              <span className="text-slate-700">Valeur totale du stock :</span>
+              <span className="font-mono-tape" style={{ color: GOLD }}>{valeurStock.toLocaleString('fr-FR')} F</span>
+            </div>
+
+            <div className="stitch-line mb-6" />
+
+            <div className="flex flex-col items-center gap-1.5 text-[10px] text-slate-400 uppercase font-bold text-center border-t pt-4" style={{ borderColor: '#E2E8F0' }}>
+              <div className="relative h-24 flex items-center justify-center mb-1">
+                <img
+                  src="/cachet-od.png"
+                  alt="Cachet Ousmane Design"
+                  className="absolute h-24 w-24 object-contain opacity-90"
+                  style={{ left: '50%', transform: 'translateX(-60%) rotate(-6deg)' }}
+                />
+                <img
+                  src="/signature.png"
+                  alt="Signature Ousmane Design"
+                  className="relative h-16 object-contain"
+                  style={{ transform: 'translateX(25%)' }}
+                />
+              </div>
+              Ousmane Design (Signature & Cachet)
+            </div>
+
+            <p className="text-[9px] text-slate-400 text-center pt-4 mt-4 border-t border-slate-200">
+              Document généré automatiquement par l'outil de gestion Ousmane Design — {dateGeneration}
+            </p>
           </div>
         </div>
       </div>
