@@ -223,7 +223,7 @@ export default function Dashboard() {
     {
       href: '/catalogue',
       icon: BookOpen,
-      title: 'Catalogue & Modèles',
+      title: 'La Boutique',
       desc: "Galerie des modèles de l'atelier, grille tarifaire indicative et book photo client.",
       accent: '#1D4E89',
       bg: '#E4EDFB'

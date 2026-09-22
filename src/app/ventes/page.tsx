@@ -698,7 +698,7 @@ export default function VentesPage() {
                 className="font-body font-bold text-xs px-4 py-2.5 rounded-full flex items-center gap-2 border transition-all hover:-translate-y-0.5 cursor-pointer"
                 style={{ borderColor: 'rgba(255,255,255,0.35)', color: '#FFFFFF' }}
               >
-                <Package size={15} /> Vendre du Catalogue
+                <Package size={15} /> Vente en Boutique
               </button>
 
               <button
@@ -809,7 +809,7 @@ export default function VentesPage() {
                   <Package size={18} />
                 </span>
                 <div>
-                  <h2 className="font-display font-semibold text-lg" style={{ color: NAVY }}>Vendre du Catalogue</h2>
+                  <h2 className="font-display font-semibold text-lg" style={{ color: NAVY }}>Vente en Boutique</h2>
                   <p className="text-xs text-slate-500">Ajoutez un ou plusieurs articles au panier (taille, couleur, quantité), puis validez pour générer une facture unique.</p>
                 </div>
               </div>
