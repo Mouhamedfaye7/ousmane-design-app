@@ -410,9 +410,8 @@ export default function CommandesPage() {
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="font-display font-bold text-slate-800 text-sm">{col.title}</h2>
                   <span
-                    className="text-[11px] font-bold px-2 py-0.5 rounded-full font-mono-tape"
+                    className={`text-[11px] font-bold px-2 py-0.5 rounded-full font-mono-tape ${style.bg ? '' : style.badge}`}
                     style={style.bg ? { backgroundColor: style.bg, color: '#FFFFFF' } : undefined}
-                    {...(!style.bg ? { className: `${style.badge} text-[11px] font-bold px-2 py-0.5 rounded-full font-mono-tape` } : {})}
                   >
                     {items.length}
                   </span>
