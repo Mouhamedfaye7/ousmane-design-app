@@ -1,8 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Search, Send, X, CheckCircle, CreditCard, Trash2, Package2, ClipboardList } from 'lucide-react';
+import {
+  ArrowLeft, Plus, Search, Send, X, CheckCircle, CreditCard, Trash2,
+  FileDown, Pencil, Loader2
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 interface Commande {
@@ -24,16 +27,11 @@ interface Commande {
   created_at?: string;
 }
 
-// Palette de statut, purement visuelle : couleur d'accent + fond léger par colonne.
-const COLUMN_META: Record<string, { accent: string; bg: string }> = {
-  'Reçue': { accent: '#64748B', bg: '#F1F5F9' },
-  'En Coupe': { accent: '#C9A24B', bg: '#FBF3E2' },
-  'Prête': { accent: '#2C5AA0', bg: '#EAF1FB' },
-  'Livrée': { accent: '#16A34A', bg: '#E8F5EF' },
-};
-const ORANGE = '#C1502E';
 const NAVY = '#1B3B6F';
 const GOLD = '#C9A24B';
+const ORANGE = '#C1502E';
+
+const STATUTS = ['Reçue', 'En Coupe', 'Prête', 'Livrée'];
 
 export default function CommandesPage() {
   const [commandes, setCommandes] = useState<Commande[]>([]);
@@ -41,9 +39,15 @@ export default function CommandesPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Modal d'édition de paiement
+  // Modal d'édition du prix & du paiement (fusionnés)
   const [selectedCommandeForPay, setSelectedCommandeForPay] = useState<Commande | null>(null);
+  const [newTotalInput, setNewTotalInput] = useState<string>('');
   const [newAvanceInput, setNewAvanceInput] = useState<string>('');
+
+  // Génération du PDF d'alerte + envoi WhatsApp
+  const [selectedCommandeForAlert, setSelectedCommandeForAlert] = useState<Commande | null>(null);
+  const [pendingAlert, setPendingAlert] = useState<Commande | null>(null);
+  const alerteRef = useRef<HTMLDivElement>(null);
 
   const [formData, setFormData] = useState({
     client_nom: '',
@@ -141,20 +145,31 @@ export default function CommandesPage() {
     }
   };
 
-  // --- ACTION : MISE À JOUR DE L'AVANCE SUR MESURE ---
+  // --- OUVRE LE MODAL DE MODIFICATION PRIX + PAIEMENT ---
+  const ouvrirModalPrix = (c: Commande) => {
+    setSelectedCommandeForPay(c);
+    setNewTotalInput(String(c.montant_total || 0));
+    setNewAvanceInput(String(c.avance || 0));
+  };
+
+  // --- ACTION : ENREGISTRER LE NOUVEAU PRIX & LA NOUVELLE AVANCE ---
   const handleSavePaymentUpdate = async () => {
     if (!selectedCommandeForPay || !selectedCommandeForPay.id) return;
-    const tot = Number(selectedCommandeForPay.montant_total) || 0;
+    const newTot = Number(newTotalInput) || 0;
     const newAv = Number(newAvanceInput) || 0;
-    const newReste = Math.max(0, tot - newAv);
+    const newReste = Math.max(0, newTot - newAv);
 
     const { error } = await supabase.from('commandes').update({
+      montant_total: newTot,
       avance: newAv,
       reste: newReste
     }).eq('id', selectedCommandeForPay.id);
 
     if (!error) {
-      setCommandes(prev => prev.map(item => item.id === selectedCommandeForPay.id ? { ...item, avance: newAv, reste: newReste } : item));
+      setCommandes(prev => prev.map(item => item.id === selectedCommandeForPay.id
+        ? { ...item, montant_total: newTot, avance: newAv, reste: newReste }
+        : item
+      ));
       setSelectedCommandeForPay(null);
     } else {
       alert('Erreur : ' + error.message);
@@ -188,7 +203,47 @@ export default function CommandesPage() {
     return c.designation || c.article || c.description || c.modele || 'Commande sur mesure';
   };
 
-  const handleAlertWhatsApp = (c: Commande) => {
+  const getMessageStatut = (c: Commande) => {
+    const statut = c.statut || 'Reçue';
+    const code = c.code_commande || '';
+    const item = getItemName(c);
+
+    if (statut === 'Reçue') {
+      return `Votre commande ${code} (${item}) a bien été enregistrée à l'atelier. Nous démarrons la confection prochainement.`;
+    } else if (statut === 'En Coupe') {
+      return `Votre commande ${code} (${item}) est actuellement en cours de coupe et de confection à l'atelier.`;
+    } else if (statut === 'Prête') {
+      return `Bonne nouvelle ! Votre commande ${code} (${item}) est PRÊTE. Vous pouvez passer la récupérer à l'atelier.`;
+    } else if (statut === 'Livrée') {
+      return `Votre commande ${code} (${item}) vous a été livrée. Merci de votre confiance !`;
+    }
+    return `Statut de votre commande ${code} (${item}) : ${statut}.`;
+  };
+
+  // --- GÉNÈRE ET TÉLÉCHARGE LE PDF D'ALERTE (plein A4, filigrane, cachet & signature) ---
+  const downloadAlertPDF = async (c: Commande) => {
+    const { default: html2canvas } = await import('html2canvas-pro');
+    const { default: jsPDF } = await import('jspdf');
+    const element = alerteRef.current;
+    if (!element) return;
+
+    const canvas = await html2canvas(element, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      useCORS: true
+    });
+
+    const imgData = canvas.toDataURL('image/jpeg', 0.98);
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+
+    pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
+    pdf.save(`Alerte_${(c.client_nom || 'Client').replace(/\s+/g, '_')}_${c.code_commande || ''}.pdf`);
+  };
+
+  // Ouvre WhatsApp avec le message texte pré-rempli (comme avant, mais désormais précédé du PDF)
+  const openWhatsAppAlert = (c: Commande) => {
     let cleanPhone = (c.client_tel || '').trim().replace(/[^0-9]/g, '');
     if (cleanPhone.length === 9) {
       cleanPhone = '221' + cleanPhone;
@@ -198,27 +253,13 @@ export default function CommandesPage() {
     const avance = c.avance || 0;
     const reste = c.reste !== undefined ? c.reste : Math.max(0, total - avance);
     const clientName = (c.client_nom || 'Client').trim();
-    const statut = c.statut || 'Reçue';
-    const code = c.code_commande || '';
 
-    let messageIntro = '';
-    if (statut === 'Reçue') {
-      messageIntro = `Votre commande *${code}* (${getItemName(c)}) a bien été enregistrée à l'atelier.`;
-    } else if (statut === 'En Coupe') {
-      messageIntro = `Votre commande *${code}* (${getItemName(c)}) est actuellement en cours de coupe et de confection à l'atelier.`;
-    } else if (statut === 'Prête') {
-      messageIntro = `Bonne nouvelle ! Votre commande *${code}* (${getItemName(c)}) est *PRÊTE* ! Vous pouvez passer la récupérer à l'atelier.`;
-    } else if (statut === 'Livrée') {
-      messageIntro = `Votre commande *${code}* (${getItemName(c)}) vous a été livrée. Merci de votre confiance !`;
-    } else {
-      messageIntro = `Statut de votre commande *${code}* (${getItemName(c)}) : *${statut}*.`;
-    }
-
-    const textMsg = `Bonjour ${clientName},\n\n${messageIntro}\n\n` +
+    const textMsg = `Bonjour ${clientName},\n\n${getMessageStatut(c)}\n\n` +
       `📌 *Récapitulatif financier* :\n` +
       `- Total : ${formatAmount(total)} FCFA\n` +
       `- Avance : ${formatAmount(avance)} FCFA\n` +
       `- Reste à payer : *${formatAmount(reste)} FCFA*\n\n` +
+      `Le PDF de suivi a été téléchargé, n'hésitez pas à le joindre 📎.\n\n` +
       `Merci d'avoir choisi *Ousmane Design* !`;
 
     const encodedText = encodeURIComponent(textMsg);
@@ -228,6 +269,29 @@ export default function CommandesPage() {
 
     window.open(waUrl, '_blank');
   };
+
+  // Déclenche la séquence : rendre le template d'alerte -> générer le PDF -> ouvrir WhatsApp
+  const handleAlertWhatsApp = (c: Commande) => {
+    setSelectedCommandeForAlert(c);
+    setPendingAlert(c);
+  };
+
+  useEffect(() => {
+    if (!pendingAlert || !selectedCommandeForAlert || selectedCommandeForAlert.id !== pendingAlert.id) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        await downloadAlertPDF(pendingAlert);
+      } catch (err) {
+        console.error('Erreur génération PDF alerte :', err);
+      }
+      openWhatsAppAlert(pendingAlert);
+      setPendingAlert(null);
+    }, 400);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingAlert, selectedCommandeForAlert]);
 
   const filteredCommandes = commandes.filter(c =>
     (c.client_nom || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -243,6 +307,28 @@ export default function CommandesPage() {
     { title: 'Livrée', key: 'Livrée' }
   ];
 
+  const getColonneStyle = (key: string) => {
+    switch (key) {
+      case 'Reçue': return { badge: 'bg-slate-100 text-slate-600' };
+      case 'En Coupe': return { badge: 'text-white', bg: GOLD };
+      case 'Prête': return { badge: 'text-white', bg: NAVY };
+      case 'Livrée': return { badge: 'bg-emerald-100 text-emerald-700' };
+      default: return { badge: 'bg-slate-100 text-slate-600' };
+    }
+  };
+
+  const dateGeneration = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+
+  const statutCouleur = (statut: string) => {
+    switch (statut) {
+      case 'Reçue': return { bg: '#F1F5F9', fg: '#475569' };
+      case 'En Coupe': return { bg: '#FBF3E2', fg: '#8A6A1E' };
+      case 'Prête': return { bg: '#EAF1FB', fg: NAVY };
+      case 'Livrée': return { bg: '#ECFDF5', fg: '#047857' };
+      default: return { bg: '#F1F5F9', fg: '#475569' };
+    }
+  };
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F8FC' }}>
       <style jsx global>{`
@@ -250,9 +336,19 @@ export default function CommandesPage() {
         .font-display { font-family: 'Fraunces', ui-serif, Georgia, serif; }
         .font-body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
         .font-mono-tape { font-family: 'Space Mono', ui-monospace, monospace; }
+        .stitch-line {
+          height: 1px;
+          background-image: repeating-linear-gradient(
+            to right,
+            ${GOLD} 0px,
+            ${GOLD} 7px,
+            transparent 7px,
+            transparent 14px
+          );
+        }
       `}</style>
 
-      {/* HEADER — bandeau navy premium */}
+      {/* HEADER — bandeau navy premium, identique aux autres pages */}
       <div className="relative overflow-hidden" style={{ backgroundColor: NAVY }}>
         <div
           className="pointer-events-none absolute -top-20 -right-20 h-72 w-72 rounded-full opacity-20 blur-3xl"
@@ -273,13 +369,13 @@ export default function CommandesPage() {
                 Suivi d'Atelier & Commandes
               </h1>
               <p className="font-body text-sm mt-1.5" style={{ color: 'rgba(255,255,255,0.7)' }}>
-                Ousmane Design — Pilotage de la production
+                Ousmane Design — Pilotage de la production sur-mesure
               </p>
             </div>
 
             <button
               onClick={() => setShowAddModal(true)}
-              className="font-body font-bold text-xs px-4 py-2.5 rounded-full flex items-center gap-2 transition-all hover:-translate-y-0.5 shrink-0 cursor-pointer"
+              className="font-body font-bold text-xs px-4 py-2.5 rounded-full flex items-center gap-2 transition-all hover:-translate-y-0.5 cursor-pointer shrink-0"
               style={{ backgroundColor: GOLD, color: NAVY }}
             >
               <Plus size={15} /> Nouvelle Commande
@@ -288,104 +384,68 @@ export default function CommandesPage() {
         </div>
       </div>
 
-      {/* BARRE DE RECHERCHE — carte flottante sur le bandeau, alignée sur les autres pages */}
-      <div className="max-w-7xl mx-auto px-6 -mt-10 relative z-10 mb-6">
-        <div className="bg-white p-4 rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.25)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="relative max-w-md w-full">
+      <div className="max-w-7xl mx-auto px-6 -mt-10 relative z-10 pb-16 space-y-5 font-body">
+        {/* RECHERCHE */}
+        <div className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.15)] p-4">
+          <div className="relative max-w-md">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2" size={16} style={{ color: NAVY, opacity: 0.5 }} />
             <input
               type="text"
               placeholder="Rechercher par client, téléphone ou code..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="font-body w-full pl-10 pr-3 py-2.5 text-xs border border-slate-200 rounded-full bg-slate-50 outline-none focus:ring-2 text-slate-900"
+              className="w-full pl-10 pr-3 py-2.5 text-xs border border-slate-200 rounded-full bg-slate-50 outline-none focus:ring-2 focus:bg-white text-slate-900 transition-colors"
               style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
             />
           </div>
-          <p className="font-body text-[11px] text-slate-400 shrink-0">
-            {filteredCommandes.length} commande{filteredCommandes.length !== 1 ? 's' : ''} au total
-          </p>
         </div>
-      </div>
 
-      {/* KANBAN */}
-      <div className="max-w-7xl mx-auto px-6 pb-16">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+        {/* KANBAN */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {columns.map(col => {
             const items = filteredCommandes.filter(c => (c.statut || 'Reçue') === col.key);
-            const meta = COLUMN_META[col.key];
-            const colTotal = items.reduce((acc, c) => acc + (Number(c.montant_total) || 0), 0);
-            const colReste = items.reduce((acc, c) => {
-              const t = Number(c.montant_total) || 0;
-              const a = Number(c.avance) || 0;
-              return acc + Math.max(0, t - a);
-            }, 0);
-
+            const style = getColonneStyle(col.key);
             return (
-              <div key={col.key} className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.15)] flex flex-col overflow-hidden">
-                <div className="px-4 pt-3.5 pb-3 space-y-1.5" style={{ backgroundColor: meta.bg, borderBottom: `2px solid ${meta.accent}22` }}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: meta.accent }}></span>
-                      <h2 className="font-display font-semibold text-sm" style={{ color: '#16233D' }}>{col.title}</h2>
-                    </div>
-                    <span
-                      className="text-xs font-bold rounded-full px-2 py-0.5 bg-white font-mono-tape"
-                      style={{ color: meta.accent }}
-                    >
-                      {items.length}
-                    </span>
-                  </div>
-                  {items.length > 0 && (
-                    <p className="font-mono-tape text-[10px] text-slate-500 pl-4.5">
-                      {formatAmount(colTotal)} F
-                      {colReste > 0 && <span style={{ color: ORANGE }}> · {formatAmount(colReste)} F restant</span>}
-                    </p>
-                  )}
+              <div key={col.key} className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.15)] p-4 flex flex-col">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="font-display font-bold text-slate-800 text-sm">{col.title}</h2>
+                  <span
+                    className="text-[11px] font-bold px-2 py-0.5 rounded-full font-mono-tape"
+                    style={style.bg ? { backgroundColor: style.bg, color: '#FFFFFF' } : undefined}
+                    {...(!style.bg ? { className: `${style.badge} text-[11px] font-bold px-2 py-0.5 rounded-full font-mono-tape` } : {})}
+                  >
+                    {items.length}
+                  </span>
                 </div>
 
-                <div className="p-3 space-y-3 flex-1 min-h-[140px]">
+                <div className="space-y-3 flex-1">
                   {loading ? (
-                    <p className="font-body text-xs text-slate-400 text-center py-6">Chargement...</p>
+                    <p className="text-xs text-slate-400 text-center py-6">Chargement...</p>
                   ) : items.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-8 gap-2">
-                      <span className="w-9 h-9 rounded-full flex items-center justify-center" style={{ backgroundColor: '#F1F5F9', color: '#94A3B8' }}>
-                        <Package2 size={16} />
-                      </span>
-                      <p className="font-body text-xs text-slate-400 italic">Aucune commande</p>
-                    </div>
+                    <p className="text-xs text-slate-400 italic text-center py-8">Aucune commande</p>
                   ) : (
                     items.map(c => {
                       const total = Number(c.montant_total) || 0;
                       const avance = Number(c.avance) || 0;
                       const isFullyPaid = avance >= total && total > 0;
                       const reste = isFullyPaid ? 0 : Math.max(0, total - avance);
-                      const pct = total > 0 ? Math.min(100, Math.max(0, (avance / total) * 100)) : 0;
-                      const statutActuel = c.statut || 'Reçue';
-                      const statutMeta = COLUMN_META[statutActuel] || COLUMN_META['Reçue'];
 
                       return (
-                        <div
-                          key={c.id}
-                          className="bg-white p-4 rounded-xl border border-slate-200 hover:border-slate-300 hover:shadow-md transition-all space-y-3"
-                        >
-                          <div className="flex justify-between items-start gap-2">
-                            <div className="min-w-0">
-                              <h3 className="font-display font-semibold text-slate-900 text-sm truncate">{c.client_nom || 'Client sans nom'}</h3>
-                              <p className="font-body text-[11px] text-slate-500">{c.client_tel || '-'}</p>
+                        <div key={c.id} className="rounded-xl p-4 space-y-3" style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h3 className="font-bold text-slate-900 text-sm">{c.client_nom || 'Client sans nom'}</h3>
+                              <p className="text-xs text-slate-500">({c.client_tel || '-'})</p>
                             </div>
-                            <div className="flex items-center gap-1.5 shrink-0">
+                            <div className="flex items-center gap-1.5">
                               {c.code_commande && (
-                                <span
-                                  className="font-mono-tape text-[10px] font-semibold px-1.5 py-0.5 rounded border"
-                                  style={{ borderColor: `${NAVY}33`, color: NAVY, backgroundColor: '#EAF1FB' }}
-                                >
+                                <span className="text-[10px] font-mono-tape font-bold px-1.5 py-0.5 rounded" style={{ backgroundColor: NAVY, color: '#FFFFFF' }}>
                                   {c.code_commande}
                                 </span>
                               )}
                               <button
                                 onClick={() => handleDeleteCommande(c)}
-                                className="text-slate-300 hover:text-rose-600 p-1 rounded-md transition-colors cursor-pointer"
+                                className="text-slate-400 hover:text-rose-600 p-1 rounded-md transition-colors cursor-pointer"
                                 title="Supprimer la commande"
                               >
                                 <Trash2 size={14} />
@@ -393,77 +453,77 @@ export default function CommandesPage() {
                             </div>
                           </div>
 
-                          <p className="font-body text-xs text-slate-700 font-medium leading-snug">{getItemName(c)}</p>
+                          <p className="text-xs text-slate-700 font-medium">{getItemName(c)}</p>
 
-                          {/* RÉCAP FINANCIER — barre de progression du paiement */}
-                          <div className="space-y-1.5 pt-2.5 border-t border-slate-100">
-                            <div className="flex justify-between items-baseline text-[11px] font-body">
-                              <span className="text-slate-500">
-                                Total <strong className="font-mono-tape text-slate-800">{formatAmount(total)} F</strong>
+                          {/* RECAP FINANCIER + PRIX MODIFIABLE */}
+                          <div className="space-y-1.5 pt-2 border-t border-slate-200">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-slate-500 flex items-center gap-1">
+                                Total: <strong className="text-slate-800 font-mono-tape">{formatAmount(total)} F</strong>
+                                <button
+                                  onClick={() => ouvrirModalPrix(c)}
+                                  className="ml-0.5 p-1 rounded hover:bg-slate-200/70 text-slate-400 transition-colors cursor-pointer"
+                                  title="Modifier le prix et/ou l'avance"
+                                >
+                                  <Pencil size={11} />
+                                </button>
                               </span>
                               {isFullyPaid ? (
                                 <span className="bg-emerald-100 text-emerald-800 font-bold text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1">
                                   <CheckCircle size={10} /> PAYÉ (100%)
                                 </span>
                               ) : (
-                                <span className="font-mono-tape font-bold" style={{ color: ORANGE }}>
-                                  {formatAmount(reste)} F restant
-                                </span>
+                                <span className="font-bold font-mono-tape" style={{ color: ORANGE }}>Reste: {formatAmount(reste)} F</span>
                               )}
                             </div>
-                            <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                              <div
-                                className="h-full rounded-full transition-all duration-500"
-                                style={{ width: `${pct}%`, backgroundColor: isFullyPaid ? '#16A34A' : ORANGE }}
-                              ></div>
-                            </div>
+
+                            {!isFullyPaid && (
+                              <div className="flex gap-1.5 pt-1">
+                                <button
+                                  onClick={() => handleSolderCommande(c)}
+                                  className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[10px] font-bold px-2 py-1 rounded-full flex-1 transition-colors cursor-pointer"
+                                >
+                                  ✓ Solder (100%)
+                                </button>
+                                <button
+                                  onClick={() => ouvrirModalPrix(c)}
+                                  className="text-[10px] font-semibold px-2 py-1 rounded-full transition-colors cursor-pointer border"
+                                  style={{ backgroundColor: '#F8FAFC', color: '#475569', borderColor: '#CBD5E1' }}
+                                >
+                                  Modifier
+                                </button>
+                              </div>
+                            )}
                           </div>
 
-                          {!isFullyPaid && (
-                            <div className="flex gap-1.5">
-                              <button
-                                onClick={() => handleSolderCommande(c)}
-                                className="font-body bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 text-[10px] font-bold px-2 py-1.5 rounded-full flex-1 transition-colors cursor-pointer"
-                              >
-                                ✓ Solder (100%)
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setSelectedCommandeForPay(c);
-                                  setNewAvanceInput(String(c.avance || 0));
-                                }}
-                                className="font-body bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-300 text-[10px] font-semibold px-2 py-1.5 rounded-full transition-colors cursor-pointer"
-                              >
-                                Modifier avance
-                              </button>
-                            </div>
-                          )}
-
-                          {/* STATUT — bordure gauche colorée pour un repérage rapide */}
-                          <div className="pt-1">
-                            <label className="font-body block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                          {/* CHANGEMENT STATUT */}
+                          <div className="pt-2 border-t border-slate-200">
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                               Statut de fabrication
                             </label>
                             <select
-                              value={statutActuel}
+                              value={c.statut || 'Reçue'}
                               onChange={(e) => c.id && handleUpdateStatut(c.id, e.target.value)}
-                              className="font-body w-full text-xs p-2 rounded-md bg-slate-50 font-semibold text-slate-700 outline-none focus:ring-1 cursor-pointer border-l-[3px]"
-                              style={{ borderLeftColor: statutMeta.accent, borderTop: '1px solid #E2E8F0', borderRight: '1px solid #E2E8F0', borderBottom: '1px solid #E2E8F0' }}
+                              className="w-full text-xs p-2 border border-slate-200 rounded-lg bg-white font-medium text-slate-700 outline-none focus:ring-2 cursor-pointer"
+                              style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                             >
-                              <option value="Reçue">Reçue</option>
-                              <option value="En Coupe">En Coupe</option>
-                              <option value="Prête">Prête</option>
-                              <option value="Livrée">Livrée</option>
+                              {STATUTS.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                           </div>
 
+                          {/* BOUTON ALERTE — PDF + WHATSAPP */}
                           <button
                             onClick={() => handleAlertWhatsApp(c)}
-                            className="font-body w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2.5 rounded-full flex items-center justify-center gap-1.5 shadow-sm transition-all hover:-translate-y-0.5 cursor-pointer"
-                            title="Alerter le client sur WhatsApp"
+                            disabled={pendingAlert?.id === c.id}
+                            className="w-full text-white text-xs font-bold px-3 py-2.5 rounded-full flex items-center justify-center gap-1.5 shadow-xs transition-all hover:-translate-y-0.5 cursor-pointer disabled:opacity-60"
+                            style={{ backgroundColor: '#059669' }}
+                            title="Générer le PDF de suivi et alerter le client sur WhatsApp"
                           >
-                            <Send size={14} />
-                            <span>Alerter le client sur WhatsApp</span>
+                            {pendingAlert?.id === c.id ? (
+                              <><Loader2 size={14} className="animate-spin" /> Génération...</>
+                            ) : (
+                              <><Send size={14} /> Alerter le client</>
+                            )}
                           </button>
                         </div>
                       );
@@ -476,7 +536,7 @@ export default function CommandesPage() {
         </div>
       </div>
 
-      {/* MODAL MODIFICATION PAIEMENT / AVANCE */}
+      {/* MODAL MODIFICATION PRIX & PAIEMENT (fusionnés) */}
       {selectedCommandeForPay && (
         <div
           onClick={() => setSelectedCommandeForPay(null)}
@@ -484,48 +544,62 @@ export default function CommandesPage() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl relative border border-slate-200 space-y-4 font-body"
+            className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl relative border border-slate-200 space-y-4 font-body"
           >
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2.5">
-                <span className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#FBF3E2', color: GOLD }}>
-                  <CreditCard size={15} />
-                </span>
-                <h3 className="font-display font-semibold text-sm" style={{ color: NAVY }}>
-                  Éditer le paiement
-                </h3>
-              </div>
-              <button onClick={() => setSelectedCommandeForPay(null)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+              <h3 className="font-display font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                <CreditCard size={16} style={{ color: GOLD }} /> Modifier Prix & Paiement
+              </h3>
+              <button onClick={() => setSelectedCommandeForPay(null)} className="text-slate-400 hover:text-slate-600">
                 <X size={18} />
               </button>
             </div>
 
-            <div className="space-y-2 text-xs">
-              <p className="font-display font-semibold text-slate-800 text-sm">{selectedCommandeForPay.client_nom}</p>
-              <p className="text-slate-500">Montant total : <strong className="font-mono-tape text-slate-800">{formatAmount(selectedCommandeForPay.montant_total)} FCFA</strong></p>
+            <div className="space-y-3 text-xs">
+              <p className="font-semibold text-slate-800">{selectedCommandeForPay.client_nom}</p>
 
               <div>
-                <label className="block font-bold mt-3 mb-1 text-slate-600">Nouvel acompte / Avance versée (FCFA)</label>
+                <label className="block font-semibold mt-1 mb-1">Montant Total (FCFA)</label>
+                <input
+                  type="number"
+                  value={newTotalInput}
+                  onChange={(e) => setNewTotalInput(e.target.value)}
+                  className="w-full p-2.5 border border-slate-300 rounded-lg text-sm font-bold font-mono-tape text-slate-900 focus:ring-2 outline-none"
+                  style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
+                />
+                <p className="text-[10px] text-slate-400 mt-1">Utile en cas de prix réduit/négocié pour ce client.</p>
+              </div>
+
+              <div>
+                <label className="block font-semibold mb-1">Acompte / Avance versée (FCFA)</label>
                 <input
                   type="number"
                   value={newAvanceInput}
                   onChange={(e) => setNewAvanceInput(e.target.value)}
-                  className="font-mono-tape w-full p-2.5 border border-slate-300 rounded-lg text-sm font-bold text-emerald-700 focus:ring-2 outline-none"
+                  className="w-full p-2.5 border border-slate-300 rounded-lg text-sm font-bold font-mono-tape text-emerald-700 focus:ring-2 outline-none"
                   style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                 />
+              </div>
+
+              <div className="rounded-lg p-2.5 flex justify-between items-center" style={{ backgroundColor: '#FBF3E2' }}>
+                <span className="font-semibold" style={{ color: '#8A6A1E' }}>Reste à payer :</span>
+                <span className="font-bold font-mono-tape" style={{ color: '#8A6A1E' }}>
+                  {formatAmount(Math.max(0, (Number(newTotalInput) || 0) - (Number(newAvanceInput) || 0)))} FCFA
+                </span>
               </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => setSelectedCommandeForPay(null)}
-                className="px-4 py-2 rounded-full bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
+                className="px-3.5 py-2 rounded-full bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer"
               >
                 Annuler
               </button>
               <button
                 onClick={handleSavePaymentUpdate}
-                className="px-4 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer transition-all hover:-translate-y-0.5"
+                className="px-4 py-2 rounded-full text-white text-xs font-bold cursor-pointer transition-all hover:-translate-y-0.5"
+                style={{ backgroundColor: '#059669' }}
               >
                 Enregistrer
               </button>
@@ -545,12 +619,7 @@ export default function CommandesPage() {
             className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl relative border border-slate-200 font-body"
           >
             <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2.5">
-                <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#FBF3E2', color: GOLD }}>
-                  <ClipboardList size={17} />
-                </span>
-                <h2 className="font-display italic font-semibold text-lg" style={{ color: NAVY }}>Nouvelle Commande</h2>
-              </div>
+              <h2 className="font-display text-lg font-bold text-slate-900">Nouvelle Commande</h2>
               <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
                 <X size={20} />
               </button>
@@ -559,109 +628,109 @@ export default function CommandesPage() {
             <form onSubmit={handleCreateCommande} className="space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold mb-1 text-slate-700">Nom du client *</label>
+                  <label className="block font-semibold mb-1">Nom du client *</label>
                   <input
                     type="text"
                     required
                     value={formData.client_nom}
                     onChange={(e) => setFormData({ ...formData, client_nom: e.target.value })}
-                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-slate-900 outline-none focus:ring-2"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 outline-none"
                     style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                   />
                 </div>
                 <div>
-                  <label className="block font-bold mb-1 text-slate-700">Téléphone</label>
+                  <label className="block font-semibold mb-1">Téléphone</label>
                   <input
                     type="text"
                     value={formData.client_tel}
                     onChange={(e) => setFormData({ ...formData, client_tel: e.target.value })}
-                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-slate-900 outline-none focus:ring-2"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 outline-none"
                     style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block font-bold mb-1 text-slate-700">Désignation / Article *</label>
+                <label className="block font-semibold mb-1">Désignation / Article *</label>
                 <input
                   type="text"
                   required
                   placeholder="Ex: Boubou Bazin VIP, Caftan, costume..."
                   value={formData.designation}
                   onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
-                  className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-slate-900 outline-none focus:ring-2"
+                  className="w-full p-2.5 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 outline-none"
                   style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                 />
               </div>
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block font-bold mb-1 text-slate-700">Quantité</label>
+                  <label className="block font-semibold mb-1">Quantité</label>
                   <input
                     type="number"
                     min="1"
                     value={formData.quantite}
                     onChange={(e) => setFormData({ ...formData, quantite: e.target.value })}
-                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-slate-900 outline-none focus:ring-2"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 outline-none"
                     style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                   />
                 </div>
                 <div>
-                  <label className="block font-bold mb-1 text-slate-700">Prix Unitaire (FCFA)</label>
+                  <label className="block font-semibold mb-1">Prix Unitaire (FCFA)</label>
                   <input
                     type="number"
                     min="0"
                     placeholder="Ex: 50000"
                     value={formData.prix_unitaire}
                     onChange={(e) => setFormData({ ...formData, prix_unitaire: e.target.value })}
-                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-slate-900 outline-none focus:ring-2"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 outline-none"
                     style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                   />
                 </div>
                 <div>
-                  <label className="block font-bold mb-1 text-slate-700">Montant Total</label>
+                  <label className="block font-semibold mb-1">Montant Total</label>
                   <input
                     type="text"
                     readOnly
                     value={`${formatAmount(montantTotalCalcul)} FCFA`}
-                    className="font-mono-tape w-full p-2.5 border border-slate-200 rounded-lg bg-slate-100 font-bold text-slate-900"
+                    className="w-full p-2.5 border border-slate-200 rounded-lg bg-slate-100 font-bold font-mono-tape text-slate-800"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold mb-1 text-slate-700">Avance versée (FCFA)</label>
+                  <label className="block font-semibold mb-1">Avance versée (FCFA)</label>
                   <input
                     type="number"
                     min="0"
                     placeholder="Ex: 25000"
                     value={formData.avance}
                     onChange={(e) => setFormData({ ...formData, avance: e.target.value })}
-                    className="font-mono-tape w-full p-2.5 border border-slate-300 rounded-lg bg-white outline-none focus:ring-2 text-emerald-600 font-bold"
+                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 outline-none text-emerald-600 font-bold font-mono-tape"
                     style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                   />
                 </div>
                 <div>
-                  <label className="block font-bold mb-1 text-slate-700">Reste à payer</label>
+                  <label className="block font-semibold mb-1">Reste à payer</label>
                   <input
                     type="text"
                     readOnly
                     value={`${formatAmount(resteCalcul)} FCFA`}
-                    className="font-mono-tape w-full p-2.5 border border-slate-200 rounded-lg font-bold"
-                    style={{ backgroundColor: '#FBEAE3', color: ORANGE }}
+                    className="w-full p-2.5 border border-slate-200 rounded-lg font-bold font-mono-tape"
+                    style={{ backgroundColor: '#FBF3E2', color: '#8A6A1E' }}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block font-bold mb-1 text-slate-700">Observations / Mesures</label>
+                <label className="block font-semibold mb-1">Observations / Mesures</label>
                 <textarea
                   rows={2}
                   value={formData.observations}
                   onChange={(e) => setFormData({ ...formData, observations: e.target.value })}
                   placeholder="Notes, détails du tissu ou mesures..."
-                  className="w-full p-2.5 border border-slate-300 rounded-lg bg-white text-slate-900 outline-none focus:ring-2"
+                  className="w-full p-2.5 border border-slate-300 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 outline-none"
                   style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                 ></textarea>
               </div>
@@ -670,7 +739,7 @@ export default function CommandesPage() {
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-full bg-slate-200 font-bold cursor-pointer"
+                  className="px-4 py-2 rounded-full bg-slate-200 text-slate-700 font-semibold cursor-pointer"
                 >
                   Annuler
                 </button>
@@ -686,6 +755,169 @@ export default function CommandesPage() {
           </div>
         </div>
       )}
+
+      {/* CONTENU CACHÉ POUR GÉNÉRATION DU PDF D'ALERTE — plein A4, filigrane, cachet & signature */}
+      {selectedCommandeForAlert && (() => {
+        const c = selectedCommandeForAlert;
+        const total = Number(c.montant_total) || 0;
+        const avance = Number(c.avance) || 0;
+        const reste = c.reste !== undefined ? Math.max(0, c.reste) : Math.max(0, total - avance);
+        const statut = c.statut || 'Reçue';
+        const sc = statutCouleur(statut);
+        const stepIndex = STATUTS.indexOf(statut) >= 0 ? STATUTS.indexOf(statut) : 0;
+
+        return (
+          <div
+            ref={alerteRef}
+            style={{ aspectRatio: '210 / 297' }}
+            className="fixed top-0 left-[-10000px] w-[750px] bg-white text-slate-900 font-sans relative overflow-hidden flex flex-col"
+          >
+            {/* FILIGRANE */}
+            <div
+              className="absolute inset-0 flex items-center justify-center pointer-events-none select-none overflow-hidden"
+              style={{ zIndex: 0 }}
+            >
+              <span
+                className="font-display italic font-bold whitespace-nowrap"
+                style={{ fontSize: '92px', color: NAVY, opacity: 0.055, transform: 'rotate(-32deg)' }}
+              >
+                Ousmane Design
+              </span>
+            </div>
+
+            {/* BANDEAU D'EN-TÊTE */}
+            <div className="px-10 pt-10 pb-7 shrink-0 relative" style={{ backgroundColor: NAVY, zIndex: 1 }}>
+              <div className="flex justify-between items-start">
+                <div>
+                  <h1 className="font-display italic font-semibold text-4xl" style={{ color: '#FFFFFF' }}>Ousmane Design</h1>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.2em] mt-2" style={{ color: GOLD }}>
+                    Création & Couture Contemporaine
+                  </p>
+                  <div className="mt-5 space-y-1 text-xs" style={{ color: 'rgba(255,255,255,0.75)' }}>
+                    <p>Hann Maristes, Dakar, Sénégal</p>
+                    <p>77 646 21 02 / 70 348 26 82</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span
+                    className="inline-block text-[11px] font-bold px-4 py-2 rounded-full uppercase tracking-wider"
+                    style={{ backgroundColor: GOLD, color: NAVY }}
+                  >
+                    Avis de Suivi de Commande
+                  </span>
+                  <p className="text-xs font-semibold mt-3" style={{ color: 'rgba(255,255,255,0.75)' }}>
+                    Généré le {dateGeneration}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="stitch-line shrink-0 relative" style={{ zIndex: 1 }} />
+
+            {/* CORPS */}
+            <div className="flex-1 px-10 py-9 flex flex-col gap-8 relative" style={{ zIndex: 1 }}>
+              {/* Identité client + commande */}
+              <div className="flex justify-between items-start gap-6">
+                <div className="border-l-2 pl-4" style={{ borderColor: GOLD }}>
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Client</p>
+                  <p className="font-display font-semibold text-slate-900 text-2xl mt-1">{c.client_nom || 'Sans nom'}</p>
+                  <p className="text-xs text-slate-600 mt-1">{c.client_tel || '-'}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Commande</p>
+                  <p className="font-mono-tape font-bold text-xl mt-1" style={{ color: NAVY }}>{c.code_commande || '-'}</p>
+                  <p className="text-xs text-slate-600 mt-1">{getItemName(c)}</p>
+                </div>
+              </div>
+
+              {/* Stepper d'avancement */}
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-4">État d'avancement</p>
+                <div className="flex items-center">
+                  {STATUTS.map((s, idx) => {
+                    const done = idx <= stepIndex;
+                    return (
+                      <React.Fragment key={s}>
+                        <div className="flex flex-col items-center gap-1.5" style={{ width: 90 }}>
+                          <div
+                            className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold"
+                            style={done ? { backgroundColor: NAVY, color: '#FFFFFF' } : { backgroundColor: '#E2E8F0', color: '#94A3B8' }}
+                          >
+                            {idx + 1}
+                          </div>
+                          <span className="text-[9px] font-bold uppercase text-center" style={{ color: done ? NAVY : '#94A3B8' }}>
+                            {s}
+                          </span>
+                        </div>
+                        {idx < STATUTS.length - 1 && (
+                          <div className="flex-1 h-0.5" style={{ backgroundColor: idx < stepIndex ? NAVY : '#E2E8F0' }} />
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Badge statut actuel + message */}
+              <div className="rounded-xl p-6 text-center" style={{ backgroundColor: sc.bg }}>
+                <span
+                  className="inline-block text-[11px] font-bold px-4 py-1.5 rounded-full uppercase tracking-wider mb-3"
+                  style={{ backgroundColor: sc.fg, color: '#FFFFFF' }}
+                >
+                  {statut}
+                </span>
+                <p className="text-sm text-slate-700 leading-relaxed max-w-md mx-auto">
+                  {getMessageStatut(c)}
+                </p>
+              </div>
+
+              {/* Récapitulatif financier */}
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-3">Récapitulatif financier</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-lg p-4" style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                    <p className="text-[10px] font-semibold text-slate-500">Montant Total</p>
+                    <p className="font-mono-tape text-lg font-bold mt-1" style={{ color: NAVY }}>{formatAmount(total)} F</p>
+                  </div>
+                  <div className="rounded-lg p-4" style={{ backgroundColor: '#ECFDF5', border: '1px solid #05966933' }}>
+                    <p className="text-[10px] font-semibold" style={{ color: '#047857' }}>Avance Réglée</p>
+                    <p className="font-mono-tape text-lg font-bold mt-1" style={{ color: '#047857' }}>{formatAmount(avance)} F</p>
+                  </div>
+                  <div className="rounded-lg p-4" style={{ backgroundColor: '#FBEAE3', border: `1px solid ${ORANGE}33` }}>
+                    <p className="text-[10px] font-semibold" style={{ color: ORANGE }}>Reste à Payer</p>
+                    <p className="font-mono-tape text-lg font-bold mt-1" style={{ color: ORANGE }}>{formatAmount(reste)} F</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* PIED DE PAGE — cachet & signature */}
+            <div className="px-10 pb-10 pt-2 shrink-0 relative" style={{ zIndex: 1 }}>
+              <div className="stitch-line mb-6" />
+              <p className="text-center italic font-display text-xs text-slate-400 mb-4">
+                Merci d'avoir choisi Ousmane Design pour votre élégance.
+              </p>
+              <div className="flex flex-col items-center gap-1.5 text-[10px] text-slate-400 uppercase font-bold text-center border-t pt-4" style={{ borderColor: '#E2E8F0' }}>
+                <div className="relative h-24 flex items-center justify-center mb-1">
+                  <img
+                    src="/cachet-od.png"
+                    alt="Cachet Ousmane Design"
+                    className="absolute h-24 w-24 object-contain opacity-90"
+                    style={{ left: '50%', transform: 'translateX(-60%) rotate(-6deg)' }}
+                  />
+                  <img
+                    src="/signature.png"
+                    alt="Signature Ousmane Design"
+                    className="relative h-16 object-contain"
+                    style={{ transform: 'translateX(25%)' }}
+                  />
+                </div>
+                Ousmane Design (Signature & Cachet)
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
