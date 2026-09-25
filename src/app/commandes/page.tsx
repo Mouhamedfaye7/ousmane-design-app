@@ -826,6 +826,9 @@ export default function CommandesPage() {
                   <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Commande</p>
                   <p className="font-mono-tape font-bold text-xl mt-1" style={{ color: NAVY }}>{c.code_commande || '-'}</p>
                   <p className="text-xs text-slate-600 mt-1">{getItemName(c)}</p>
+                  <p className="text-[11px] font-bold mt-1" style={{ color: GOLD }}>
+                    Quantité : {c.quantite ?? 1} article{(c.quantite ?? 1) > 1 ? 's' : ''}
+                  </p>
                 </div>
               </div>
 
