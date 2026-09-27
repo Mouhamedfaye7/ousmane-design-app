@@ -561,12 +561,16 @@ export default function ClientsPage() {
         )}
       </div>
 
+      {/* Conteneur d'isolation : taille nulle + overflow hidden, empêche les gabarits PDF
+          cachés ci-dessous (même hors écran en position fixed) de gonfler la hauteur de
+          défilement de la page — bug connu de certains navigateurs sur les éléments "fixed". */}
+      <div className="fixed top-0 left-0 w-0 h-0 overflow-hidden" aria-hidden="true">
       {/* CONTENU CACHÉ POUR GÉNÉRATION DE LA FICHE PDF COMPLÈTE — format A4 plein, filigrane, cachet & signature */}
       {selectedClient && (
         <div
           ref={ficheRef}
           style={{ aspectRatio: '210 / 297' }}
-          className="fixed top-0 left-[-10000px] w-[750px] bg-white text-slate-900 font-sans relative overflow-hidden flex flex-col"
+          className="w-[750px] bg-white text-slate-900 font-sans relative overflow-hidden flex flex-col"
         >
           <div
             className="absolute inset-0 flex items-center justify-center pointer-events-none select-none overflow-hidden"
@@ -705,7 +709,7 @@ export default function ClientsPage() {
       {selectedClient && (
         <div
           ref={etiquetteRef}
-          className="fixed top-0 left-[-10000px] w-[300px] bg-white font-sans relative overflow-hidden"
+          className="w-[300px] bg-white font-sans relative overflow-hidden"
           style={{ border: `2px solid ${NAVY}` }}
         >
           {/* Filigrane discret */}
@@ -785,6 +789,7 @@ export default function ClientsPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
