@@ -417,7 +417,7 @@ export default function CommandesPage() {
                   </span>
                 </div>
 
-                <div className="space-y-3 flex-1">
+                <div className="space-y-3 flex-1 max-h-[70vh] overflow-y-auto pr-1">
                   {loading ? (
                     <p className="text-xs text-slate-400 text-center py-6">Chargement...</p>
                   ) : items.length === 0 ? (

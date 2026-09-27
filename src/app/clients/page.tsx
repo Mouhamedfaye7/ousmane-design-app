@@ -50,16 +50,12 @@ export default function ClientsPage() {
     try {
       const { data, error } = await supabase.from('clients').select('*').order('created_at', { ascending: false });
       if (!error && data) {
-        // Uniformiser nom / nom_complet au cas où
         const formattedData = data.map((c: any) => ({
           ...c,
           nom: c.nom || c.nom_complet || ''
         }));
         setClients(formattedData);
 
-        // Après un enregistrement, on re-sélectionne le client qu'on vient de
-        // modifier (par id, ou par téléphone pour une création) plutôt que de
-        // toujours retomber sur le plus récemment créé de la liste.
         if (preferredId) {
           const match = formattedData.find((c: Client) => c.id === preferredId);
           if (match) {
@@ -238,7 +234,6 @@ export default function ClientsPage() {
     { label: 'Tour Cheville (cm)', shortLabel: 'Tour Cheville', key: 'tour_cheville' },
   ];
 
-  // Mesures effectivement renseignées pour le client sélectionné (utilisé par la fiche PDF et l'étiquette)
   const getFilledMeasures = (client: Client) => {
     return mesureFields.filter(m => {
       const v = client[m.key];
@@ -246,7 +241,6 @@ export default function ClientsPage() {
     });
   };
 
-  // --- GÉNÉRATION FICHE PDF COMPLÈTE (une seule page A4, quel que soit le contenu) ---
   const downloadFichePDF = async () => {
     if (!selectedClient) return;
     try {
@@ -266,22 +260,7 @@ export default function ClientsPage() {
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
 
-      // La fiche tient TOUJOURS sur une seule page : on calcule un facteur
-      // d'échelle "contain" qui fait entrer tout le contenu dans la page A4,
-      // et on le cale en haut (le bandeau bleu touche le bord supérieur).
-      const ratio = canvas.width / canvas.height;
-      let renderWidth = pageWidth;
-      let renderHeight = renderWidth / ratio;
-
-      if (renderHeight > pageHeight) {
-        renderHeight = pageHeight;
-        renderWidth = renderHeight * ratio;
-      }
-
-      const offsetX = (pageWidth - renderWidth) / 2;
-      const offsetY = 0;
-
-      pdf.addImage(imgData, 'JPEG', offsetX, offsetY, renderWidth, renderHeight);
+      pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
       pdf.save(`Fiche_Mesures_${(selectedClient.nom || 'Client').replace(/\s+/g, '_')}.pdf`);
     } catch (err) {
       console.error('Erreur génération fiche PDF :', err);
@@ -289,7 +268,6 @@ export default function ClientsPage() {
     }
   };
 
-  // --- GÉNÉRATION ÉTIQUETTE TISSU (petit format à découper et coller/agrafer) ---
   const downloadEtiquettePDF = async () => {
     if (!selectedClient) return;
     try {
@@ -305,7 +283,6 @@ export default function ClientsPage() {
       });
 
       const imgData = canvas.toDataURL('image/jpeg', 0.98);
-      // Petit format type étiquette : 80mm x 120mm (facile à découper et coller sur le tissu)
       const pdf = new jsPDF({ unit: 'mm', format: [80, 120], orientation: 'portrait' });
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
@@ -326,7 +303,6 @@ export default function ClientsPage() {
     day: '2-digit', month: 'long', year: 'numeric'
   });
 
-  // Regroupement des mesures par zone du corps — purement visuel, ne change aucune donnée/clé
   const mesureGroups: Array<{ title: string; keys: (keyof Client)[] }> = [
     { title: 'Haut du corps', keys: ['cou', 'epaule', 'poitrine', 'longueur_bras', 'tour_bras', 'poignet', 'longueur_haut'] },
     { title: 'Bas du corps', keys: ['ceinture', 'hanche', 'tour_ventre', 'longueur_pantalon', 'tour_cuisse', 'tour_cheville'] }
@@ -391,9 +367,9 @@ export default function ClientsPage() {
       </div>
 
       {/* CONTENU — cartes flottantes sur le bandeau */}
-      <div className="max-w-7xl mx-auto px-6 -mt-10 relative z-10 pb-16 grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* LISTE CLIENTS */}
-        <div className="bg-white p-5 rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.25)] space-y-4 h-fit">
+      <div className="max-w-7xl mx-auto px-6 -mt-10 relative z-10 pb-16 grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+        {/* LISTE CLIENTS — fixe pendant le défilement, avec son propre scroll interne */}
+        <div className="bg-white p-5 rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.25)] space-y-4 sticky top-6 self-start">
           <div className="relative">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2" size={16} style={{ color: NAVY, opacity: 0.5 }} />
             <input
@@ -406,7 +382,7 @@ export default function ClientsPage() {
             />
           </div>
 
-          <div className="space-y-2 max-h-[620px] overflow-y-auto pr-0.5">
+          <div className="space-y-2 max-h-[70vh] overflow-y-auto pr-0.5">
             {loading ? (
               <p className="font-body text-xs text-slate-400 p-3 text-center">Chargement des clients...</p>
             ) : filteredClients.length === 0 ? (
@@ -502,7 +478,7 @@ export default function ClientsPage() {
                   onClick={downloadEtiquettePDF}
                   className="font-bold text-xs px-3.5 py-2 rounded-full flex items-center gap-1.5 cursor-pointer transition-all hover:-translate-y-0.5 border"
                   style={{ borderColor: `${NAVY}33`, color: NAVY }}
-                  title="Télécharger une petite étiquette à découper et coller sur le tissu"
+                  title="Télécharger une étiquette premium à découper et coller sur le tissu"
                 >
                   <TagIcon size={14} /> Étiquette Tissu
                 </button>
@@ -532,7 +508,6 @@ export default function ClientsPage() {
               </div>
             </div>
 
-            {/* GRILLE DES MESURES — regroupée par zone pour une lecture plus rapide, mêmes champs et clés */}
             <div className="space-y-5">
               {mesureGroups.map((group) => (
                 <div key={group.title}>
@@ -586,28 +561,25 @@ export default function ClientsPage() {
         )}
       </div>
 
-      {/* CONTENU CACHÉ POUR GÉNÉRATION DE LA FICHE PDF COMPLÈTE — inspiré de la mise en page des factures :
-          bandeau navy tout en haut, contenu, puis signature/cachet centrés tout en bas de la page. */}
+      {/* CONTENU CACHÉ POUR GÉNÉRATION DE LA FICHE PDF COMPLÈTE — format A4 plein, filigrane, cachet & signature */}
       {selectedClient && (
         <div
           ref={ficheRef}
-          style={{ minHeight: '1061px' }}
-          className="fixed top-0 left-[-10000px] w-[750px] bg-white text-slate-900 font-sans relative flex flex-col"
+          style={{ aspectRatio: '210 / 297' }}
+          className="fixed top-0 left-[-10000px] w-[750px] bg-white text-slate-900 font-sans relative overflow-hidden flex flex-col"
         >
-          {/* FILIGRANE — "Ousmane Design" en oblique, derrière tout le contenu */}
           <div
             className="absolute inset-0 flex items-center justify-center pointer-events-none select-none overflow-hidden"
             style={{ zIndex: 0 }}
           >
             <span
               className="font-display italic font-bold whitespace-nowrap"
-              style={{ fontSize: '92px', color: NAVY, opacity: 0.12, transform: 'rotate(-32deg)' }}
+              style={{ fontSize: '92px', color: NAVY, opacity: 0.055, transform: 'rotate(-32deg)' }}
             >
               Ousmane Design
             </span>
           </div>
 
-          {/* BANDEAU D'EN-TÊTE — tout en haut de la page, comme sur la facture */}
           <div className="px-10 pt-10 pb-7 shrink-0 relative" style={{ backgroundColor: NAVY, zIndex: 1 }}>
             <div className="flex justify-between items-start">
               <div>
@@ -616,8 +588,8 @@ export default function ClientsPage() {
                   Création & Couture Contemporaine
                 </p>
                 <div className="mt-5 space-y-1 text-xs" style={{ color: 'rgba(255,255,255,0.75)' }}>
-                  <p className="flex items-center gap-1.5"><MapPin size={11} /> Hann Maristes, Dakar, Sénégal</p>
-                  <p className="flex items-center gap-1.5"><Phone size={11} /> 77 646 21 02 / 70 348 26 82</p>
+                  <p className="flex items-center gap-1.5"><MapPin size={12} style={{ color: GOLD }} /> Hann Maristes, Dakar, Sénégal</p>
+                  <p className="flex items-center gap-1.5"><Phone size={12} style={{ color: GOLD }} /> 77 646 21 02 / 70 348 26 82</p>
                 </div>
               </div>
               <div className="text-right">
@@ -628,7 +600,7 @@ export default function ClientsPage() {
                   Carnet de Mesures
                 </span>
                 <p className="text-xs font-semibold mt-3" style={{ color: 'rgba(255,255,255,0.75)' }}>
-                  Enregistré le {dateGeneration}
+                  Mis à jour le {dateGeneration}
                 </p>
               </div>
             </div>
@@ -636,28 +608,17 @@ export default function ClientsPage() {
 
           <div className="stitch-line shrink-0 relative" style={{ zIndex: 1 }} />
 
-          {/* CORPS — s'étire pour occuper toute la page ; un espaceur pousse la signature tout en bas */}
-          <div className="flex-1 px-10 py-6 flex flex-col gap-5 relative" style={{ zIndex: 1 }}>
-            {/* Identité du client */}
-            <div className="border-l-2 pl-4 shrink-0" style={{ borderColor: GOLD }}>
+          <div className="flex-1 px-10 py-8 flex flex-col gap-7 relative" style={{ zIndex: 1 }}>
+            <div className="border-l-2 pl-4" style={{ borderColor: GOLD }}>
               <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Fiche client</p>
               <p className="font-display font-semibold text-slate-900 text-2xl mt-1">{selectedClient.nom || 'Sans nom'}</p>
               <div className="flex flex-wrap gap-x-6 gap-y-1 mt-2 text-xs text-slate-600">
-                {selectedClient.telephone && (
-                  <span className="flex items-center gap-1.5">
-                    <Phone size={11} style={{ color: NAVY, opacity: 0.5 }} /> {selectedClient.telephone}
-                  </span>
-                )}
-                {selectedClient.adresse && (
-                  <span className="flex items-center gap-1.5">
-                    <MapPin size={11} style={{ color: NAVY, opacity: 0.5 }} /> {selectedClient.adresse}
-                  </span>
-                )}
+                {selectedClient.telephone && <span>Tél : {selectedClient.telephone}</span>}
+                {selectedClient.adresse && <span>Adresse : {selectedClient.adresse}</span>}
               </div>
             </div>
 
-            {/* Mesures, groupées par zone du corps, format compact */}
-            <div className="space-y-4 shrink-0">
+            <div className="space-y-6 flex-1">
               {mesureGroups.map((group) => {
                 const filledInGroup = group.keys
                   .map(k => fieldByKey[k])
@@ -671,21 +632,21 @@ export default function ClientsPage() {
                 return (
                   <div key={group.title}>
                     <h2
-                      className="text-xs font-bold uppercase tracking-wide pb-1.5 mb-2 border-b"
+                      className="text-xs font-bold uppercase tracking-wide pb-2 mb-3 border-b"
                       style={{ color: NAVY, borderColor: '#E2E8F0' }}
                     >
                       {group.title}
                     </h2>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-3 gap-3">
                       {filledInGroup.map((m) => (
                         <div
                           key={m.key}
-                          className="rounded-md px-2.5 py-1.5"
+                          className="rounded-lg px-4 py-3"
                           style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}
                         >
-                          <p className="text-[9px] font-semibold text-slate-500 leading-tight">{m.shortLabel}</p>
-                          <p className="font-mono-tape text-sm font-bold mt-0.5 leading-tight" style={{ color: NAVY }}>
-                            {selectedClient[m.key]} <span className="text-[10px] font-normal text-slate-400">cm</span>
+                          <p className="text-[10px] font-semibold text-slate-500">{m.shortLabel}</p>
+                          <p className="font-mono-tape text-lg font-bold mt-1" style={{ color: NAVY }}>
+                            {selectedClient[m.key]} <span className="text-xs font-normal text-slate-400">cm</span>
                           </p>
                         </div>
                       ))}
@@ -699,9 +660,8 @@ export default function ClientsPage() {
               )}
             </div>
 
-            {/* Notes */}
             {selectedClient.notes && (
-              <div className="shrink-0">
+              <div>
                 <h2 className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-2">
                   Notes & Particularités
                 </h2>
@@ -713,78 +673,113 @@ export default function ClientsPage() {
                 </p>
               </div>
             )}
+          </div>
 
-            {/* ESPACEUR — pousse le pied de page tout en bas quand le contenu est court */}
-            <div className="flex-1" />
-
-            {/* PIED DE PAGE — même esprit que la facture : liseré, texte italique centré,
-                puis cachet et signature superposés, centrés, tout en bas de page. */}
-            <div className="shrink-0">
-              <div className="stitch-line mb-5" />
-              <p className="text-center italic font-display text-xs text-slate-400 mb-4">
-                Document confidentiel — carnet de mesures personnalisé Ousmane Design.
-              </p>
-              <div className="flex flex-col items-center">
-                <div className="relative h-16 w-16 mb-1.5">
-                  <img
-                    src="/cachet-od.png"
-                    alt="Cachet Ousmane Design"
-                    className="absolute inset-0 h-16 w-16 object-contain opacity-90"
-                    style={{ transform: 'rotate(-6deg)' }}
-                  />
-                  <img
-                    src="/signature.png"
-                    alt="Signature Ousmane Design"
-                    className="absolute h-9 object-contain"
-                    style={{ top: '50%', left: '50%', transform: 'translate(-50%, -50%) rotate(-4deg)' }}
-                  />
-                </div>
-                <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wide">
-                  Ousmane Design (Signature &amp; Cachet)
-                </p>
+          <div className="px-10 pb-10 pt-2 shrink-0 relative" style={{ zIndex: 1 }}>
+            <div className="stitch-line mb-6" />
+            <p className="text-center italic font-display text-xs text-slate-400 mb-4">
+              Document confidentiel — carnet de mesures personnalisé Ousmane Design.
+            </p>
+            <div className="flex flex-col items-center gap-1.5 text-[10px] text-slate-400 uppercase font-bold text-center border-t pt-4" style={{ borderColor: '#E2E8F0' }}>
+              <div className="relative h-24 flex items-center justify-center mb-1">
+                <img
+                  src="/cachet-od.png"
+                  alt="Cachet Ousmane Design"
+                  className="absolute h-24 w-24 object-contain opacity-90"
+                  style={{ left: '50%', transform: 'translateX(-60%) rotate(-6deg)' }}
+                />
+                <img
+                  src="/signature.png"
+                  alt="Signature Ousmane Design"
+                  className="relative h-16 object-contain"
+                  style={{ transform: 'translateX(25%)' }}
+                />
               </div>
+              Ousmane Design (Signature & Cachet)
             </div>
           </div>
         </div>
       )}
 
-      {/* CONTENU CACHÉ POUR GÉNÉRATION DE L'ÉTIQUETTE TISSU (petit format) */}
+      {/* CONTENU CACHÉ POUR GÉNÉRATION DE L'ÉTIQUETTE TISSU — refonte premium, filigrane, cachet & signature */}
       {selectedClient && (
         <div
           ref={etiquetteRef}
-          className="fixed top-0 left-[-10000px] w-[290px] bg-white p-3 text-slate-900 font-sans"
+          className="fixed top-0 left-[-10000px] w-[300px] bg-white font-sans relative overflow-hidden"
+          style={{ border: `2px solid ${NAVY}` }}
         >
-          <div className="border-2 border-amber-800 rounded-lg p-3 space-y-2">
-            <div className="text-center border-b border-amber-800/30 pb-1.5">
-              <p className="text-[9px] font-bold text-amber-800 uppercase tracking-wider">Ousmane Design</p>
-              <p className="text-sm font-extrabold text-slate-900 leading-tight mt-0.5">
-                {selectedClient.nom || 'Sans nom'}
+          {/* Filigrane discret */}
+          <div
+            className="absolute inset-0 flex items-center justify-center pointer-events-none select-none overflow-hidden"
+            style={{ zIndex: 0 }}
+          >
+            <span
+              className="font-display italic font-bold whitespace-nowrap"
+              style={{ fontSize: '32px', color: NAVY, opacity: 0.06, transform: 'rotate(-28deg)' }}
+            >
+              Ousmane Design
+            </span>
+          </div>
+
+          <div className="relative p-3.5 space-y-2.5" style={{ zIndex: 1 }}>
+            {/* En-tête marque */}
+            <div className="text-center pb-2 border-b" style={{ borderColor: `${GOLD}55` }}>
+              <p className="font-display italic font-bold text-sm" style={{ color: NAVY }}>Ousmane Design</p>
+              <p className="text-[7px] font-bold uppercase tracking-widest mt-0.5" style={{ color: GOLD }}>
+                Maison de Couture
               </p>
+            </div>
+
+            {/* Identité client */}
+            <div className="text-center">
+              <p className="font-bold text-slate-900 text-[13px] leading-tight">{selectedClient.nom || 'Sans nom'}</p>
               {selectedClient.telephone && (
-                <p className="text-[9px] text-slate-500">{selectedClient.telephone}</p>
+                <p className="text-[8px] text-slate-500 mt-0.5">{selectedClient.telephone}</p>
               )}
             </div>
 
+            {/* Mesures */}
             {getFilledMeasures(selectedClient).length === 0 ? (
-              <p className="text-[10px] text-slate-400 italic text-center py-2">Aucune mesure enregistrée.</p>
+              <p className="text-[9px] text-slate-400 italic text-center py-2">Aucune mesure enregistrée.</p>
             ) : (
-              <div className="space-y-1">
+              <div className="rounded-md p-2 space-y-1" style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
                 {getFilledMeasures(selectedClient).map((m) => (
-                  <div key={m.key} className="flex justify-between items-center text-[11px]">
+                  <div key={m.key} className="flex justify-between items-center text-[10px]">
                     <span className="font-semibold text-slate-600">{m.shortLabel}</span>
-                    <span className="font-extrabold text-amber-800">{selectedClient[m.key]} cm</span>
+                    <span className="font-mono-tape font-extrabold" style={{ color: NAVY }}>
+                      {selectedClient[m.key]} cm
+                    </span>
                   </div>
                 ))}
               </div>
             )}
 
+            {/* Notes */}
             {selectedClient.notes && (
-              <p className="text-[9px] text-slate-500 italic border-t border-slate-200 pt-1.5 leading-tight">
+              <p className="text-[7.5px] text-slate-500 italic leading-snug border-t pt-1.5" style={{ borderColor: '#E2E8F0' }}>
                 {selectedClient.notes}
               </p>
             )}
 
-            <p className="text-[8px] text-slate-400 text-center border-t border-slate-200 pt-1">
+            {/* Cachet + signature, miniaturisés */}
+            <div className="flex items-center justify-center pt-1.5 border-t" style={{ borderColor: '#E2E8F0' }}>
+              <div className="relative h-9 flex items-center justify-center">
+                <img
+                  src="/cachet-od.png"
+                  alt="Cachet Ousmane Design"
+                  className="absolute h-9 w-9 object-contain opacity-90"
+                  style={{ left: '50%', transform: 'translateX(-58%) rotate(-6deg)' }}
+                />
+                <img
+                  src="/signature.png"
+                  alt="Signature Ousmane Design"
+                  className="relative h-5 object-contain"
+                  style={{ transform: 'translateX(22%)' }}
+                />
+              </div>
+            </div>
+
+            <p className="text-[6.5px] text-slate-400 text-center border-t pt-1" style={{ borderColor: '#E2E8F0' }}>
               {dateGeneration}
             </p>
           </div>
