@@ -369,7 +369,7 @@ export default function ClientsPage() {
       {/* CONTENU — cartes flottantes sur le bandeau */}
       <div className="max-w-7xl mx-auto px-6 -mt-10 relative z-10 pb-16 grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
         {/* LISTE CLIENTS — fixe pendant le défilement, avec son propre scroll interne */}
-        <div className="bg-white p-5 rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.25)] space-y-4 sticky top-6 self-start">
+        <div className="bg-white p-5 rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.25)] space-y-4 sticky top-6 self-start min-h-0 max-h-[calc(100vh-3rem)] flex flex-col overflow-hidden">
           <div className="relative">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2" size={16} style={{ color: NAVY, opacity: 0.5 }} />
             <input
@@ -382,7 +382,7 @@ export default function ClientsPage() {
             />
           </div>
 
-          <div className="space-y-2 max-h-[70vh] overflow-y-auto pr-0.5">
+          <div className="space-y-2 flex-1 min-h-0 overflow-y-auto pr-0.5">
             {loading ? (
               <p className="font-body text-xs text-slate-400 p-3 text-center">Chargement des clients...</p>
             ) : filteredClients.length === 0 ? (
