@@ -698,7 +698,7 @@ export default function VentesPage() {
                 className="font-body font-bold text-xs px-4 py-2.5 rounded-full flex items-center gap-2 border transition-all hover:-translate-y-0.5 cursor-pointer"
                 style={{ borderColor: 'rgba(255,255,255,0.35)', color: '#FFFFFF' }}
               >
-                <Package size={15} /> Vente en Boutique
+                <Package size={15} /> Vendre du Catalogue
               </button>
 
               <button
@@ -796,211 +796,230 @@ export default function VentesPage() {
         </div>
       </div>
 
-      {/* MODAL CATALOGUE — sélection multi-articles avec panier */}
+      {/* MODAL CATALOGUE — en-tête et recherche fixes, seule la liste/le panier défile */}
       {showCatalogueModal && (
         <div
           onClick={() => { setShowCatalogueModal(false); setSelectedCatItem(null); setPanier([]); }}
-          className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto"
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50"
         >
-          <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative border border-slate-200 font-body max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-3">
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl relative border border-slate-200 font-body flex flex-col max-h-[92vh]"
+          >
+            {/* EN-TÊTE — fixe, ne défile jamais */}
+            <div className="flex justify-between items-start px-5 sm:px-6 py-4 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
                 <span className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: '#FBF3E2', color: GOLD }}>
                   <Package size={18} />
                 </span>
-                <div>
-                  <h2 className="font-display font-semibold text-lg" style={{ color: NAVY }}>Vente en Boutique</h2>
-                  <p className="text-xs text-slate-500">Ajoutez un ou plusieurs articles au panier (taille, couleur, quantité), puis validez pour générer une facture unique.</p>
+                <div className="min-w-0">
+                  <h2 className="font-display font-semibold text-lg" style={{ color: NAVY }}>Vendre du Catalogue</h2>
+                  <p className="text-xs text-slate-500">Ajoutez un ou plusieurs articles au panier (taille, couleur, quantité), puis validez.</p>
                 </div>
               </div>
-              <button onClick={() => { setShowCatalogueModal(false); setSelectedCatItem(null); setPanier([]); }} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X size={20} /></button>
+              <button onClick={() => { setShowCatalogueModal(false); setSelectedCatItem(null); setPanier([]); }} className="text-slate-400 hover:text-slate-600 cursor-pointer shrink-0"><X size={20} /></button>
             </div>
 
-            <div className="relative mb-4">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2" size={16} style={{ color: NAVY, opacity: 0.5 }} />
-              <input type="text" placeholder="Rechercher par nom, catégorie, taille ou couleur..." value={catalogueSearch} onChange={(e) => setCatalogueSearch(e.target.value)} className="w-full pl-10 pr-3 py-2.5 text-xs border border-slate-200 rounded-full bg-slate-50 outline-none focus:ring-2 text-slate-900" style={{ '--tw-ring-color': GOLD } as React.CSSProperties} />
-            </div>
-
-            {!selectedCatItem ? (
-              <>
-                <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-xl">
-                  {filteredCatalogue.length === 0 ? (
-                    <p className="p-4 text-center text-xs text-slate-400">Aucun article trouvé dans le catalogue.</p>
-                  ) : filteredCatalogue.map((item) => {
-                    const qtyInPanier = getQtyDejaAuPanier(item.id);
-                    const stockRestant = Math.max(0, item.quantite_stock - qtyInPanier);
-                    const isVendu = stockRestant <= 0 || item.statut === 'Vendu';
-                    const detailsText = formatCatalogueDetails(item);
-
-                    return (
-                      <div key={item.id} className={`p-3.5 flex items-center justify-between transition-colors ${isVendu ? 'bg-slate-50 opacity-75' : 'hover:bg-[#EAF1FB]/40'}`}>
-                        <div className="space-y-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-bold text-slate-900 text-xs">{item.nom}</span>
-                            {isVendu ? (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1" style={{ backgroundColor: '#FBEAE3', color: ORANGE, borderColor: `${ORANGE}33` }}>
-                                <Tag size={10} /> {item.statut === 'Vendu' ? 'VENDU' : 'ÉPUISÉ'}
-                              </span>
-                            ) : (
-                              <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                                Stock : {stockRestant}
-                              </span>
-                            )}
-                            {qtyInPanier > 0 && (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1" style={{ backgroundColor: '#EAF1FB', color: NAVY }}>
-                                <ShoppingCart size={10} /> x{qtyInPanier} au panier
-                              </span>
-                            )}
-                          </div>
-
-                          {detailsText && (
-                            <p className="text-[11px] text-slate-600 font-medium">
-                              {detailsText}
-                            </p>
-                          )}
-
-                          <p className="text-[11px] font-bold font-mono-tape" style={{ color: GOLD }}>
-                            Prix : {formatAmount(item.prix)} FCFA
-                          </p>
-                        </div>
-
-                        <button
-                          onClick={() => handlePrepareCatalogueItem(item)}
-                          disabled={isVendu}
-                          className="font-bold text-xs px-3.5 py-2 rounded-full cursor-pointer transition-colors shrink-0 disabled:bg-slate-300 disabled:text-slate-500"
-                          style={!isVendu ? { backgroundColor: GOLD, color: NAVY } : undefined}
-                        >
-                          {isVendu ? (item.statut === 'Vendu' ? 'Épuisé' : 'Complet') : 'Choisir'}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* PANIER */}
-                {panier.length > 0 && (
-                  <div className="mt-4 rounded-xl p-4 space-y-3" style={{ backgroundColor: '#EAF1FB', border: `1px solid ${NAVY}22` }}>
-                    <p className="font-bold text-[11px] uppercase tracking-wide flex items-center gap-1.5" style={{ color: NAVY }}>
-                      <ShoppingCart size={13} /> Panier ({panier.length} article{panier.length > 1 ? 's' : ''})
-                    </p>
-                    <div className="space-y-1.5">
-                      {panier.map((p, idx) => (
-                        <div key={idx} className="bg-white border border-slate-200 rounded-lg p-2.5 flex items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="font-semibold text-slate-800 text-xs truncate">{p.nom}</p>
-                            <p className="text-[10px] text-slate-500">
-                              {[p.taille && `Taille: ${p.taille}`, p.couleur && `Couleur: ${p.couleur}`].filter(Boolean).join(' · ') || 'Sans spécification'}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <div className="flex flex-col items-center gap-0.5">
-                              <span className="text-[9px] text-slate-400 font-semibold">Qté</span>
-                              <input
-                                type="number"
-                                min={1}
-                                value={p.quantite}
-                                onChange={(e) => updatePanierQuantite(idx, Number(e.target.value))}
-                                className="w-14 p-1 text-xs border border-slate-300 rounded text-center font-mono-tape font-bold"
-                              />
-                            </div>
-                            <div className="flex flex-col items-center gap-0.5">
-                              <span className="text-[9px] text-slate-400 font-semibold">Prix unit.</span>
-                              <input
-                                type="number"
-                                min={0}
-                                value={p.prix}
-                                onChange={(e) => updatePanierPrix(idx, Number(e.target.value))}
-                                className="w-20 p-1 text-xs border rounded text-center font-mono-tape font-bold"
-                                style={{ borderColor: `${GOLD}88`, color: GOLD }}
-                                title="Modifier le prix de vente (ex: réduction accordée au client)"
-                              />
-                            </div>
-                            <span className="font-mono-tape text-xs font-bold text-slate-700 w-24 text-right">{formatAmount(p.prix * p.quantite)} F</span>
-                            <button onClick={() => retirerDuPanier(idx)} className="text-slate-400 hover:text-rose-600 cursor-pointer p-1" title="Retirer du panier">
-                              <X size={15} />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex justify-between items-center pt-2 border-t border-slate-200 text-xs font-bold">
-                      <span style={{ color: NAVY }}>Total panier</span>
-                      <span className="font-mono-tape" style={{ color: NAVY }}>{formatAmount(panierTotal)} FCFA</span>
-                    </div>
-                    <button
-                      onClick={validerPanier}
-                      className="w-full py-2.5 rounded-full font-bold text-xs cursor-pointer transition-all hover:-translate-y-0.5"
-                      style={{ backgroundColor: GOLD, color: NAVY }}
-                    >
-                      Valider la facture ({panier.length} article{panier.length > 1 ? 's' : ''})
-                    </button>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="rounded-xl space-y-4 p-4" style={{ backgroundColor: '#FBF3E2', border: `1px solid ${GOLD}44` }}>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-display font-semibold text-slate-900 text-sm">{selectedCatItem.nom}</h3>
-                    <p className="text-xs font-bold font-mono-tape" style={{ color: GOLD }}>{formatAmount(selectedCatItem.prix)} FCFA</p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">{stockRestantSelectedItem} unité(s) disponible(s)</p>
-                  </div>
-                  <button onClick={() => setSelectedCatItem(null)} className="text-xs text-slate-500 underline cursor-pointer">Changer d'article</button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Taille sélectionnée :</label>
-                    {Array.isArray(selectedCatItem.tailles) && selectedCatItem.tailles.length > 0 ? (
-                      <select value={selectedTaille} onChange={(e) => setSelectedTaille(e.target.value)} className="w-full p-2 border border-slate-300 rounded-lg bg-white font-bold">
-                        {selectedCatItem.tailles.map((t, i) => (
-                          <option key={i} value={t}>{t}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input type="text" value={selectedTaille} onChange={(e) => setSelectedTaille(e.target.value)} placeholder="Ex: XL, L, 42..." className="w-full p-2 border border-slate-300 rounded-lg bg-white" />
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Couleur sélectionnée :</label>
-                    {Array.isArray(selectedCatItem.couleurs) && selectedCatItem.couleurs.length > 0 ? (
-                      <select value={selectedCouleur} onChange={(e) => setSelectedCouleur(e.target.value)} className="w-full p-2 border border-slate-300 rounded-lg bg-white font-bold">
-                        {selectedCatItem.couleurs.map((c, i) => (
-                          <option key={i} value={c}>{c}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input type="text" value={selectedCouleur} onChange={(e) => setSelectedCouleur(e.target.value)} placeholder="Ex: Bleu Nuit, Blanc..." className="w-full p-2 border border-slate-300 rounded-lg bg-white" />
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1 text-xs">Quantité :</label>
+            {/* RECHERCHE — fixe, visible uniquement quand on parcourt la liste */}
+            {!selectedCatItem && (
+              <div className="px-5 sm:px-6 pt-4 shrink-0">
+                <div className="relative">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2" size={16} style={{ color: NAVY, opacity: 0.5 }} />
                   <input
-                    type="number"
-                    min={1}
-                    max={stockRestantSelectedItem || 1}
-                    value={selectedQuantite}
-                    onChange={(e) => setSelectedQuantite(Number(e.target.value) || 1)}
-                    className="w-full p-2 border border-slate-300 rounded-lg bg-white font-bold font-mono-tape text-xs"
+                    type="text"
+                    placeholder="Rechercher par nom, catégorie, taille ou couleur..."
+                    value={catalogueSearch}
+                    onChange={(e) => setCatalogueSearch(e.target.value)}
+                    className="w-full pl-10 pr-3 py-2.5 text-xs border border-slate-200 rounded-full bg-slate-50 outline-none focus:ring-2 text-slate-900"
+                    style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                   />
-                </div>
-
-                <div className="flex justify-end gap-2 pt-2">
-                  <button onClick={() => setSelectedCatItem(null)} className="px-3.5 py-2 rounded-full bg-slate-200 text-xs font-bold cursor-pointer">Retour</button>
-                  <button
-                    onClick={ajouterAuPanier}
-                    disabled={stockRestantSelectedItem <= 0}
-                    className="px-4 py-2 rounded-full text-xs font-bold cursor-pointer transition-all hover:-translate-y-0.5 disabled:opacity-50 flex items-center gap-1.5"
-                    style={{ backgroundColor: GOLD, color: NAVY }}
-                  >
-                    <ShoppingCart size={13} /> Ajouter au panier
-                  </button>
                 </div>
               </div>
             )}
+
+            {/* CORPS DÉFILANT */}
+            <div className="overflow-y-auto px-5 sm:px-6 py-4 flex-1">
+              {!selectedCatItem ? (
+                <>
+                  <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl">
+                    {filteredCatalogue.length === 0 ? (
+                      <p className="p-4 text-center text-xs text-slate-400">Aucun article trouvé dans le catalogue.</p>
+                    ) : filteredCatalogue.map((item) => {
+                      const qtyInPanier = getQtyDejaAuPanier(item.id);
+                      const stockRestant = Math.max(0, item.quantite_stock - qtyInPanier);
+                      const isVendu = stockRestant <= 0 || item.statut === 'Vendu';
+                      const detailsText = formatCatalogueDetails(item);
+
+                      return (
+                        <div key={item.id} className={`p-3.5 flex items-center justify-between transition-colors ${isVendu ? 'bg-slate-50 opacity-75' : 'hover:bg-[#EAF1FB]/40'}`}>
+                          <div className="space-y-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-slate-900 text-xs">{item.nom}</span>
+                              {isVendu ? (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1" style={{ backgroundColor: '#FBEAE3', color: ORANGE, borderColor: `${ORANGE}33` }}>
+                                  <Tag size={10} /> {item.statut === 'Vendu' ? 'VENDU' : 'ÉPUISÉ'}
+                                </span>
+                              ) : (
+                                <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                  Stock : {stockRestant}
+                                </span>
+                              )}
+                              {qtyInPanier > 0 && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1" style={{ backgroundColor: '#EAF1FB', color: NAVY }}>
+                                  <ShoppingCart size={10} /> x{qtyInPanier} au panier
+                                </span>
+                              )}
+                            </div>
+
+                            {detailsText && (
+                              <p className="text-[11px] text-slate-600 font-medium">
+                                {detailsText}
+                              </p>
+                            )}
+
+                            <p className="text-[11px] font-bold font-mono-tape" style={{ color: '#8A6A22' }}>
+                              Prix : {formatAmount(item.prix)} FCFA
+                            </p>
+                          </div>
+
+                          <button
+                            onClick={() => handlePrepareCatalogueItem(item)}
+                            disabled={isVendu}
+                            className="font-bold text-xs px-3.5 py-2 rounded-full cursor-pointer transition-colors shrink-0 disabled:bg-slate-300 disabled:text-slate-500"
+                            style={!isVendu ? { backgroundColor: GOLD, color: NAVY } : undefined}
+                          >
+                            {isVendu ? (item.statut === 'Vendu' ? 'Épuisé' : 'Complet') : 'Choisir'}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* PANIER */}
+                  {panier.length > 0 && (
+                    <div className="mt-4 rounded-xl p-4 space-y-3" style={{ backgroundColor: '#EAF1FB', border: `1px solid ${NAVY}22` }}>
+                      <p className="font-bold text-[11px] uppercase tracking-wide flex items-center gap-1.5" style={{ color: NAVY }}>
+                        <ShoppingCart size={13} /> Panier ({panier.length} article{panier.length > 1 ? 's' : ''})
+                      </p>
+                      <div className="space-y-1.5">
+                        {panier.map((p, idx) => (
+                          <div key={idx} className="bg-white border border-slate-200 rounded-lg p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="font-semibold text-slate-900 text-xs truncate">{p.nom}</p>
+                              <p className="text-[10px] text-slate-500">
+                                {[p.taille && `Taille: ${p.taille}`, p.couleur && `Couleur: ${p.couleur}`].filter(Boolean).join(' · ') || 'Sans spécification'}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span className="text-[9px] text-slate-400 font-semibold">Qté</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  value={p.quantite}
+                                  onChange={(e) => updatePanierQuantite(idx, Number(e.target.value))}
+                                  className="w-14 p-1 text-xs border border-slate-300 rounded text-center font-mono-tape font-bold text-slate-900 bg-white"
+                                />
+                              </div>
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span className="text-[9px] text-slate-400 font-semibold">Prix unit.</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={p.prix}
+                                  onChange={(e) => updatePanierPrix(idx, Number(e.target.value))}
+                                  className="w-20 p-1 text-xs border rounded text-center font-mono-tape font-bold bg-white"
+                                  style={{ borderColor: `${GOLD}88`, color: '#8A6A22' }}
+                                  title="Modifier le prix de vente (ex: réduction accordée au client)"
+                                />
+                              </div>
+                              <span className="font-mono-tape text-xs font-bold text-slate-900 w-24 text-right">{formatAmount(p.prix * p.quantite)} F</span>
+                              <button onClick={() => retirerDuPanier(idx)} className="text-slate-400 hover:text-rose-600 cursor-pointer p-1" title="Retirer du panier">
+                                <X size={15} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex justify-between items-center pt-2 border-t border-slate-200 text-xs font-bold">
+                        <span style={{ color: NAVY }}>Total panier</span>
+                        <span className="font-mono-tape" style={{ color: NAVY }}>{formatAmount(panierTotal)} FCFA</span>
+                      </div>
+                      <button
+                        onClick={validerPanier}
+                        className="w-full py-2.5 rounded-full font-bold text-xs cursor-pointer transition-all hover:-translate-y-0.5"
+                        style={{ backgroundColor: GOLD, color: NAVY }}
+                      >
+                        Valider la facture ({panier.length} article{panier.length > 1 ? 's' : ''})
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="rounded-xl space-y-4 p-4" style={{ backgroundColor: '#FBF3E2', border: `1px solid ${GOLD}44` }}>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="font-display font-semibold text-slate-900 text-sm">{selectedCatItem.nom}</h3>
+                      <p className="text-xs font-bold font-mono-tape" style={{ color: '#8A6A22' }}>{formatAmount(selectedCatItem.prix)} FCFA</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{stockRestantSelectedItem} unité(s) disponible(s)</p>
+                    </div>
+                    <button onClick={() => setSelectedCatItem(null)} className="text-xs text-slate-500 underline cursor-pointer shrink-0">Changer d'article</button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Taille sélectionnée :</label>
+                      {Array.isArray(selectedCatItem.tailles) && selectedCatItem.tailles.length > 0 ? (
+                        <select value={selectedTaille} onChange={(e) => setSelectedTaille(e.target.value)} className="w-full p-2 border border-slate-300 rounded-lg bg-white font-bold text-slate-900">
+                          {selectedCatItem.tailles.map((t, i) => (
+                            <option key={i} value={t}>{t}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input type="text" value={selectedTaille} onChange={(e) => setSelectedTaille(e.target.value)} placeholder="Ex: XL, L, 42..." className="w-full p-2 border border-slate-300 rounded-lg bg-white text-slate-900" />
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Couleur sélectionnée :</label>
+                      {Array.isArray(selectedCatItem.couleurs) && selectedCatItem.couleurs.length > 0 ? (
+                        <select value={selectedCouleur} onChange={(e) => setSelectedCouleur(e.target.value)} className="w-full p-2 border border-slate-300 rounded-lg bg-white font-bold text-slate-900">
+                          {selectedCatItem.couleurs.map((c, i) => (
+                            <option key={i} value={c}>{c}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input type="text" value={selectedCouleur} onChange={(e) => setSelectedCouleur(e.target.value)} placeholder="Ex: Bleu Nuit, Blanc..." className="w-full p-2 border border-slate-300 rounded-lg bg-white text-slate-900" />
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1 text-xs">Quantité :</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={stockRestantSelectedItem || 1}
+                      value={selectedQuantite}
+                      onChange={(e) => setSelectedQuantite(Number(e.target.value) || 1)}
+                      className="w-full p-2 border border-slate-300 rounded-lg bg-white font-bold font-mono-tape text-xs text-slate-900"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button onClick={() => setSelectedCatItem(null)} className="px-3.5 py-2 rounded-full bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer">Retour</button>
+                    <button
+                      onClick={ajouterAuPanier}
+                      disabled={stockRestantSelectedItem <= 0}
+                      className="px-4 py-2 rounded-full text-xs font-bold cursor-pointer transition-all hover:-translate-y-0.5 disabled:opacity-50 flex items-center gap-1.5"
+                      style={{ backgroundColor: GOLD, color: NAVY }}
+                    >
+                      <ShoppingCart size={13} /> Ajouter au panier
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1261,8 +1280,8 @@ export default function VentesPage() {
         </div>
       )}
 
-      {/* MODAL FACTURE — en-tête sticky (les boutons restent toujours visibles),
-          corps défilant, facture au format proche A4 pour un rendu "page entière" harmonisé */}
+      {/* MODAL FACTURE — barre d'actions fixe, corps défilant, facture au format A4
+          avec filigrane, signature + cachet agrandis et centrés, le tout responsive */}
       {selectedVente && (() => {
         let total = selectedVente.montant_total || 0;
         let avance = selectedVente.avance || 0;
@@ -1274,13 +1293,13 @@ export default function VentesPage() {
         const dateFormatted = selectedVente.created_at ? new Date(selectedVente.created_at).toLocaleDateString('fr-FR') : new Date().toLocaleDateString('fr-FR');
 
         return (
-          <div onClick={() => setSelectedVente(null)} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div onClick={() => setSelectedVente(null)} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50">
             <div
               onClick={(e) => e.stopPropagation()}
               className="bg-white rounded-2xl max-w-3xl w-full shadow-2xl relative border border-slate-200 font-body flex flex-col max-h-[92vh] print:max-h-none"
             >
               {/* BARRE D'ACTIONS — fixe en haut, ne défile jamais hors de vue */}
-              <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 print:hidden shrink-0 bg-white rounded-t-2xl">
+              <div className="flex justify-between items-center px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 print:hidden shrink-0 bg-white rounded-t-2xl">
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     onClick={() => handleDownloadPDF(selectedVente)}
@@ -1312,7 +1331,7 @@ export default function VentesPage() {
               </div>
 
               {/* CORPS DÉFILANT — la facture reste toujours accessible même sur petit écran */}
-              <div className="overflow-y-auto p-6 print:overflow-visible print:p-0">
+              <div className="overflow-y-auto p-3 sm:p-6 print:overflow-visible print:p-0">
                 <div
                   ref={invoiceRef}
                   style={{ aspectRatio: '210 / 297', borderColor: `${NAVY}1A` }}
@@ -1332,10 +1351,10 @@ export default function VentesPage() {
                   </div>
 
                   {/* BANDEAU D'EN-TÊTE */}
-                  <div className="px-8 pt-8 pb-6 shrink-0" style={{ backgroundColor: NAVY }}>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h2 className="font-display italic font-semibold text-3xl" style={{ color: '#FFFFFF' }}>Ousmane Design</h2>
+                  <div className="relative px-5 sm:px-8 pt-6 sm:pt-8 pb-5 sm:pb-6 shrink-0" style={{ backgroundColor: NAVY, zIndex: 1 }}>
+                    <div className="flex flex-wrap justify-between items-start gap-3">
+                      <div className="min-w-0">
+                        <h2 className="font-display italic font-semibold text-2xl sm:text-3xl break-words" style={{ color: '#FFFFFF' }}>Ousmane Design</h2>
                         <p className="text-[10px] font-bold uppercase tracking-[0.2em] mt-1.5" style={{ color: GOLD }}>
                           Création & Couture Contemporaine
                         </p>
@@ -1358,14 +1377,14 @@ export default function VentesPage() {
                     </div>
                   </div>
 
-                  <div className="stitch-line shrink-0" />
+                  <div className="stitch-line shrink-0 relative" style={{ zIndex: 1 }} />
 
                   {/* CORPS — s'étire pour occuper la page, le total est poussé vers le bas */}
-                  <div className="flex-1 px-8 py-7 flex flex-col gap-6">
-                    <div className="grid grid-cols-2 gap-6 text-xs shrink-0">
+                  <div className="relative flex-1 px-5 sm:px-8 py-5 sm:py-7 flex flex-col gap-5 sm:gap-6 min-w-0" style={{ zIndex: 1 }}>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 text-xs shrink-0">
                       <div className="border-l-2 pl-3.5" style={{ borderColor: GOLD }}>
                         <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Facturé à</p>
-                        <p className="font-display font-semibold text-slate-900 text-base mt-1">{selectedVente.client_nom}</p>
+                        <p className="font-display font-semibold text-slate-900 text-base mt-1 break-words">{selectedVente.client_nom}</p>
                         <p className="text-slate-500 mt-0.5">Tél : {selectedVente.client_tel || '-'}</p>
                       </div>
                       <div className="border-l-2 pl-3.5" style={{ borderColor: NAVY }}>
@@ -1380,24 +1399,26 @@ export default function VentesPage() {
                     </div>
 
                     <div className="rounded-lg overflow-hidden border shrink-0" style={{ borderColor: '#E2E8F0' }}>
-                      <table className="w-full text-left text-xs">
-                        <thead style={{ backgroundColor: NAVY }}>
-                          <tr className="text-white uppercase text-[10px]">
-                            <th className="p-3 font-bold">Désignation</th>
-                            <th className="p-3 font-bold text-center">Qté</th>
-                            <th className="p-3 font-bold text-right">Prix Unitaire</th>
-                            <th className="p-3 font-bold text-right">Total</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          <tr>
-                            <td className="p-3 font-medium text-slate-800">{getItemName(selectedVente)}</td>
-                            <td className="p-3 text-center font-mono-tape font-bold text-slate-700">{qte}</td>
-                            <td className="p-3 text-right font-mono-tape text-slate-700">{formatAmount(pu)} FCFA</td>
-                            <td className="p-3 text-right font-mono-tape font-bold text-slate-900">{formatAmount(total)} FCFA</td>
-                          </tr>
-                        </tbody>
-                      </table>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs min-w-[420px]">
+                          <thead style={{ backgroundColor: NAVY }}>
+                            <tr className="text-white uppercase text-[10px]">
+                              <th className="p-3 font-bold">Désignation</th>
+                              <th className="p-3 font-bold text-center">Qté</th>
+                              <th className="p-3 font-bold text-right">Prix Unitaire</th>
+                              <th className="p-3 font-bold text-right">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            <tr>
+                              <td className="p-3 font-medium text-slate-800 break-words">{getItemName(selectedVente)}</td>
+                              <td className="p-3 text-center font-mono-tape font-bold text-slate-700">{qte}</td>
+                              <td className="p-3 text-right font-mono-tape text-slate-700">{formatAmount(pu)} FCFA</td>
+                              <td className="p-3 text-right font-mono-tape font-bold text-slate-900">{formatAmount(total)} FCFA</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
 
                     {selectedVente.observations && (
@@ -1411,7 +1432,7 @@ export default function VentesPage() {
                     <div className="flex-1" />
 
                     <div className="flex justify-end shrink-0">
-                      <div className="w-72 rounded-xl p-4 space-y-2" style={{ backgroundColor: '#F8FAFC', border: `1px solid ${NAVY}1A` }}>
+                      <div className="w-full sm:w-72 rounded-xl p-4 space-y-2" style={{ backgroundColor: '#F8FAFC', border: `1px solid ${NAVY}1A` }}>
                         <div className="flex justify-between text-xs text-slate-600">
                           <span>Montant Total</span>
                           <strong className="font-mono-tape text-slate-900">{formatAmount(total)} FCFA</strong>
@@ -1431,26 +1452,29 @@ export default function VentesPage() {
                     </div>
                   </div>
 
-                  {/* PIED DE PAGE */}
-                  <div className="relative px-8 pb-8 pt-2 shrink-0" style={{ zIndex: 1 }}>
-                    <div className="stitch-line mb-6" />
+                  {/* PIED DE PAGE — signature + cachet, agrandis et centrés (pas de ligne "Signature du client") */}
+                  <div className="relative px-5 sm:px-8 pb-6 sm:pb-8 pt-2 shrink-0" style={{ zIndex: 1 }}>
+                    <div className="stitch-line mb-5 sm:mb-6" />
                     <p className="text-center italic font-display text-xs text-slate-400 mb-4">
                       Merci d'avoir choisi Ousmane Design pour votre élégance.
                     </p>
-                    <div className="flex flex-col items-center gap-1.5 text-[10px] text-slate-400 uppercase font-bold text-center border-t pt-3" style={{ borderColor: '#E2E8F0' }}>
-                      <div className="relative h-24 flex items-center justify-center mb-1">
+                    <div
+                      className="flex flex-col items-center gap-1.5 text-[10px] text-slate-400 uppercase font-bold text-center border-t pt-3"
+                      style={{ borderColor: '#E2E8F0' }}
+                    >
+                      <div className="relative h-20 sm:h-24 flex items-center justify-center mb-1">
                         {/* Cachet, légèrement en arrière-plan */}
                         <img
                           src="/cachet-od.png"
                           alt="Cachet Ousmane Design"
-                          className="absolute h-24 w-24 object-contain opacity-90"
+                          className="absolute h-20 w-20 sm:h-24 sm:w-24 object-contain opacity-90"
                           style={{ left: '50%', transform: 'translateX(-60%) rotate(-6deg)' }}
                         />
                         {/* Signature, superposée au-dessus du cachet */}
                         <img
                           src="/signature.png"
                           alt="Signature Ousmane Design"
-                          className="relative h-16 object-contain"
+                          className="relative h-14 sm:h-16 object-contain"
                           style={{ transform: 'translateX(25%)' }}
                         />
                       </div>
