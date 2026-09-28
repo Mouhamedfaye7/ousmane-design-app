@@ -19,6 +19,7 @@ interface Client {
   tour_bras?: number | string;
   poignet?: number | string;
   longueur_haut?: number | string;
+  grand_boubou?: number | string;
   ceinture?: number | string;
   hanche?: number | string;
   tour_ventre?: number | string;
@@ -94,7 +95,7 @@ export default function ClientsPage() {
 
     const numericFields: (keyof Client)[] = [
       'cou', 'epaule', 'poitrine', 'longueur_bras', 'tour_bras',
-      'poignet', 'longueur_haut', 'ceinture', 'hanche', 'tour_ventre',
+      'poignet', 'longueur_haut', 'grand_boubou', 'ceinture', 'hanche', 'tour_ventre',
       'longueur_pantalon', 'tour_cuisse', 'tour_cheville'
     ];
 
@@ -192,6 +193,7 @@ export default function ClientsPage() {
     if (selectedClient.poitrine) msg += `- Poitrine: ${selectedClient.poitrine} cm\n`;
     if (selectedClient.longueur_bras) msg += `- Long. Bras: ${selectedClient.longueur_bras} cm\n`;
     if (selectedClient.longueur_haut) msg += `- Long. Haut: ${selectedClient.longueur_haut} cm\n`;
+    if (selectedClient.grand_boubou) msg += `- Grand Boubou: ${selectedClient.grand_boubou} cm\n`;
     if (selectedClient.ceinture) msg += `- Ceinture/Taille: ${selectedClient.ceinture} cm\n`;
     if (selectedClient.hanche) msg += `- Hanche: ${selectedClient.hanche} cm\n`;
     if (selectedClient.tour_ventre) msg += `- Tour de Ventre: ${selectedClient.tour_ventre} cm\n`;
@@ -226,6 +228,7 @@ export default function ClientsPage() {
     { label: 'Tour de Bras (cm)', shortLabel: 'Tour Bras', key: 'tour_bras' },
     { label: 'Poignet (cm)', shortLabel: 'Poignet', key: 'poignet' },
     { label: 'Longueur Boubou/Haut (cm)', shortLabel: 'Long. Haut', key: 'longueur_haut' },
+    { label: 'Grand Boubou (cm)', shortLabel: 'Grand Boubou', key: 'grand_boubou' },
     { label: 'Ceinture/Taille (cm)', shortLabel: 'Ceinture', key: 'ceinture' },
     { label: 'Hanche (cm)', shortLabel: 'Hanche', key: 'hanche' },
     { label: 'Tour de Ventre (cm)', shortLabel: 'T. Ventre', key: 'tour_ventre' },
@@ -304,7 +307,7 @@ export default function ClientsPage() {
   });
 
   const mesureGroups: Array<{ title: string; keys: (keyof Client)[] }> = [
-    { title: 'Haut du corps', keys: ['cou', 'epaule', 'poitrine', 'longueur_bras', 'tour_bras', 'poignet', 'longueur_haut'] },
+    { title: 'Haut du corps', keys: ['cou', 'epaule', 'poitrine', 'longueur_bras', 'tour_bras', 'poignet', 'longueur_haut', 'grand_boubou'] },
     { title: 'Bas du corps', keys: ['ceinture', 'hanche', 'tour_ventre', 'longueur_pantalon', 'tour_cuisse', 'tour_cheville'] }
   ];
   const fieldByKey = Object.fromEntries(mesureFields.map(f => [f.key, f])) as Record<keyof Client, typeof mesureFields[number]>;
