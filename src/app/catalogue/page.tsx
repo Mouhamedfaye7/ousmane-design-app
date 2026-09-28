@@ -788,7 +788,7 @@ export default function CataloguePretAPorterPage() {
   );
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#F5F8FC' }}>
+    <div className="min-h-screen" style={{ backgroundColor: '#F5F8FC', color: '#0F172A' }}>
       <style jsx global>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
         .font-display { font-family: 'Fraunces', ui-serif, Georgia, serif; }
