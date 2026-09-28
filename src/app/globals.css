@@ -24,3 +24,14 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* L'application est conçue en thème clair (fond blanc / bandeaux navy).
+   Sans cette règle, le mode sombre du système rend le texte hérité quasi blanc
+   (labels, champs, selects) sur des cartes blanches, donc illisible. */
+:root {
+  color-scheme: light;
+}
+body {
+  color: #0F172A;
+  background: #F5F8FC;
+}
