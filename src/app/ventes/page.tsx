@@ -111,6 +111,9 @@ export default function VentesPage() {
   // État pour piloter la séquence "PDF -> WhatsApp"
   const [pendingWhatsApp, setPendingWhatsApp] = useState<Vente | null>(null);
 
+  // Id de la vente en cours de correction (mode édition). Null = création d'une nouvelle vente.
+  const [editingVenteId, setEditingVenteId] = useState<string | null>(null);
+
   const invoiceRef = useRef<HTMLDivElement>(null);
 
   const [formData, setFormData] = useState({
@@ -196,9 +199,11 @@ export default function VentesPage() {
   const closeVenteForm = () => {
     setShowAddModal(false);
     setSelectedCatalogueDetails([]);
+    setEditingVenteId(null);
   };
 
   const handleOpenVenteLiberale = () => {
+    setEditingVenteId(null);
     setSelectedCommandesDetails([]);
     setSelectedCatalogueDetails([]);
     setPanier([]);
@@ -213,6 +218,36 @@ export default function VentesPage() {
       prix_unitaire: '',
       avance: '',
       observations: ''
+    });
+    setShowAddModal(true);
+  };
+
+  // --- OUVRE LE FORMULAIRE EN MODE "CORRECTION" POUR UNE VENTE DÉJÀ ENREGISTRÉE
+  // (ex: le client revient régler le reste de sa facture catalogue/boutique) ---
+  const handleOpenEditVente = (v: Vente) => {
+    let total = v.montant_total || 0;
+    let avance = v.avance || 0;
+    if (total > 0 && total < 1000) total *= 1000;
+    if (avance > 0 && avance < 1000) avance *= 1000;
+    const qte = v.quantite || 1;
+    const pu = v.prix_unitaire && v.prix_unitaire > 0 ? v.prix_unitaire : (qte > 0 ? total / qte : total);
+
+    setEditingVenteId(v.id || null);
+    setSelectedCommandesIds([]);
+    setSelectedCommandesDetails([]);
+    setSelectedCatalogueDetails([]);
+    setPanier([]);
+    setFormData({
+      commande_ids: [],
+      client_nom: v.client_nom || '',
+      client_tel: v.client_tel || '',
+      mode_commande: v.mode_commande || 'Vente Libérale',
+      mode_paiement: v.mode_paiement || 'Espèces',
+      designation: getItemName(v),
+      quantite: qte.toString(),
+      prix_unitaire: pu.toString(),
+      avance: avance.toString(),
+      observations: v.observations || ''
     });
     setShowAddModal(true);
   };
@@ -244,6 +279,7 @@ export default function VentesPage() {
     const selectedCmds = commandesPending.filter(c => selectedCommandesIds.includes(c.id));
     if (selectedCmds.length === 0) return;
 
+    setEditingVenteId(null);
     setSelectedCatalogueDetails([]);
     setPanier([]);
 
@@ -376,6 +412,7 @@ export default function VentesPage() {
       })
       .join(' | ');
 
+    setEditingVenteId(null);
     setSelectedCommandesDetails([]);
     setSelectedCatalogueDetails(panier);
     setFormData({
@@ -417,59 +454,71 @@ export default function VentesPage() {
       observations: formData.observations
     };
 
-    const { error } = await supabase.from('ventes').insert([payload]);
+    if (editingVenteId) {
+      // MODE CORRECTION : on met à jour la vente existante (ex: encaissement du reste)
+      // sans toucher au stock catalogue ni au statut des commandes.
+      const { error } = await supabase.from('ventes').update(payload).eq('id', editingVenteId);
+      if (error) {
+        console.error('Erreur Supabase mise à jour Vente:', error);
+        alert('Erreur lors de la mise à jour de la facture. Veuillez réessayer.');
+        return;
+      }
+    } else {
+      const { error } = await supabase.from('ventes').insert([payload]);
 
-    if (error) {
-      console.error('Erreur Supabase Ventes:', error);
-      const fallbackPayload = {
-        client_nom: formData.client_nom,
-        client_tel: formData.client_tel,
-        montant_total: montantTotalCalcul,
-        avance: avanceNum,
-        observations: `[${formData.designation}] Qté: ${qtyNum} x ${puNum} FCFA - Reste: ${resteCalcul} FCFA | ${formData.observations}`.trim()
-      };
-      await supabase.from('ventes').insert([fallbackPayload]);
-    }
+      if (error) {
+        console.error('Erreur Supabase Ventes:', error);
+        const fallbackPayload = {
+          client_nom: formData.client_nom,
+          client_tel: formData.client_tel,
+          montant_total: montantTotalCalcul,
+          avance: avanceNum,
+          observations: `[${formData.designation}] Qté: ${qtyNum} x ${puNum} FCFA - Reste: ${resteCalcul} FCFA | ${formData.observations}`.trim()
+        };
+        await supabase.from('ventes').insert([fallbackPayload]);
+      }
 
-    // Vente issue du panier catalogue : on décrémente le stock et on trace un mouvement
-    // de sortie pour CHAQUE article retenu (avec sa propre quantité).
-    if (selectedCatalogueDetails.length > 0) {
-      for (const item of selectedCatalogueDetails) {
-        const { data: catItem } = await supabase.from('catalogue').select('quantite_stock, nom').eq('id', item.id).single();
-        if (catItem) {
-          const nouveauStock = Math.max(0, Number(catItem.quantite_stock) - item.quantite);
-          const updatePayload: { quantite_stock: number; statut?: string } = { quantite_stock: nouveauStock };
-          if (nouveauStock === 0) {
-            updatePayload.statut = 'Vendu';
+      // Vente issue du panier catalogue : on décrémente le stock et on trace un mouvement
+      // de sortie pour CHAQUE article retenu (avec sa propre quantité).
+      if (selectedCatalogueDetails.length > 0) {
+        for (const item of selectedCatalogueDetails) {
+          const { data: catItem } = await supabase.from('catalogue').select('quantite_stock, nom').eq('id', item.id).single();
+          if (catItem) {
+            const nouveauStock = Math.max(0, Number(catItem.quantite_stock) - item.quantite);
+            const updatePayload: { quantite_stock: number; statut?: string } = { quantite_stock: nouveauStock };
+            if (nouveauStock === 0) {
+              updatePayload.statut = 'Vendu';
+            }
+            await supabase.from('catalogue').update(updatePayload).eq('id', item.id);
+
+            await supabase.from('mouvements_stock').insert([{
+              produit_id: item.id,
+              produit_nom: catItem.nom || item.nom,
+              type: 'sortie',
+              quantite: item.quantite,
+              motif: `Vente catalogue - ${formData.client_nom}`
+            }]);
           }
-          await supabase.from('catalogue').update(updatePayload).eq('id', item.id);
+        }
+      }
 
-          await supabase.from('mouvements_stock').insert([{
-            produit_id: item.id,
-            produit_nom: catItem.nom || item.nom,
-            type: 'sortie',
-            quantite: item.quantite,
-            motif: `Vente catalogue - ${formData.client_nom}`
-          }]);
+      if (formData.commande_ids && formData.commande_ids.length > 0) {
+        for (const cmdId of formData.commande_ids) {
+          const cmdOriginal = commandesPending.find(c => c.id === cmdId);
+          const cmdTotal = normalizeCmdAmount(cmdOriginal?.montant_total);
+          // On marque la commande Livrée (payée intégralement) pour qu'elle
+          // reste visible et cohérente dans le Kanban et les statistiques.
+          await supabase.from('commandes').update({
+            statut: 'Livrée',
+            avance: cmdTotal,
+            reste: 0
+          }).eq('id', cmdId);
         }
       }
     }
 
-    if (formData.commande_ids && formData.commande_ids.length > 0) {
-      for (const cmdId of formData.commande_ids) {
-        const cmdOriginal = commandesPending.find(c => c.id === cmdId);
-        const cmdTotal = normalizeCmdAmount(cmdOriginal?.montant_total);
-        // On marque la commande Livrée (payée intégralement) pour qu'elle
-        // reste visible et cohérente dans le Kanban et les statistiques.
-        await supabase.from('commandes').update({
-          statut: 'Livrée',
-          avance: cmdTotal,
-          reste: 0
-        }).eq('id', cmdId);
-      }
-    }
-
     setShowAddModal(false);
+    setEditingVenteId(null);
     setSelectedCommandesIds([]);
     setSelectedCommandesDetails([]);
     setSelectedCatalogueDetails([]);
@@ -752,6 +801,7 @@ export default function VentesPage() {
                   if (total > 0 && total < 1000) total = total * 1000;
                   if (avance > 0 && avance < 1000) avance = avance * 1000;
                   const reste = v.reste !== undefined ? v.reste : (total - avance);
+                  const hasReste = reste > 0;
 
                   return (
                     <tr key={v.id} className="hover:bg-[#EAF1FB]/50 transition-colors">
@@ -770,6 +820,14 @@ export default function VentesPage() {
                             title="Voir / Imprimer Facture"
                           >
                             Facture
+                          </button>
+                          <button
+                            onClick={() => handleOpenEditVente(v)}
+                            className="p-1.5 rounded-full transition-colors cursor-pointer text-white"
+                            style={{ backgroundColor: hasReste ? ORANGE : NAVY }}
+                            title={hasReste ? "Corriger la facture / Encaisser le reste" : "Corriger la facture"}
+                          >
+                            <Pencil size={15} />
                           </button>
                           <button
                             onClick={() => handleSendWhatsAppInvoice(v)}
@@ -1132,20 +1190,29 @@ export default function VentesPage() {
         </div>
       )}
 
-      {/* MODAL FORMULAIRE DE VENTE */}
+      {/* MODAL FORMULAIRE DE VENTE / CORRECTION */}
       {showAddModal && (
         <div onClick={closeVenteForm} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
           <div onClick={(e) => e.stopPropagation()} className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl relative border border-slate-200 text-slate-900 font-body">
             <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
               <h2 className="font-display italic font-semibold text-lg" style={{ color: NAVY }}>
-                {formData.commande_ids.length > 0
-                  ? 'Solder & Générer Facture'
-                  : selectedCatalogueDetails.length > 0
-                    ? 'Facture Catalogue'
-                    : formData.mode_commande === 'Vente Libérale' ? 'Nouvelle Vente Libérale' : 'Vente Catalogue'}
+                {editingVenteId
+                  ? 'Corriger la Facture / Encaisser un Paiement'
+                  : formData.commande_ids.length > 0
+                    ? 'Solder & Générer Facture'
+                    : selectedCatalogueDetails.length > 0
+                      ? 'Facture Catalogue'
+                      : formData.mode_commande === 'Vente Libérale' ? 'Nouvelle Vente Libérale' : 'Vente Catalogue'}
               </h2>
               <button onClick={closeVenteForm} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X size={20} /></button>
             </div>
+
+            {editingVenteId && (
+              <div className="mb-4 rounded-lg p-3 text-[11px] font-semibold" style={{ backgroundColor: '#EAF1FB', color: NAVY }}>
+                Mode correction : modifiez le <strong>Montant Encaissé</strong> ci-dessous (ou tout autre champ) puis validez pour mettre à jour cette facture existante.
+              </div>
+            )}
+
             <form onSubmit={handleCreateVente} className="space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1263,7 +1330,9 @@ export default function VentesPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Montant Encaissé</label>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Montant Encaissé{editingVenteId ? ' (modifiez pour régler le reste)' : ''}
+                  </label>
                   <input type="number" min="0" value={formData.avance} onChange={(e) => setFormData({ ...formData, avance: e.target.value })} className="font-mono-tape w-full p-2.5 border border-slate-300 rounded-lg bg-white text-emerald-600 font-bold outline-none focus:ring-2" style={{ '--tw-ring-color': GOLD } as React.CSSProperties} />
                 </div>
                 <div>
@@ -1273,7 +1342,9 @@ export default function VentesPage() {
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={closeVenteForm} className="px-4 py-2 rounded-full bg-slate-200 font-bold cursor-pointer">Annuler</button>
-                <button type="submit" className="px-4 py-2 rounded-full font-bold cursor-pointer transition-all hover:-translate-y-0.5" style={{ backgroundColor: GOLD, color: NAVY }}>Enregistrer la vente</button>
+                <button type="submit" className="px-4 py-2 rounded-full font-bold cursor-pointer transition-all hover:-translate-y-0.5" style={{ backgroundColor: GOLD, color: NAVY }}>
+                  {editingVenteId ? 'Enregistrer les modifications' : 'Enregistrer la vente'}
+                </button>
               </div>
             </form>
           </div>
@@ -1322,6 +1393,18 @@ export default function VentesPage() {
                     className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-full flex items-center gap-1.5 cursor-pointer shadow-xs transition-all hover:-translate-y-0.5"
                   >
                     <Send size={15} /> WhatsApp
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const v = selectedVente;
+                      setSelectedVente(null);
+                      if (v) handleOpenEditVente(v);
+                    }}
+                    className="font-bold text-xs px-3.5 py-2 rounded-full flex items-center gap-1.5 cursor-pointer shadow-xs transition-all hover:-translate-y-0.5 text-white"
+                    style={{ backgroundColor: reste > 0 ? ORANGE : NAVY }}
+                  >
+                    <Pencil size={15} /> Corriger
                   </button>
                 </div>
 
