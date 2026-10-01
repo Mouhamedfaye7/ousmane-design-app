@@ -143,19 +143,25 @@ export default function StatistiquesPage() {
   };
 
   // --- HELPER : CALCUL FINANCIER PRÉCIS (commandes sur-mesure) ---
+  // Une commande "Livrée" (ou "Soldée") est considérée comme intégralement réglée :
+  // avance = montant total ET reste = 0, quelle que soit la valeur stockée en base.
+  // Cela évite d'avoir à corriger manuellement l'acompte après la livraison.
   const getCalculatedFinancials = (c: Commande) => {
     const tot = Number(c.montant_total) || 0;
     let av = Number(c.avance ?? c.acompte) || 0;
+    let reste: number;
 
-    if (
-      c.statut === 'Livrée' ||
-      c.statut === 'Soldée' ||
-      (c.reste !== undefined && Number(c.reste) === 0 && tot > 0)
-    ) {
+    const estLivreeOuSoldee = c.statut === 'Livrée' || c.statut === 'Soldée';
+
+    if (estLivreeOuSoldee) {
       av = tot;
+      reste = 0;
+    } else if (c.reste !== undefined) {
+      reste = Math.max(0, Number(c.reste));
+    } else {
+      reste = Math.max(0, tot - av);
     }
 
-    const reste = c.reste !== undefined ? Math.max(0, Number(c.reste)) : Math.max(0, tot - av);
     return { tot, av, reste };
   };
 
