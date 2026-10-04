@@ -15,7 +15,9 @@ import {
   FileDown,
   CalendarRange,
   Loader2,
-  BarChart3
+  BarChart3,
+  MapPin,
+  Phone
 } from 'lucide-react';
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis,
@@ -808,40 +810,46 @@ export default function StatistiquesPage() {
       >
         {/* Bloc En-tête + KPI de la période */}
         <div className="pdf-block bg-white p-6 space-y-4">
-          <div className="flex justify-between items-start border-b-2 border-amber-900/20 pb-4">
-            <div>
-              <h1 className="text-2xl font-serif font-extrabold text-amber-900 tracking-wide">Ousmane Design</h1>
-              <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">Création & Couture Contemporaine</p>
-              <p className="text-xs text-slate-600 mt-1">Hann Maristes, Dakar, Sénégal · 77 646 21 02 / 70 348 26 82</p>
+          <div className="flex justify-between items-start pb-5 px-2 pt-2 -mx-6 -mt-6 mb-1" style={{ backgroundColor: NAVY }}>
+            <div className="pl-6 pt-6">
+              <h1 className="text-2xl font-serif italic font-extrabold tracking-wide" style={{ color: '#FFFFFF' }}>Ousmane Design</h1>
+              <p className="text-[10px] font-bold uppercase tracking-wider mt-1" style={{ color: GOLD }}>Création & Couture Contemporaine</p>
+              <div className="mt-2.5 space-y-0.5 text-[11px]" style={{ color: 'rgba(255,255,255,0.8)' }}>
+                <p className="flex items-center gap-1.5"><MapPin size={11} style={{ color: GOLD }} /> Hann Maristes, Dakar, Sénégal</p>
+                <p className="flex items-center gap-1.5"><Phone size={11} style={{ color: GOLD }} /> 77 646 21 02 / 70 348 26 82</p>
+              </div>
             </div>
-            <div className="text-right">
-              <span className="inline-block bg-amber-900 text-white text-xs font-bold px-3 py-1 rounded-md uppercase tracking-wider">
+            <div className="text-right pr-6 pt-6">
+              <span
+                className="inline-block text-[10px] font-bold px-3.5 py-1.5 rounded-full uppercase tracking-wider"
+                style={{ backgroundColor: GOLD, color: NAVY }}
+              >
                 Bilan {activePeriodDef.label}
               </span>
-              <p className="text-xs font-semibold text-slate-500 mt-2">Période : {dateDebutPeriode} au {dateFinPeriode}</p>
-              <p className="text-[10px] text-slate-400">Généré le {dateGeneration}</p>
+              <p className="text-[11px] font-semibold mt-2.5" style={{ color: 'rgba(255,255,255,0.8)' }}>Période : {dateDebutPeriode} au {dateFinPeriode}</p>
+              <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.55)' }}>Généré le {dateGeneration}</p>
             </div>
           </div>
 
           <div className="grid grid-cols-3 gap-3 text-xs">
-            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-              <p className="text-slate-500 font-medium">Chiffre d'Affaires</p>
-              <p className="text-base font-bold text-slate-900 mt-1">{formatAmount(bilanCaTotal)} F</p>
+            <div className="p-3 rounded-lg border" style={{ backgroundColor: '#EAF1FB', borderColor: `${NAVY}22` }}>
+              <p className="font-medium" style={{ color: NAVY, opacity: 0.75 }}>Chiffre d'Affaires</p>
+              <p className="text-base font-bold mt-1" style={{ color: NAVY }}>{formatAmount(bilanCaTotal)} F</p>
             </div>
             <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-100">
               <p className="text-emerald-700 font-medium">Total Encaissé</p>
               <p className="text-base font-bold text-emerald-700 mt-1">{formatAmount(bilanAvanceTotal)} F</p>
             </div>
-            <div className="bg-amber-50 p-3 rounded-lg border border-amber-100">
-              <p className="text-amber-800 font-medium">Reste à Recouvrer</p>
-              <p className="text-base font-bold text-amber-800 mt-1">{formatAmount(bilanResteTotal)} F</p>
+            <div className="p-3 rounded-lg border" style={{ backgroundColor: '#FBEAE3', borderColor: `${ORANGE}33` }}>
+              <p className="font-medium" style={{ color: ORANGE }}>Reste à Recouvrer</p>
+              <p className="text-base font-bold mt-1" style={{ color: ORANGE }}>{formatAmount(bilanResteTotal)} F</p>
             </div>
           </div>
         </div>
 
         {/* Bloc Graphiques (propres à la période sélectionnée) */}
         <div className="pdf-block bg-white p-6 space-y-4">
-          <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5">
+          <h2 className="text-sm font-bold text-slate-900 border-b-2 pb-1.5" style={{ borderColor: `${GOLD}55` }}>
             Aperçu Visuel de la Période
           </h2>
           <div className="grid grid-cols-2 gap-4">
@@ -898,7 +906,7 @@ export default function StatistiquesPage() {
         {/* Blocs Commandes de la période */}
         {commandesChunks.length === 0 ? (
           <div className="pdf-block bg-white p-6">
-            <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2">
+            <h2 className="text-sm font-bold text-slate-900 border-b-2 pb-1.5 mb-2" style={{ borderColor: `${GOLD}55` }}>
               Commandes Sur-Mesure de la Période (0)
             </h2>
             <p className="text-[10px] text-slate-400 italic">Aucune commande sur cette période.</p>
@@ -907,12 +915,12 @@ export default function StatistiquesPage() {
           commandesChunks.map((chunk, idx) => (
             <div key={`cmd-chunk-${idx}`} className="pdf-block bg-white p-6">
               {idx === 0 && (
-                <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2">
+                <h2 className="text-sm font-bold text-slate-900 border-b-2 pb-1.5 mb-2" style={{ borderColor: `${GOLD}55` }}>
                   Commandes Sur-Mesure de la Période ({bilanCommandes.length})
                 </h2>
               )}
               <table className="w-full text-left text-[10px]">
-                <thead className="bg-amber-900 text-white font-bold uppercase">
+                <thead className="text-white font-bold uppercase" style={{ backgroundColor: NAVY }}>
                   <tr>
                     <th className="p-1.5">Code</th>
                     <th className="p-1.5">Client</th>
@@ -934,7 +942,7 @@ export default function StatistiquesPage() {
                         <td className="p-1.5">{c.statut || 'Reçue'}</td>
                         <td className="p-1.5 text-right">{formatAmount(tot)} F</td>
                         <td className="p-1.5 text-right text-emerald-700">{formatAmount(av)} F</td>
-                        <td className="p-1.5 text-right text-amber-700">{formatAmount(reste)} F</td>
+                        <td className="p-1.5 text-right" style={{ color: ORANGE }}>{formatAmount(reste)} F</td>
                       </tr>
                     );
                   })}
@@ -947,7 +955,7 @@ export default function StatistiquesPage() {
         {/* Blocs Ventes Boutique de la période */}
         {ventesChunks.length === 0 ? (
           <div className="pdf-block bg-white p-6">
-            <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2">
+            <h2 className="text-sm font-bold text-slate-900 border-b-2 pb-1.5 mb-2" style={{ borderColor: `${GOLD}55` }}>
               Ventes Boutique & Catalogue de la Période (0)
             </h2>
             <p className="text-[10px] text-slate-400 italic">Aucune vente boutique sur cette période.</p>
@@ -956,12 +964,12 @@ export default function StatistiquesPage() {
           ventesChunks.map((chunk, idx) => (
             <div key={`vte-chunk-${idx}`} className="pdf-block bg-white p-6">
               {idx === 0 && (
-                <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2">
+                <h2 className="text-sm font-bold text-slate-900 border-b-2 pb-1.5 mb-2" style={{ borderColor: `${GOLD}55` }}>
                   Ventes Boutique & Catalogue de la Période ({bilanVentesBoutique.length})
                 </h2>
               )}
               <table className="w-full text-left text-[10px]">
-                <thead className="bg-amber-900 text-white font-bold uppercase">
+                <thead className="text-white font-bold uppercase" style={{ backgroundColor: NAVY }}>
                   <tr>
                     <th className="p-1.5">Client</th>
                     <th className="p-1.5">Désignation</th>
@@ -981,7 +989,7 @@ export default function StatistiquesPage() {
                         <td className="p-1.5">{v.mode_paiement || 'Espèces'}</td>
                         <td className="p-1.5 text-right">{formatAmount(tot)} F</td>
                         <td className="p-1.5 text-right text-emerald-700">{formatAmount(av)} F</td>
-                        <td className="p-1.5 text-right text-amber-700">{formatAmount(reste)} F</td>
+                        <td className="p-1.5 text-right" style={{ color: ORANGE }}>{formatAmount(reste)} F</td>
                       </tr>
                     );
                   })}
@@ -994,7 +1002,7 @@ export default function StatistiquesPage() {
         {/* Blocs Inventaire du Catalogue (état actuel) */}
         {catalogueChunks.length === 0 ? (
           <div className="pdf-block bg-white p-6">
-            <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2">
+            <h2 className="text-sm font-bold text-slate-900 border-b-2 pb-1.5 mb-2" style={{ borderColor: `${GOLD}55` }}>
               Inventaire du Catalogue — État Actuel (0)
             </h2>
             <p className="text-[10px] text-slate-400 italic">Aucun article dans le catalogue.</p>
@@ -1003,12 +1011,12 @@ export default function StatistiquesPage() {
           catalogueChunks.map((chunk, idx) => (
             <div key={`cat-chunk-${idx}`} className="pdf-block bg-white p-6">
               {idx === 0 && (
-                <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 mb-2">
+                <h2 className="text-sm font-bold text-slate-900 border-b-2 pb-1.5 mb-2" style={{ borderColor: `${GOLD}55` }}>
                   Inventaire du Catalogue — État Actuel ({catalogue.length} article(s), {inventoryTotalStock} unité(s))
                 </h2>
               )}
               <table className="w-full text-left text-[10px]">
-                <thead className="bg-amber-900 text-white font-bold uppercase">
+                <thead className="text-white font-bold uppercase" style={{ backgroundColor: NAVY }}>
                   <tr>
                     <th className="p-1.5">Article</th>
                     <th className="p-1.5">Catégorie</th>
@@ -1036,17 +1044,41 @@ export default function StatistiquesPage() {
         {/* Bloc Total du stock */}
         {catalogueChunks.length > 0 && (
           <div className="pdf-block bg-white p-6">
-            <div className="flex justify-end items-center gap-3 text-xs font-bold pt-2 border-t-2 border-amber-900/20">
+            <div className="flex justify-end items-center gap-3 text-xs font-bold pt-3 border-t-2" style={{ borderColor: `${GOLD}55` }}>
               <span className="text-slate-700">Valeur totale du stock :</span>
-              <span className="text-amber-800">{formatAmount(inventoryTotalValue)} F</span>
+              <span style={{ color: NAVY }}>{formatAmount(inventoryTotalValue)} F</span>
             </div>
           </div>
         )}
 
-        {/* Bloc Pied de page */}
+        {/* Bloc Pied de page — signature et cachet superposés, même esprit que les factures */}
         <div className="pdf-block bg-white p-6">
-          <div className="text-[9px] text-slate-400 text-center pt-2 border-t border-slate-200">
-            Document généré automatiquement par l'outil de gestion Ousmane Design — {dateGeneration}
+          <div className="pt-2 border-t-2" style={{ borderColor: `${GOLD}55` }}>
+            <p className="text-center italic font-serif text-xs text-slate-400 mt-4 mb-3">
+              Document confidentiel — bilan de gestion Ousmane Design.
+            </p>
+            <div className="flex flex-col items-center">
+              <div className="relative h-16 w-16 mb-1.5">
+                <img
+                  src="/cachet-od.png"
+                  alt="Cachet Ousmane Design"
+                  className="absolute inset-0 h-16 w-16 object-contain opacity-90"
+                  style={{ transform: 'rotate(-6deg)' }}
+                />
+                <img
+                  src="/signature.png"
+                  alt="Signature Ousmane Design"
+                  className="absolute h-9 object-contain"
+                  style={{ top: '50%', left: '50%', transform: 'translate(-50%, -50%) rotate(-4deg)' }}
+                />
+              </div>
+              <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wide mb-3">
+                Ousmane Design (Signature &amp; Cachet)
+              </p>
+            </div>
+            <p className="text-[9px] text-slate-400 text-center pt-2 border-t border-slate-200">
+              Document généré automatiquement par l'outil de gestion Ousmane Design — {dateGeneration}
+            </p>
           </div>
         </div>
       </div>
