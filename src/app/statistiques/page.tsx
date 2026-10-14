@@ -106,6 +106,44 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
+// Filigrane "Ousmane Design" injecté dans chaque bloc du PDF juste avant sa capture,
+// placé derrière le contenu, puis retiré aussitôt après (aucun impact sur l'affichage de la page).
+function ajouterFiligrane(block: HTMLElement): () => void {
+  const ancienPosition = block.style.position;
+  const ancienZIndex = block.style.zIndex;
+  block.style.position = 'relative';
+  block.style.zIndex = '0';
+
+  const hauteur = block.offsetHeight;
+  const repetitions = Math.max(1, Math.round(hauteur / 320));
+  const hauteurZone = hauteur / repetitions;
+  const taillePolice = Math.min(64, Math.max(24, hauteurZone * 0.32));
+
+  const conteneur = document.createElement('div');
+  conteneur.setAttribute('data-filigrane', 'true');
+  conteneur.style.cssText =
+    'position:absolute;top:0;left:0;right:0;bottom:0;overflow:hidden;pointer-events:none;z-index:-1;';
+
+  for (let i = 0; i < repetitions; i++) {
+    const texte = document.createElement('span');
+    texte.textContent = 'Ousmane Design';
+    texte.style.cssText =
+      `position:absolute;left:50%;top:${(i + 0.5) * hauteurZone}px;` +
+      'transform:translate(-50%,-50%) rotate(-24deg);white-space:nowrap;' +
+      "font-family:'Fraunces',ui-serif,Georgia,serif;font-style:italic;font-weight:700;" +
+      `font-size:${taillePolice}px;color:${NAVY};opacity:0.09;`;
+    conteneur.appendChild(texte);
+  }
+
+  block.insertBefore(conteneur, block.firstChild);
+
+  return () => {
+    conteneur.remove();
+    block.style.position = ancienPosition;
+    block.style.zIndex = ancienZIndex;
+  };
+}
+
 export default function StatistiquesPage() {
   const [commandes, setCommandes] = useState<Commande[]>([]);
   const [ventes, setVentes] = useState<VenteRow[]>([]);
@@ -296,11 +334,13 @@ export default function StatistiquesPage() {
     let cursorY = margin;
 
     for (const block of blocks) {
+      const retirerFiligrane = ajouterFiligrane(block);
       const canvas = await html2canvas(block, {
         scale: 2,
         backgroundColor: '#ffffff',
         useCORS: true
       });
+      retirerFiligrane();
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const imgHeight = (canvas.height * usableWidth) / canvas.width;
 
