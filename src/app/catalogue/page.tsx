@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   Trash2, Plus, ArrowLeft, Package, Loader2, Edit3, X, Check,
   Search, ArrowUpCircle, ArrowDownCircle, History, BarChart3, AlertTriangle,
-  Tag, Layers, Wallet, CalendarRange, FileDown
+  Tag, Layers, Wallet, CalendarRange, FileDown, MapPin, Phone
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -1478,8 +1478,8 @@ export default function CataloguePretAPorterPage() {
                   Catalogue Prêt-à-Porter — Inventaire de Stock
                 </p>
                 <div className="mt-4 space-y-1 text-[11px]" style={{ color: 'rgba(255,255,255,0.75)' }}>
-                  <p>Hann Maristes, Dakar, Sénégal</p>
-                  <p>77 646 21 02 / 70 348 26 82</p>
+                  <p className="flex items-center gap-1.5"><MapPin size={11} style={{ color: GOLD }} /> Hann Maristes, Dakar, Sénégal</p>
+                  <p className="flex items-center gap-1.5"><Phone size={11} style={{ color: GOLD }} /> 77 646 21 02 / 70 348 26 82</p>
                 </div>
               </div>
               <div className="text-right">
