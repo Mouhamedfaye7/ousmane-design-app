@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis,
-  Tooltip, Legend, ResponsiveContainer, CartesianGrid, LabelList
+  Tooltip, ResponsiveContainer, CartesianGrid, LabelList
 } from 'recharts';
 import { supabase } from '@/lib/supabase';
 
@@ -810,7 +810,7 @@ export default function StatistiquesPage() {
       >
         {/* Bloc En-tête + KPI de la période */}
         <div className="pdf-block bg-white p-6 space-y-4">
-          <div className="flex justify-between items-start pb-5 px-2 pt-2 -mx-6 -mt-6 mb-1" style={{ backgroundColor: NAVY }}>
+          <div className="flex justify-between items-start pb-6 px-2 pt-2 -mx-6 -mt-6 mb-7" style={{ backgroundColor: NAVY }}>
             <div className="pl-6 pt-6">
               <h1 className="text-2xl font-serif italic font-extrabold tracking-wide" style={{ color: '#FFFFFF' }}>Ousmane Design</h1>
               <p className="text-[10px] font-bold uppercase tracking-wider mt-1" style={{ color: GOLD }}>Création & Couture Contemporaine</p>
@@ -877,11 +877,37 @@ export default function StatistiquesPage() {
                           <Cell key={idx} fill={entry.color} />
                         ))}
                       </Pie>
-                      <Legend verticalAlign="bottom" height={24} wrapperStyle={{ fontSize: 10 }} />
                     </PieChart>
                   </ResponsiveContainer>
                 )}
               </div>
+
+              {pieDataBilan.length > 0 && (
+                <div className="mt-2 space-y-1.5">
+                  {pieDataBilan.map((entry, idx) => {
+                    const pct = bilanCaTotal > 0 ? Math.round((entry.value / bilanCaTotal) * 100) : 0;
+                    return (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between gap-2 text-[10px] rounded-md px-2.5 py-1.5"
+                        style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span
+                            className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
+                            style={{ backgroundColor: entry.color }}
+                          ></span>
+                          <span className="font-semibold text-slate-700">{entry.name}</span>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="font-bold text-slate-900">{formatAmount(entry.value)} F</span>
+                          <span className="font-bold ml-1.5" style={{ color: NAVY }}>({pct}%)</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
             <div>
               <p className="text-[11px] font-semibold text-slate-600 mb-2 text-center">Commandes par Statut</p>
