@@ -14,9 +14,11 @@ import {
   BookOpen,
   BarChart3,
   DollarSign,
-  AlertCircle
+  AlertCircle,
+  ShieldCheck
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/components/AuthProvider';
 
 interface Commande {
   id?: string;
@@ -56,6 +58,7 @@ const isVenteBoutique = (v: Vente) =>
   v.mode_commande !== 'Sur Mesure' && v.mode_commande !== 'Sur Mesure (Groupé)';
 
 export default function Dashboard() {
+  const { role } = useAuth();
   const [totalClients, setTotalClients] = useState<number>(0);
   const [enCoursCount, setEnCoursCount] = useState<number>(0);
   const [pretesCount, setPretesCount] = useState<number>(0);
@@ -235,6 +238,14 @@ export default function Dashboard() {
       desc: "Suivi des acomptes, chiffre d'affaires global et reste à recouvrer.",
       accent: '#B5471A',
       bg: '#FBE6D8'
+    },
+    {
+      href: '/utilisateurs',
+      icon: ShieldCheck,
+      title: 'Utilisateurs & Accès',
+      desc: 'Comptes des postes de travail, profils (gérant, tailleur, caissier) et mots de passe.',
+      accent: '#0F2A52',
+      bg: '#E7ECF5'
     }
   ];
 
@@ -403,7 +414,7 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {modules.map((m, i) => {
+          {modules.filter((m) => m.href !== '/utilisateurs' || role === 'admin').map((m, i) => {
             const Icon = m.icon;
             return (
               <Link

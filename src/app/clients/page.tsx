@@ -6,6 +6,7 @@ import {
   ArrowLeft, Search, Plus, Save, Trash2, Send, Ruler, FileText, Tag as TagIcon, Phone, MapPin, User
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/components/AuthProvider';
 
 interface Client {
   id?: string;
@@ -34,6 +35,7 @@ const GOLD = '#C9A24B';
 const ORANGE = '#C1502E';
 
 export default function ClientsPage() {
+  const { role } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [search, setSearch] = useState('');
@@ -493,13 +495,15 @@ export default function ClientsPage() {
                   <Send size={14} /> WhatsApp
                 </button>
 
-                <button
-                  onClick={handleDeleteClient}
-                  className="p-2.5 text-slate-300 hover:text-rose-600 rounded-full transition-colors cursor-pointer"
-                  title="Supprimer définitivement ce client"
-                >
-                  <Trash2 size={18} />
-                </button>
+                {role !== 'tailleur' && (
+                  <button
+                    onClick={handleDeleteClient}
+                    className="p-2.5 text-slate-300 hover:text-rose-600 rounded-full transition-colors cursor-pointer"
+                    title="Supprimer définitivement ce client"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                )}
 
                 <button
                   onClick={handleSave}

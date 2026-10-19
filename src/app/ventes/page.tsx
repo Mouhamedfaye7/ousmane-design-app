@@ -7,6 +7,7 @@ import {
   X, Download, Trash2, Package, PlusCircle, CheckSquare, Square, Tag, Send, FileText, Pencil, ShoppingCart
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/components/AuthProvider';
 
 interface Vente {
   id?: string;
@@ -80,6 +81,7 @@ const GOLD = '#C9A24B';
 const ORANGE = '#C1502E';
 
 export default function VentesPage() {
+  const { role } = useAuth();
   const [ventes, setVentes] = useState<Vente[]>([]);
   const [commandesPending, setCommandesPending] = useState<Commande[]>([]);
   const [catalogueItems, setCatalogueItems] = useState<CatalogueItem[]>([]);
@@ -836,13 +838,15 @@ export default function VentesPage() {
                           >
                             <Send size={15} />
                           </button>
-                          <button
-                            onClick={() => handleDeleteVente(v.id, v.client_nom)}
-                            className="p-1.5 text-slate-300 hover:text-rose-600 rounded-full transition-colors cursor-pointer"
-                            title="Supprimer la vente"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                          {role !== 'caissier' && (
+                            <button
+                              onClick={() => handleDeleteVente(v.id, v.client_nom)}
+                              className="p-1.5 text-slate-300 hover:text-rose-600 rounded-full transition-colors cursor-pointer"
+                              title="Supprimer la vente"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
