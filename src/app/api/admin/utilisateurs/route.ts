@@ -31,7 +31,7 @@ async function verifierAdmin(req: NextRequest) {
   return { sb, userId: data.user.id };
 }
 
-export async function GET(req: NextRequest) {
+async function lister(req: NextRequest) {
   const ctx = await verifierAdmin(req);
   if (ctx.erreur) return ctx.erreur;
   const { data, error } = await ctx.sb!.from('profils').select('*').order('created_at', { ascending: true });
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ utilisateurs: data });
 }
 
-export async function POST(req: NextRequest) {
+async function creer(req: NextRequest) {
   const ctx = await verifierAdmin(req);
   if (ctx.erreur) return ctx.erreur;
   const sb = ctx.sb!;
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true });
 }
 
-export async function PATCH(req: NextRequest) {
+async function modifier(req: NextRequest) {
   const ctx = await verifierAdmin(req);
   if (ctx.erreur) return ctx.erreur;
   const sb = ctx.sb!;
@@ -105,3 +105,17 @@ export async function PATCH(req: NextRequest) {
 
   return NextResponse.json({ ok: true });
 }
+
+async function proteger(fn: (req: NextRequest) => Promise<Response>, req: NextRequest): Promise<Response> {
+  try {
+    return await fn(req);
+  } catch (e) {
+    console.error('[api/admin/utilisateurs]', e);
+    const m = e instanceof Error ? e.message : String(e);
+    return erreur(`Exception serveur : ${m}`, 500);
+  }
+}
+
+export const GET = (req: NextRequest) => proteger(lister, req);
+export const POST = (req: NextRequest) => proteger(creer, req);
+export const PATCH = (req: NextRequest) => proteger(modifier, req);

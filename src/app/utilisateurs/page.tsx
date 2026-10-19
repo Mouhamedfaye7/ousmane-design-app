@@ -49,8 +49,10 @@ export default function UtilisateursPage() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: corps ? JSON.stringify(corps) : undefined,
     });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json.erreur || 'Erreur serveur.');
+    const texte = await res.text();
+    let json: any = {};
+    try { json = JSON.parse(texte); } catch { /* reponse non JSON */ }
+    if (!res.ok) throw new Error(json.erreur || `Erreur serveur (code ${res.status}) : ${texte.slice(0, 160)}`);
     return json;
   };
 
