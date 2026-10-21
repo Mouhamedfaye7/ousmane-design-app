@@ -315,24 +315,21 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto px-6 pt-14 pb-24 md:pt-16 md:pb-28 relative">
           <div className="rise-in flex flex-col md:flex-row md:items-end md:justify-between gap-8">
             <div>
-              <p
-                className="font-body text-[11px] font-bold tracking-[0.28em] uppercase mb-3"
-                style={{ color: '#E8B84B' }}
-              >
-                Atelier de Haute Couture — Hann Maristes, Dakar
-              </p>
-              <h1
-                className="font-display italic font-semibold leading-[0.95] tracking-tight"
-                style={{ color: '#FFFFFF', fontSize: 'clamp(2.6rem, 6vw, 4.5rem)' }}
-              >
-                Ousmane Design
+              <h1 className="m-0">
+                <span className="sr-only">Ousmane Design — Création &amp; Couture Contemporaine</span>
+                <img
+                  src="/logo-ousmane.png"
+                  alt=""
+                  aria-hidden="true"
+                  draggable={false}
+                  className="block h-auto select-none w-[min(100%,420px)] md:w-[480px]"
+                />
               </h1>
               <p
-                className="font-body text-sm md:text-base mt-4 max-w-md"
+                className="font-body text-sm md:text-base mt-6 max-w-md leading-relaxed"
                 style={{ color: '#FFFFFF', opacity: 0.88 }}
               >
-                Tableau de bord de l'atelier - chaque commande, chaque mesure,
-                chaque paiement, cousu au fil pres.
+                De la prise de mesures à la livraison, pilotez toute la maison d'un seul regard.
               </p>
             </div>
 
