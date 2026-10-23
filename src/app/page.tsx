@@ -252,7 +252,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#0F2A52' }}>
       <style jsx global>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@500&family=Playfair+Display:ital,wght@1,900&family=Space+Grotesk:wght@500;600;700&display=swap');
 
         .font-display { font-family: 'Fraunces', ui-serif, Georgia, serif; }
         .font-body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
@@ -315,15 +315,42 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto px-6 pt-14 pb-24 md:pt-16 md:pb-28 relative">
           <div className="rise-in flex flex-col md:flex-row md:items-end md:justify-between gap-8">
             <div>
-              <h1 className="m-0">
-                <span className="sr-only">Ousmane Design — Création &amp; Couture Contemporaine</span>
-                <img
-                  src="/logo-ousmane.png"
-                  alt=""
-                  aria-hidden="true"
-                  draggable={false}
-                  className="block h-auto select-none w-[min(100%,420px)] md:w-[480px]"
-                />
+              <h1
+                className="m-0 inline-block"
+                style={{
+                  color: '#FFFFFF',
+                  fontSize: 'clamp(3.4rem, 8vw, 6.2rem)',
+                  fontFamily: "'Playfair Display', 'Fraunces', Georgia, serif",
+                  fontStyle: 'italic',
+                  fontWeight: 900,
+                }}
+              >
+                <span className="block whitespace-nowrap" style={{ lineHeight: 0.8, letterSpacing: '-0.01em' }}>
+                  Ousmane
+                </span>
+                <span className="block whitespace-nowrap text-center" style={{ fontSize: '0.676em', lineHeight: 0.856 }}>
+                  Design
+                </span>
+                <span
+                  className="block whitespace-nowrap"
+                  style={{
+                    width: 0,
+                    minWidth: '100%',
+                    fontFamily: "'Montserrat', 'Inter', system-ui, sans-serif",
+                    fontStyle: 'normal',
+                    fontWeight: 500,
+                    fontSize: 'max(9px, 0.146em)',
+                    lineHeight: 1,
+                    marginTop: '1.4em',
+                    letterSpacing: '0.2em',
+                    textAlign: 'justify',
+                    textAlignLast: 'justify',
+                    textTransform: 'uppercase',
+                    color: '#D9BE8C',
+                  }}
+                >
+                  Création &amp; Couture Contemporaine
+                </span>
               </h1>
               <p
                 className="font-body text-sm md:text-base mt-6 max-w-md leading-relaxed"
