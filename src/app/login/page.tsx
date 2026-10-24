@@ -45,20 +45,57 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center p-6" style={{ backgroundColor: NAVY }}>
       <style jsx global>{`
-        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Inter:wght@400;500;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@500&family=Playfair+Display:ital,wght@1,900&display=swap');
         .font-display { font-family: 'Fraunces', ui-serif, Georgia, serif; }
         .font-body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; }
       `}</style>
 
       <div className="w-full max-w-sm font-body">
-        <div className="text-center mb-7">
-          <h1 className="font-display italic font-semibold text-4xl" style={{ color: '#FFFFFF' }}>Ousmane Design</h1>
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] mt-2" style={{ color: GOLD }}>
-            Espace de gestion — Connexion
-          </p>
+        <div className="text-center mb-8">
+          <h1
+            className="m-0 inline-block"
+            style={{
+              color: '#FFFFFF',
+              fontSize: 'clamp(3rem, 13vw, 4.6rem)',
+              fontFamily: "'Playfair Display', 'Fraunces', Georgia, serif",
+              fontStyle: 'italic',
+              fontWeight: 900,
+            }}
+          >
+            <span className="block whitespace-nowrap" style={{ lineHeight: 0.8, letterSpacing: '-0.01em' }}>
+              Ousmane
+            </span>
+            <span className="block whitespace-nowrap text-center" style={{ fontSize: '0.676em', lineHeight: 0.856 }}>
+              Design
+            </span>
+            <span
+              className="block whitespace-nowrap"
+              style={{
+                width: 0,
+                minWidth: '100%',
+                fontFamily: "'Montserrat', 'Inter', system-ui, sans-serif",
+                fontStyle: 'normal',
+                fontWeight: 500,
+                fontSize: 'max(9px, 0.146em)',
+                lineHeight: 1,
+                marginTop: '1.4em',
+                letterSpacing: '0.2em',
+                textAlign: 'justify',
+                textAlignLast: 'justify',
+                textTransform: 'uppercase',
+                color: '#D9BE8C',
+              }}
+            >
+              Création &amp; Couture Contemporaine
+            </span>
+          </h1>
         </div>
 
         <form onSubmit={seConnecter} className="bg-white rounded-2xl p-6 shadow-2xl space-y-4">
+          <p className="text-center text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: NAVY }}>
+            Espace de gestion
+          </p>
+
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">Adresse e-mail</label>
             <div className="relative">
