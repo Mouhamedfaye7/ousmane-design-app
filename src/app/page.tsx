@@ -15,7 +15,8 @@ import {
   BarChart3,
   DollarSign,
   AlertCircle,
-  ShieldCheck
+  ShieldCheck,
+  Wallet
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/AuthProvider';
@@ -238,6 +239,14 @@ export default function Dashboard() {
       desc: "Suivi des acomptes, chiffre d'affaires global et reste à recouvrer.",
       accent: '#B5471A',
       bg: '#FBE6D8'
+    },
+    {
+      href: '/depenses',
+      icon: Wallet,
+      title: 'Dépenses & Bénéfice',
+      desc: 'Ce qui sort, ce qui reste : dépenses du mois, bénéfice net et marge.',
+      accent: '#2E7D5B',
+      bg: '#E2F2EA'
     },
     {
       href: '/utilisateurs',
