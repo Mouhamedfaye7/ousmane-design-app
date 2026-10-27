@@ -417,60 +417,7 @@ export default function CommandesPage() {
 
       
       {/* ========== BARRE PLANNING ========== */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 -mt-6 mb-6 relative z-10">
-        <div className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.15)] p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-            <div className="flex items-center gap-2">
-              <CalendarClock size={18} style={{ color: NAVY }} />
-              <h2 className="font-display font-semibold text-base" style={{ color: NAVY }}>Planning atelier</h2>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {[
-                { key: 'toutes', label: 'Toutes' },
-                { key: 'retard', label: `En retard (${nbEnRetard})` },
-                { key: 'semaine', label: `Livraisons semaine (${nbLivraisonsSemaine})` },
-                { key: 'essayages', label: `Essayages semaine (${nbEssayagesSemaine})` },
-              ].map(f => (
-                <button
-                  key={f.key}
-                  onClick={() => setFiltrePlanning(f.key as any)}
-                  className={`px-3 py-1 rounded-full text-xs font-semibold transition ${
-                    filtrePlanning === f.key ? 'text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                  style={filtrePlanning === f.key ? { backgroundColor: f.key === 'retard' ? ORANGE : NAVY } : {}}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Prochains événements */}
-          {evenements.filter(e => e.date >= new Date().toISOString().slice(0, 10)).slice(0, 6).length > 0 && (
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {evenements
-                .filter(e => e.date >= new Date().toISOString().slice(0, 10))
-                .slice(0, 8)
-                .map((e, i) => (
-                  <div
-                    key={i}
-                    className="flex-shrink-0 rounded-xl px-3 py-2 text-xs border"
-                    style={{
-                      borderColor: e.type === 'livraison' ? '#C9A24B' : '#0891b2',
-                      backgroundColor: e.type === 'livraison' ? '#FDF8ED' : '#ECFEFF',
-                    }}
-                  >
-                    <div className="font-bold" style={{ color: e.type === 'livraison' ? '#C9A24B' : '#0891b2' }}>
-                      {e.type === 'livraison' ? '📦 Livraison' : '🧵 Essayage'}
-                    </div>
-                    <div className="font-semibold text-slate-800">{fmtDate(e.date)}</div>
-                    <div className="text-slate-500 truncate max-w-[120px]">{e.commande.client_nom}</div>
-                  </div>
-                ))}
-            </div>
-          )}
-        </div>
-      </div>
+      
 {/* HEADER — bandeau navy premium, identique aux autres pages */}
       <div className="relative overflow-hidden" style={{ backgroundColor: NAVY }}>
         <div
@@ -510,7 +457,58 @@ export default function CommandesPage() {
       <div className="max-w-7xl mx-auto px-6 -mt-10 relative z-10 pb-16 space-y-5 font-body">
         {/* RECHERCHE */}
         <div className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.15)] p-4">
-          <div className="relative max-w-md">
+          
+      {/* ========== BARRE PLANNING ========== */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 -mt-6 mb-5 relative z-10">
+        <div className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.15)] p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl" style={{ backgroundColor: '#EAF1FB' }}>
+                <CalendarClock size={16} style={{ color: NAVY }} />
+              </div>
+              <div>
+                <h2 className="font-display font-semibold text-sm leading-tight" style={{ color: NAVY }}>Planning atelier</h2>
+                <p className="text-[11px] text-slate-400">Livraisons · Essayages · Retards</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { key: 'toutes', label: 'Toutes' },
+                { key: 'retard', label: `En retard (${nbEnRetard})` },
+                { key: 'semaine', label: `Livraisons (${nbLivraisonsSemaine})` },
+                { key: 'essayages', label: `Essayages (${nbEssayagesSemaine})` },
+              ].map(f => (
+                <button
+                  key={f.key}
+                  onClick={() => setFiltrePlanning(f.key as any)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition ${
+                    filtrePlanning === f.key ? 'text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                  style={filtrePlanning === f.key ? { backgroundColor: f.key === 'retard' ? ORANGE : NAVY } : {}}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {evenements.filter(e => e.date >= new Date().toISOString().slice(0, 10)).length > 0 && (
+            <div className="flex gap-2 overflow-x-auto pt-3 mt-3 border-t border-slate-100">
+              {evenements.filter(e => e.date >= new Date().toISOString().slice(0, 10)).slice(0, 8).map((e, i) => (
+                <div key={i} className="flex-shrink-0 rounded-xl px-3 py-2 text-xs border"
+                  style={{ borderColor: e.type === 'livraison' ? '#C9A24B' : '#0891b2', backgroundColor: e.type === 'livraison' ? '#FDF8ED' : '#ECFEFF' }}>
+                  <div className="font-bold" style={{ color: e.type === 'livraison' ? '#C9A24B' : '#0891b2' }}>
+                    {e.type === 'livraison' ? '📦 Livraison' : '🧵 Essayage'}
+                  </div>
+                  <div className="font-semibold text-slate-800">{fmtDate(e.date)}</div>
+                  <div className="text-slate-500 truncate max-w-[130px]">{e.commande.client_nom}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="relative max-w-md">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2" size={16} style={{ color: NAVY, opacity: 0.5 }} />
             <input
               type="text"
