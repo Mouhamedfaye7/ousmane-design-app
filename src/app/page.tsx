@@ -241,6 +241,14 @@ export default function Dashboard() {
       bg: '#FBE6D8'
     },
     {
+      href: '/caisse',
+      icon: Wallet,
+      title: 'Caisse & Paiements',
+      desc: 'Journal des encaissements du jour, totaux par mode et suivi de caisse.',
+      accent: '#0F766E',
+      bg: '#CCFBF1'
+    },
+    {
       href: '/depenses',
       icon: Wallet,
       title: 'Dépenses & Bénéfice',

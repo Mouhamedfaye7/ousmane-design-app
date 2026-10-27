@@ -25,9 +25,9 @@ export const ROLE_LABELS: Record<Role, string> = {
 
 // Pages accessibles par profil
 const ACCES: Record<Role, string[]> = {
-  admin: ['/', '/ventes', '/clients', '/commandes', '/stock', '/catalogue', '/statistiques', '/depenses', '/utilisateurs'],
-  gerant: ['/', '/ventes', '/clients', '/commandes', '/stock', '/catalogue', '/statistiques', '/depenses'],
-  caissier: ['/ventes'],
+  admin: ['/', '/ventes', '/clients', '/commandes', '/stock', '/catalogue', '/statistiques', '/depenses', '/utilisateurs', '/caisse'],
+  gerant: ['/', '/ventes', '/clients', '/commandes', '/stock', '/catalogue', '/statistiques', '/depenses', '/caisse'],
+  caissier: ['/ventes', '/caisse'],
   tailleur: ['/clients'],
 };
 
