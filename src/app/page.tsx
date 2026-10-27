@@ -241,6 +241,14 @@ export default function Dashboard() {
       bg: '#FBE6D8'
     },
     {
+      href: '/tailleurs',
+      icon: Scissors,
+      title: 'Tailleurs & Production',
+      desc: 'Charge de chaque tailleur, affectation des commandes et estimation de paie.',
+      accent: '#7C3AED',
+      bg: '#F3E8FF'
+    },
+    {
       href: '/caisse',
       icon: Wallet,
       title: 'Caisse & Paiements',
