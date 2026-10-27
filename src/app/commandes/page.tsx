@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
   ArrowLeft, Plus, Search, Send, X, CheckCircle, CreditCard, Trash2,
-  FileDown, Pencil, Loader2, MapPin, Phone
+  FileDown, Pencil, Loader2, MapPin, Phone, CalendarClock, AlertTriangle, Calendar
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -25,6 +25,9 @@ interface Commande {
   reste?: number;
   observations?: string;
   created_at?: string;
+  date_livraison_promise?: string | null;
+  date_essayage?: string | null;
+  notes_planning?: string | null;
 }
 
 const NAVY = '#1B3B6F';
@@ -56,7 +59,10 @@ export default function CommandesPage() {
     quantite: '1',
     prix_unitaire: '',
     avance: '',
-    observations: ''
+    observations: '',
+    date_livraison_promise: '',
+    date_essayage: '',
+    notes_planning: ''
   });
 
   const fetchCommandes = async () => {
@@ -99,6 +105,9 @@ export default function CommandesPage() {
       avance: avanceNum,
       reste: resteCalcul,
       observations: formData.observations
+      date_livraison_promise: formData.date_livraison_promise || null,
+      date_essayage: formData.date_essayage || null,
+      notes_planning: formData.notes_planning || null,
     };
 
     const { error } = await supabase.from('commandes').insert([payload]);
@@ -116,7 +125,10 @@ export default function CommandesPage() {
       quantite: '1',
       prix_unitaire: '',
       avance: '',
-      observations: ''
+      observations: '',
+      date_livraison_promise: '',
+      date_essayage: '',
+      notes_planning: ''
     });
     fetchCommandes();
   };
@@ -329,6 +341,61 @@ export default function CommandesPage() {
     }
   };
 
+  // ========== PLANNING ==========
+  const aujourdhui = new Date();
+  aujourdhui.setHours(0, 0, 0, 0);
+
+  const estEnRetard = (c: Commande) => {
+    if (!c.date_livraison_promise) return false;
+    if (c.statut === 'Prête' || c.statut === 'Livrée') return false;
+    const d = new Date(c.date_livraison_promise + 'T12:00:00');
+    return d < aujourdhui;
+  };
+
+  const estCetteSemaine = (dateStr?: string | null) => {
+    if (!dateStr) return false;
+    const d = new Date(dateStr + 'T12:00:00');
+    const finSemaine = new Date(aujourdhui);
+    finSemaine.setDate(finSemaine.getDate() + (7 - finSemaine.getDay()));
+    return d >= aujourdhui && d <= finSemaine;
+  };
+
+  const nbEnRetard = commandes.filter(estEnRetard).length;
+  const nbLivraisonsSemaine = commandes.filter(c =>
+    c.statut !== 'Livrée' && estCetteSemaine(c.date_livraison_promise)
+  ).length;
+  const nbEssayagesSemaine = commandes.filter(c =>
+    estCetteSemaine(c.date_essayage)
+  ).length;
+
+  const [filtrePlanning, setFiltrePlanning] = useState<'toutes' | 'retard' | 'semaine' | 'essayages'>('toutes');
+
+  const commandesFiltreesPlanning = commandes.filter(c => {
+    if (filtrePlanning === 'retard') return estEnRetard(c);
+    if (filtrePlanning === 'semaine') return c.statut !== 'Livrée' && estCetteSemaine(c.date_livraison_promise);
+    if (filtrePlanning === 'essayages') return estCetteSemaine(c.date_essayage);
+    return true;
+  });
+
+  // Liste chronologique des prochains événements
+  type Evenement = { type: 'livraison' | 'essayage'; date: string; commande: Commande };
+  const evenements: Evenement[] = [];
+  commandes.forEach(c => {
+    if (c.date_livraison_promise && c.statut !== 'Livrée') {
+      evenements.push({ type: 'livraison', date: c.date_livraison_promise, commande: c });
+    }
+    if (c.date_essayage) {
+      evenements.push({ type: 'essayage', date: c.date_essayage, commande: c });
+    }
+  });
+  evenements.sort((a, b) => a.date.localeCompare(b.date));
+
+  const fmtDate = (d?: string | null) => {
+    if (!d) return '—';
+    return new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F8FC' }}>
       <style jsx global>{`
@@ -348,7 +415,63 @@ export default function CommandesPage() {
         }
       `}</style>
 
-      {/* HEADER — bandeau navy premium, identique aux autres pages */}
+      
+      {/* ========== BARRE PLANNING ========== */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 -mt-6 mb-6 relative z-10">
+        <div className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.15)] p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2">
+              <CalendarClock size={18} style={{ color: NAVY }} />
+              <h2 className="font-display font-semibold text-base" style={{ color: NAVY }}>Planning atelier</h2>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { key: 'toutes', label: 'Toutes' },
+                { key: 'retard', label: `En retard (${nbEnRetard})` },
+                { key: 'semaine', label: `Livraisons semaine (${nbLivraisonsSemaine})` },
+                { key: 'essayages', label: `Essayages semaine (${nbEssayagesSemaine})` },
+              ].map(f => (
+                <button
+                  key={f.key}
+                  onClick={() => setFiltrePlanning(f.key as any)}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold transition ${
+                    filtrePlanning === f.key ? 'text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                  style={filtrePlanning === f.key ? { backgroundColor: f.key === 'retard' ? ORANGE : NAVY } : {}}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Prochains événements */}
+          {evenements.filter(e => e.date >= new Date().toISOString().slice(0, 10)).slice(0, 6).length > 0 && (
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {evenements
+                .filter(e => e.date >= new Date().toISOString().slice(0, 10))
+                .slice(0, 8)
+                .map((e, i) => (
+                  <div
+                    key={i}
+                    className="flex-shrink-0 rounded-xl px-3 py-2 text-xs border"
+                    style={{
+                      borderColor: e.type === 'livraison' ? '#C9A24B' : '#0891b2',
+                      backgroundColor: e.type === 'livraison' ? '#FDF8ED' : '#ECFEFF',
+                    }}
+                  >
+                    <div className="font-bold" style={{ color: e.type === 'livraison' ? '#C9A24B' : '#0891b2' }}>
+                      {e.type === 'livraison' ? '📦 Livraison' : '🧵 Essayage'}
+                    </div>
+                    <div className="font-semibold text-slate-800">{fmtDate(e.date)}</div>
+                    <div className="text-slate-500 truncate max-w-[120px]">{e.commande.client_nom}</div>
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+      </div>
+{/* HEADER — bandeau navy premium, identique aux autres pages */}
       <div className="relative overflow-hidden" style={{ backgroundColor: NAVY }}>
         <div
           className="pointer-events-none absolute -top-20 -right-20 h-72 w-72 rounded-full opacity-20 blur-3xl"
