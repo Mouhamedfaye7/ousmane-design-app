@@ -13,7 +13,7 @@ interface Paiement {
   commande_id: string | null;
   vente_id: string | null;
   montant: number;
-  mode_paiement: string;
+  moyen_paiement: string;
   recu_par: string | null;
   date_paiement: string;
   notes: string | null;
@@ -51,7 +51,7 @@ export default function CaissePage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     montant: '',
-    mode_paiement: 'Espèces',
+    moyen_paiement: 'Espèces',
     recu_par: '',
     notes: '',
     commande_code: '',
@@ -74,7 +74,8 @@ export default function CaissePage() {
     const { data, error } = await supabase
       .from('paiements')
       .select('*, commandes(code_commande, client_nom)')
-      .eq('date_paiement', dateJour)
+      .gte('date_paiement', dateJour + 'T00:00:00')
+      .lt('date_paiement', dateJour + 'T23:59:59')
       .order('created_at', { ascending: false });
     if (error) setErreur(error.message);
     setPaiements((data as Paiement[]) || []);
@@ -89,7 +90,7 @@ export default function CaissePage() {
   const parMode = MODES.map(m => ({
     ...m,
     total: paiements
-      .filter(p => p.mode_paiement === m.nom)
+      .filter(p => p.moyen_paiement === m.nom)
       .reduce((s, p) => s + (Number(p.montant) || 0), 0),
   }));
 
@@ -111,17 +112,17 @@ export default function CaissePage() {
 
     const { error } = await supabase.from('paiements').insert({
       montant,
-      mode_paiement: form.mode_paiement,
+      moyen_paiement: form.moyen_paiement,
       recu_par: form.recu_par || null,
       notes: form.notes || null,
-      date_paiement: dateJour,
+      date_paiement: new Date(dateJour + 'T12:00:00').toISOString(),
       commande_id,
     });
 
     setSaving(false);
     if (error) { alert(error.message); return; }
     setShowModal(false);
-    setForm({ montant: '', mode_paiement: 'Espèces', recu_par: '', notes: '', commande_code: '' });
+    setForm({ montant: '', moyen_paiement: 'Espèces', recu_par: '', notes: '', commande_code: '' });
     charger();
   };
 
@@ -266,8 +267,8 @@ export default function CaissePage() {
                           </td>
                           <td className="py-2.5">
                             <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold text-white"
-                              style={{ backgroundColor: MODES.find(m => m.nom === p.mode_paiement)?.couleur || '#64748b' }}>
-                              {p.mode_paiement}
+                              style={{ backgroundColor: MODES.find(m => m.nom === p.moyen_paiement)?.couleur || '#64748b' }}>
+                              {p.moyen_paiement}
                             </span>
                           </td>
                           <td className="py-2.5 font-mono-tape font-bold" style={{ color: NAVY }}>{fmt(p.montant)} F</td>
@@ -316,8 +317,8 @@ export default function CaissePage() {
               </div>
               <div>
                 <label className="block font-semibold mb-1">Mode de paiement</label>
-                <select value={form.mode_paiement}
-                  onChange={e => setForm({ ...form, mode_paiement: e.target.value })}
+                <select value={form.moyen_paiement}
+                  onChange={e => setForm({ ...form, moyen_paiement: e.target.value })}
                   className="w-full p-2.5 border border-slate-300 rounded-lg bg-white focus:ring-2 outline-none font-medium"
                   style={{ '--tw-ring-color': GOLD } as React.CSSProperties}>
                   {MODES.map(m => <option key={m.nom} value={m.nom}>{m.nom}</option>)}
