@@ -632,6 +632,29 @@ export default function CommandesPage() {
                               {STATUTS.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                           </div>
+                            {/* Dates planning */}
+                            <div className="mt-2 space-y-1">
+                              <div className="flex items-center gap-1.5 text-[11px]">
+                                <Calendar size={11} className="text-slate-400 shrink-0" />
+                                <span className="text-slate-500">Livraison :</span>
+                                <span className={`font-semibold ${estEnRetard(c) ? 'text-red-600' : 'text-slate-700'}`}>
+                                  {fmtDate(c.date_livraison_promise)}
+                                </span>
+                                {estEnRetard(c) && (
+                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-bold">
+                                    <AlertTriangle size={9} /> Retard
+                                  </span>
+                                )}
+                              </div>
+                              {c.date_essayage && (
+                                <div className="flex items-center gap-1.5 text-[11px]">
+                                  <Calendar size={11} className="text-cyan-500 shrink-0" />
+                                  <span className="text-slate-500">Essayage :</span>
+                                  <span className="font-semibold text-slate-700">{fmtDate(c.date_essayage)}</span>
+                                </div>
+                              )}
+                            </div>
+
 
                           {/* BOUTON ALERTE — PDF + WHATSAPP */}
                           <button
@@ -856,6 +879,40 @@ export default function CommandesPage() {
                   style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
                 ></textarea>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Date livraison promise</label>
+                  <input
+                    type="date"
+                    value={formData.date_livraison_promise}
+                    onChange={e => setFormData({ ...formData, date_livraison_promise: e.target.value })}
+                    className="w-full p-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 bg-slate-50"
+                    style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Date essayage</label>
+                  <input
+                    type="date"
+                    value={formData.date_essayage}
+                    onChange={e => setFormData({ ...formData, date_essayage: e.target.value })}
+                    className="w-full p-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 bg-slate-50"
+                    style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Notes planning</label>
+                <input
+                  type="text"
+                  value={formData.notes_planning}
+                  onChange={e => setFormData({ ...formData, notes_planning: e.target.value })}
+                  placeholder="Ex: client préfère le matin..."
+                  className="w-full p-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 bg-slate-50"
+                  style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
+                />
+              </div>
+
 
               <div className="flex justify-end gap-2 pt-2">
                 <button
