@@ -104,7 +104,7 @@ export default function CommandesPage() {
       montant_total: montantTotalCalcul,
       avance: avanceNum,
       reste: resteCalcul,
-      observations: formData.observations
+      observations: formData.observations,
       date_livraison_promise: formData.date_livraison_promise || null,
       date_essayage: formData.date_essayage || null,
       notes_planning: formData.notes_planning || null,
