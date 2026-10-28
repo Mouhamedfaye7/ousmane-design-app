@@ -80,6 +80,21 @@ export default function TailleursPage() {
     ]);
     if (tRes.error) setErreur(tRes.error.message);
     setTailleurs((tRes.data as Tailleur[]) || []);
+    const { data: profils, error: errProfils } = await supabase
+          .from('profils')
+          .select('id, nom, email, role');
+        if (errProfils) {
+          console.error('profils:', errProfils.message);
+        } else if (profils) {
+          // Priorité aux rôles tailleur, sinon tous les comptes (pour pouvoir lier)
+          const tailleursComptes = profils.filter((p: any) => p.role === 'tailleur');
+          const liste = (tailleursComptes.length > 0 ? tailleursComptes : profils).map((p: any) => ({
+            id: p.id,
+            nom: p.nom,
+            email: p.email,
+          }));
+          setListeComptes(liste);
+        }
     setCommandes((cRes.data as CommandeLite[]) || []);
     setLoading(false);
   }, []);
