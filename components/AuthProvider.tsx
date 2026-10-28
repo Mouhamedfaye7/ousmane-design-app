@@ -238,8 +238,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     contenu = <EcranChargement />;
   } else if (!profil) {
     contenu = enLogin ? children : <EcranChargement />;
-  } else if (enLogin || !peutAcceder(profil.role, pathname)) {
+  } else if (enLogin) {
     contenu = <EcranChargement />;
+  } else if (!peutAcceder(profil.role, pathname)) {
+    contenu = (
+      <div
+        style={{
+          minHeight: '100vh',
+          backgroundColor: NAVY,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'white',
+          fontFamily: 'Inter, system-ui, sans-serif',
+          padding: '24px',
+          textAlign: 'center',
+        }}
+      >
+        <div
+          style={{
+            backgroundColor: 'rgba(255,255,255,0.08)',
+            borderRadius: 16,
+            padding: '32px 40px',
+            maxWidth: 420,
+            width: '100%',
+            border: '1px solid rgba(255,255,255,0.15)',
+          }}
+        >
+          <p style={{ fontSize: 48, margin: '0 0 12px' }}>🚫</p>
+          <h1 style={{ fontSize: 22, fontWeight: 700, margin: '0 0 8px', color: GOLD }}>
+            Accès refusé
+          </h1>
+          <p style={{ fontSize: 14, opacity: 0.85, margin: '0 0 24px', lineHeight: 1.5 }}>
+            Votre profil ({ROLE_LABELS[profil.role]}) n’a pas l’autorisation
+            d’accéder à cette page.
+          </p>
+          <button
+            onClick={() => router.replace(pageAccueil(profil.role))}
+            style={{
+              backgroundColor: GOLD,
+              color: NAVY,
+              border: 'none',
+              borderRadius: 10,
+              padding: '10px 20px',
+              fontWeight: 700,
+              fontSize: 13,
+              cursor: 'pointer',
+            }}
+          >
+            Retour à l’accueil
+          </button>
+        </div>
+        <BoutonSession profil={profil} onSignOut={signOut} />
+      </div>
+    );
   } else {
     contenu = (
       <>
