@@ -28,6 +28,7 @@ interface Commande {
   date_livraison_promise?: string | null;
   date_essayage?: string | null;
   notes_planning?: string | null;
+  tailleur_id?: string | null;
 }
 
 const NAVY = '#1B3B6F';
@@ -41,6 +42,7 @@ export default function CommandesPage() {
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [listeTailleurs, setListeTailleurs] = useState<{id: string; nom: string}[]>([])};
 
   // Modal d'édition du prix & du paiement (fusionnés)
   const [selectedCommandeForPay, setSelectedCommandeForPay] = useState<Commande | null>(null);
@@ -71,6 +73,9 @@ export default function CommandesPage() {
     if (!error && data) {
       setCommandes(data);
     }
+    const { data: tailData } = await supabase.from('tailleurs').select('id, nom').eq('actif', true).order('nom');
+    if (tailData) setListeTailleurs(tailData);
+
     setLoading(false);
   };
 
@@ -304,6 +309,15 @@ export default function CommandesPage() {
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingAlert, selectedCommandeForAlert]);
+
+  
+  const handleUpdateTailleur = async (id: string, tailleurId: string) => {
+    const val = tailleurId || null;
+    const { error } = await supabase.from('commandes').update({ tailleur_id: val }).eq('id', id);
+    if (!error) {
+      setCommandes(prev => prev.map(c => c.id === id ? { ...c, tailleur_id: val } : c));
+    }
+  };
 
   const filteredCommandes = commandes.filter(c =>
     (c.client_nom || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -652,6 +666,25 @@ export default function CommandesPage() {
                                 </div>
                               )}
                             </div>
+
+                            {/* Affectation tailleur */}
+                            <div className="mt-2">
+                              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                                Tailleur
+                              </label>
+                              <select
+                                value={c.tailleur_id || ''}
+                                onChange={(e) => c.id && handleUpdateTailleur(c.id, e.target.value)}
+                                className="w-full text-xs p-2 border border-slate-200 rounded-lg bg-white font-medium text-slate-700 outline-none focus:ring-2 cursor-pointer"
+                                style={{ '--tw-ring-color': GOLD } as React.CSSProperties}
+                              >
+                                <option value="">— Non assigné —</option>
+                                {listeTailleurs.map(t => (
+                                  <option key={t.id} value={t.id}>{t.nom}</option>
+                                ))}
+                              </select>
+                            </div>
+
 
 
                           {/* BOUTON ALERTE — PDF + WHATSAPP */}
