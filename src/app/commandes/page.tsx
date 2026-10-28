@@ -335,24 +335,8 @@ export default function CommandesPage() {
     }
   };
 
-  const filteredCommandes = commandes.filter(c => {
-    // Tailleur : uniquement ses productions
-    if (monRole === 'tailleur' && monTailleurId && c.tailleur_id !== monTailleurId) {
-      return false;
-    }
-    const matchSearch =
-      (c.client_nom || '').toLowerCase().includes(search.toLowerCase()) ||
-      (c.client_tel || '').includes(search) ||
-      (c.code_commande || '').toLowerCase().includes(search.toLowerCase()) ||
-      getItemName(c).toLowerCase().includes(search.toLowerCase());
-    if (!matchSearch) return false;
-    if (typeof filtrePlanning !== 'undefined' && filtrePlanning !== 'toutes') {
-      if (filtrePlanning === 'retard') return estEnRetard(c);
-      if (filtrePlanning === 'semaine') return c.statut !== 'Livrée' && estCetteSemaine(c.date_livraison_promise);
-      if (filtrePlanning === 'essayages') return estCetteSemaine(c.date_essayage);
-    }
-    return true;
-  });
+
+
   const columns = [
     { title: 'Reçue', key: 'Reçue' },
     { title: 'En Coupe', key: 'En Coupe' },
@@ -431,6 +415,22 @@ export default function CommandesPage() {
   });
   evenements.sort((a, b) => a.date.localeCompare(b.date));
 
+
+  const filteredCommandes = commandes.filter(c => {
+    if (monRole === 'tailleur' && monTailleurId && c.tailleur_id !== monTailleurId) {
+      return false;
+    }
+    const matchSearch =
+      (c.client_nom || '').toLowerCase().includes(search.toLowerCase()) ||
+      (c.client_tel || '').includes(search) ||
+      (c.code_commande || '').toLowerCase().includes(search.toLowerCase()) ||
+      getItemName(c).toLowerCase().includes(search.toLowerCase());
+    if (!matchSearch) return false;
+    if (filtrePlanning === 'retard') return estEnRetard(c);
+    if (filtrePlanning === 'semaine') return c.statut !== 'Livrée' && estCetteSemaine(c.date_livraison_promise);
+    if (filtrePlanning === 'essayages') return estCetteSemaine(c.date_essayage);
+    return true;
+  });
   const fmtDate = (d?: string | null) => {
     if (!d) return '—';
     return new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
