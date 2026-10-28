@@ -25,14 +25,21 @@ export const ROLE_LABELS: Record<Role, string> = {
 
 // Pages accessibles par profil
 const ACCES: Record<Role, string[]> = {
-  admin: ['/', '/ventes', '/clients', '/commandes', '/stock', '/catalogue', '/statistiques', '/depenses', '/utilisateurs', '/caisse'],
-  gerant: ['/', '/ventes', '/clients', '/commandes', '/stock', '/catalogue', '/statistiques', '/depenses', '/caisse'],
-  caissier: ['/ventes', '/caisse'],
-  tailleur: ['/clients', '/commandes', '/tailleurs', '/stock', '/statistiques', '/'],
+  admin: [
+    '/', '/ventes', '/clients', '/commandes', '/stock', '/catalogue',
+    '/statistiques', '/utilisateurs', '/tailleurs'
+  ],
+  gerant: [
+    '/', '/ventes', '/clients', '/commandes', '/stock', '/catalogue',
+    '/statistiques', '/tailleurs'
+  ],
+  caissier: ['/ventes'],
+  // Tailleur : uniquement Accueil + Clients + Statistiques
+  tailleur: ['/', '/clients', '/statistiques'],
 };
 
 export const pageAccueil = (role: Role) =>
-  role === 'caissier' ? '/ventes' : role === 'tailleur' ? '/clients' : '/';
+  role === 'caissier' ? '/ventes' : '/';
 
 const peutAcceder = (role: Role, chemin: string) => {
   if (chemin === '/') return ACCES[role].includes('/');
