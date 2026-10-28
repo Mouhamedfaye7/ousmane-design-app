@@ -210,7 +210,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (pathname !== '/login') router.replace('/login');
       return;
     }
-    if (pathname === '/login' || !peutAcceder(profil.role, pathname)) {
+    // On ne redirige plus silencieusement : on laisse le composant afficher "Accès Refusé"
+    if (pathname === '/login') {
       router.replace(pageAccueil(profil.role));
     }
   }, [loading, profil, pathname, router]);
