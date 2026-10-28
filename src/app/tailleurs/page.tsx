@@ -17,6 +17,7 @@ interface Tailleur {
   taux_commission: number;
   actif: boolean;
   created_at: string;
+  user_id?: string | null;
 }
 
 interface CommandeLite {
@@ -44,6 +45,7 @@ const formVide = () => ({
   taux_piece: '',
   taux_commission: '',
   actif: true,
+  user_id: '',
 });
 
 export default function TailleursPage() {
@@ -56,6 +58,7 @@ export default function TailleursPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(formVide());
+  const [listeComptes, setListeComptes] = useState<{id: string; nom: string | null; email: string | null}[]>([])];
 
   useEffect(() => {
     (async () => {
@@ -112,6 +115,7 @@ export default function TailleursPage() {
       taux_piece: String(t.taux_piece || ''),
       taux_commission: String(t.taux_commission || ''),
       actif: t.actif,
+      user_id: t.user_id || '',
     });
     setShowModal(true);
   };
@@ -127,6 +131,7 @@ export default function TailleursPage() {
       taux_piece: Number(form.taux_piece) || 0,
       taux_commission: Number(form.taux_commission) || 0,
       actif: form.actif,
+      user_id: form.user_id || null,
     };
     if (editingId) {
       await supabase.from('tailleurs').update(payload).eq('id', editingId);
@@ -231,6 +236,7 @@ export default function TailleursPage() {
                         <h3 className="font-display font-semibold text-base" style={{ color: NAVY }}>{t.nom}</h3>
                         {t.specialite && <p className="text-xs text-slate-400">{t.specialite}</p>}
                         {t.telephone && <p className="text-xs text-slate-500">{t.telephone}</p>}
+                        {t.user_id && <p className="text-[10px] text-emerald-600 font-semibold">Compte lié</p>}
                       </div>
                     </div>
                     <div className="flex gap-1">
@@ -341,6 +347,21 @@ export default function TailleursPage() {
                     style={{ '--tw-ring-color': GOLD } as React.CSSProperties} />
                 </div>
               </div>
+              
+              <div>
+                <label className="block font-semibold mb-1">Compte de connexion (optionnel)</label>
+                <select value={form.user_id}
+                  onChange={e => setForm({ ...form, user_id: e.target.value })}
+                  className="w-full p-2.5 border border-slate-300 rounded-lg bg-white focus:ring-2 outline-none"
+                  style={{ '--tw-ring-color': GOLD } as React.CSSProperties}>
+                  <option value="">— Aucun compte lié —</option>
+                  {listeComptes.map(p => (
+                    <option key={p.id} value={p.id}>{p.nom || p.email || p.id.slice(0,8)}</option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-slate-400 mt-1">Lie cette fiche au login du tailleur pour « Mes productions »</p>
+              </div>
+
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={form.actif}
                   onChange={e => setForm({ ...form, actif: e.target.checked })}

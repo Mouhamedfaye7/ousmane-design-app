@@ -43,6 +43,8 @@ export default function CommandesPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [listeTailleurs, setListeTailleurs] = useState<{id: string; nom: string}[]>([]);
+  const [monTailleurId, setMonTailleurId] = useState<string | null>(null);
+  const [monRole, setMonRole] = useState<string | null>(null);
 
   // Modal d'édition du prix & du paiement (fusionnés)
   const [selectedCommandeForPay, setSelectedCommandeForPay] = useState<Commande | null>(null);
@@ -78,6 +80,20 @@ export default function CommandesPage() {
 
     setLoading(false);
   };
+
+  
+  useEffect(() => {
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const { data: profil } = await supabase.from('profils').select('role').eq('id', session.user.id).single();
+      if (profil) setMonRole(profil.role);
+      if (profil?.role === 'tailleur') {
+        const { data: t } = await supabase.from('tailleurs').select('id').eq('user_id', session.user.id).maybeSingle();
+        if (t) setMonTailleurId(t.id);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     fetchCommandes();
@@ -319,8 +335,9 @@ export default function CommandesPage() {
     }
   };
 
-  const filteredCommandes = commandes.filter(c =>
-    (c.client_nom || '').toLowerCase().includes(search.toLowerCase()) ||
+  const filteredCommandes = commandes.filter(c => {
+    if (monRole === 'tailleur' && monTailleurId && c.tailleur_id !== monTailleurId) return false;
+    return (c.client_nom || '').toLowerCase().includes(search.toLowerCase()) ||
     (c.client_tel || '').includes(search) ||
     (c.code_commande || '').toLowerCase().includes(search.toLowerCase()) ||
     getItemName(c).toLowerCase().includes(search.toLowerCase())
@@ -450,7 +467,7 @@ export default function CommandesPage() {
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-5">
             <div>
               <h1 className="font-display italic font-semibold text-2xl md:text-3xl" style={{ color: '#FFFFFF' }}>
-                Suivi d'Atelier & Commandes
+                {monRole === 'tailleur' ? 'Mes productions' : "Suivi d'Atelier & Commandes"}
               </h1>
               <p className="font-body text-sm mt-1.5" style={{ color: 'rgba(255,255,255,0.7)' }}>
                 Ousmane Design — Pilotage de la production sur-mesure
