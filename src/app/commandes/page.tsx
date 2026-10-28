@@ -484,13 +484,15 @@ export default function CommandesPage() {
               </p>
             </div>
 
-            <button
+            {monRole !== 'tailleur' && (
+              <button
               onClick={() => setShowAddModal(true)}
               className="font-body font-bold text-xs px-4 py-2.5 rounded-full flex items-center gap-2 transition-all hover:-translate-y-0.5 cursor-pointer shrink-0"
               style={{ backgroundColor: GOLD, color: NAVY }}
             >
               <Plus size={15} /> Nouvelle Commande
             </button>
+            )}
           </div>
         </div>
       </div>
