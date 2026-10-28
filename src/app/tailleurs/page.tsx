@@ -67,6 +67,7 @@ export default function TailleursPage() {
       if (!session) { setDroits('refuse'); return; }
       const { data: profil } = await supabase
         .from('profils').select('role').eq('id', session.user.id).single();
+      if (profil) setMonRole(profil.role);
       if (profil && ROLES_AUTORISES.includes(profil.role)) setDroits('ok');
       else setDroits('refuse');
     })();
@@ -211,7 +212,7 @@ export default function TailleursPage() {
                 Charge atelier, affectation et estimation de paie
               </p>
             </div>
-            {monRole !== 'tailleur' && (
+            {(monRole === 'admin' || monRole === 'gerant') && (
             <button onClick={ouvrirAjout}
               className="flex items-center gap-2 px-4 py-2 rounded-full font-bold text-sm transition hover:-translate-y-0.5"
               style={{ backgroundColor: GOLD, color: NAVY }}>
@@ -233,7 +234,7 @@ export default function TailleursPage() {
           <div className="bg-white rounded-2xl border border-black/5 p-12 text-center text-slate-400">
             <Scissors size={40} className="mx-auto mb-3 opacity-40" />
             <p>Aucun tailleur enregistré</p>
-            {monRole !== 'tailleur' && (
+            {(monRole === 'admin' || monRole === 'gerant') && (
             <button onClick={ouvrirAjout} className="mt-4 px-4 py-2 rounded-full font-bold text-sm" style={{ backgroundColor: GOLD, color: NAVY }}>
               Ajouter le premier
             </button>
