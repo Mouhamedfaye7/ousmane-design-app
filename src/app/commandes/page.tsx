@@ -42,7 +42,7 @@ export default function CommandesPage() {
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [listeTailleurs, setListeTailleurs] = useState<{id: string; nom: string}[]>([])};
+  const [listeTailleurs, setListeTailleurs] = useState<{id: string; nom: string}[]>([]);
 
   // Modal d'édition du prix & du paiement (fusionnés)
   const [selectedCommandeForPay, setSelectedCommandeForPay] = useState<Commande | null>(null);
