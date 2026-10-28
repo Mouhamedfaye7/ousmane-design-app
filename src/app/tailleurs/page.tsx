@@ -57,6 +57,7 @@ export default function TailleursPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [monRole, setMonRole] = useState<string | null>(null);
   const [form, setForm] = useState(formVide());
   const [listeComptes, setListeComptes] = useState<{id: string; nom: string | null; email: string | null}[]>([]);
 
@@ -210,11 +211,13 @@ export default function TailleursPage() {
                 Charge atelier, affectation et estimation de paie
               </p>
             </div>
+            {monRole !== 'tailleur' && (
             <button onClick={ouvrirAjout}
               className="flex items-center gap-2 px-4 py-2 rounded-full font-bold text-sm transition hover:-translate-y-0.5"
               style={{ backgroundColor: GOLD, color: NAVY }}>
               <Plus size={15} /> Ajouter un tailleur
             </button>
+          )}
           </div>
         </div>
       </div>
@@ -230,9 +233,11 @@ export default function TailleursPage() {
           <div className="bg-white rounded-2xl border border-black/5 p-12 text-center text-slate-400">
             <Scissors size={40} className="mx-auto mb-3 opacity-40" />
             <p>Aucun tailleur enregistré</p>
+            {monRole !== 'tailleur' && (
             <button onClick={ouvrirAjout} className="mt-4 px-4 py-2 rounded-full font-bold text-sm" style={{ backgroundColor: GOLD, color: NAVY }}>
               Ajouter le premier
             </button>
+          )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

@@ -274,7 +274,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             d’accéder à cette page.
           </p>
           <button
-            onClick={() => router.replace(pageAccueil(profil.role))}
+            onClick={() => router.replace("/")}
             style={{
               backgroundColor: GOLD,
               color: NAVY,
