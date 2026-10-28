@@ -35,11 +35,10 @@ const ACCES: Record<Role, string[]> = {
   ],
   caissier: ['/ventes'],
   // Tailleur : uniquement Accueil + Clients + Statistiques
-  tailleur: ['/', '/clients', '/statistiques'],
+  tailleur: ['/', '/clients', '/commandes', '/tailleurs', '/stock', '/statistiques'],
 };
 
-export const pageAccueil = (role: Role) =>
-  role === 'caissier' ? '/ventes' : '/';
+export const pageAccueil = (role: Role) => role === 'caissier' ? '/ventes' : role === 'tailleur' ? '/commandes' : '/';
 
 const peutAcceder = (role: Role, chemin: string) => {
   if (chemin === '/') return ACCES[role].includes('/');

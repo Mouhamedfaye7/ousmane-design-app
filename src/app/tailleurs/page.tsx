@@ -58,7 +58,7 @@ export default function TailleursPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(formVide());
-  const [listeComptes, setListeComptes] = useState<{id: string; nom: string | null; email: string | null}[]>([])];
+  const [listeComptes, setListeComptes] = useState<{id: string; nom: string | null; email: string | null}[]>([]);
 
   useEffect(() => {
     (async () => {
