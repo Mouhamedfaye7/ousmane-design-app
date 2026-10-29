@@ -29,6 +29,7 @@ interface Commande {
   date_essayage?: string | null;
   notes_planning?: string | null;
   tailleur_id?: string | null;
+  tailleur_nom?: string | null;
 }
 
 const NAVY = '#1B3B6F';
@@ -711,6 +712,9 @@ export default function CommandesPage() {
                               <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
                                 Tailleur
                               </label>
+                              {roleActuel === 'tailleur' ? (
+                              <p className="text-sm font-medium text-slate-700">{c.tailleur_nom || (c.tailleur_id ? 'Assigné' : 'Non assigné')}</p>
+                            ) : (
                               <select
                                 value={c.tailleur_id || ''}
                                 onChange={(e) => c.id && handleUpdateTailleur(c.id, e.target.value)}
@@ -722,6 +726,7 @@ export default function CommandesPage() {
                                   <option key={t.id} value={t.id}>{t.nom}</option>
                                 ))}
                               </select>
+                            )}
                             </div>
 
 
