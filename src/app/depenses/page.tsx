@@ -406,7 +406,7 @@ export default function DepensesPage() {
                 style={{ backgroundColor: GOLD, color: NAVY }}
               >
                 {pdfLoading ? <Loader2 size={15} className="animate-spin" /> : <FileDown size={15} />}
-                Rapport PDF
+                Télécharger le rapport
               </button>
 
               <button
@@ -666,7 +666,7 @@ export default function DepensesPage() {
                   Ousmane Design
                 </h1>
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] mt-1.5" style={{ color: GOLD }}>
-                  Rapport des dépenses
+                  Création &amp; Couture Contemporaine
                 </p>
               </div>
               <div className="text-right">
