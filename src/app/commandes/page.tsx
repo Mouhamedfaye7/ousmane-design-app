@@ -39,6 +39,8 @@ const STATUTS = ['Reçue', 'En Coupe', 'Prête', 'Livrée'];
 
 export default function CommandesPage() {
   const [commandes, setCommandes] = useState<Commande[]>([]);
+  const [roleActuel, setRoleActuel] = useState<string | null>(null);
+  const [tailleurIdActuel, setTailleurIdActuel] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -71,7 +73,11 @@ export default function CommandesPage() {
 
   const fetchCommandes = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('commandes').select('*').order('created_at', { ascending: false });
+    let query = supabase.from('commandes').select('*');
+    if (roleActuel === 'tailleur' && tailleurIdActuel) {
+      query = query.eq('tailleur_id', tailleurIdActuel);
+    }
+    const { data, error } = await query.order('created_at', { ascending: false });
     if (!error && data) {
       setCommandes(data);
     }
