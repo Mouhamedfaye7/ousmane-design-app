@@ -712,7 +712,7 @@ export default function CommandesPage() {
                               <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
                                 Tailleur
                               </label>
-                              {roleActuel === 'tailleur' ? (
+                              {(roleActuel === 'tailleur' || monRole === 'tailleur') ? (
                               <p className="text-sm font-medium text-slate-700">{c.tailleur_nom || (c.tailleur_id ? 'Assigné' : 'Non assigné')}</p>
                             ) : (
                               <select
