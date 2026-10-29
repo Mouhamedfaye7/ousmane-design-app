@@ -661,6 +661,7 @@ export default function CommandesPage() {
                               </div>
                             )}
                           </div>
+                          )}
 
                           {/* CHANGEMENT STATUT */}
                           <div className="pt-2 border-t border-slate-200">
@@ -719,7 +720,8 @@ export default function CommandesPage() {
 
 
 
-                          {/* BOUTON ALERTE — PDF + WHATSAPP */}
+                          {/* BOUTON ALERTE — PDF + WHATSAPP — masqué pour tailleur */}
+                          {monRole !== 'tailleur' && (
                           <button
                             onClick={() => handleAlertWhatsApp(c)}
                             disabled={pendingAlert?.id === c.id}
@@ -733,6 +735,7 @@ export default function CommandesPage() {
                               <><Send size={14} /> Alerter le client</>
                             )}
                           </button>
+                          )}
                         </div>
                       );
                     })
