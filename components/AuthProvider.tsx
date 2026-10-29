@@ -27,15 +27,15 @@ export const ROLE_LABELS: Record<Role, string> = {
 const ACCES: Record<Role, string[]> = {
   admin: [
     '/', '/ventes', '/clients', '/commandes', '/stock', '/catalogue',
-    '/statistiques', '/utilisateurs', '/tailleurs'
+    '/statistiques', '/utilisateurs', '/tailleurs', '/depenses', '/caisse'
   ],
   gerant: [
     '/', '/ventes', '/clients', '/commandes', '/stock', '/catalogue',
-    '/statistiques', '/tailleurs'
+    '/statistiques', '/tailleurs', '/depenses', '/caisse'
   ],
-  caissier: ['/ventes'],
+  caissier: ['/ventes', '/caisse'],
   // Tailleur : uniquement Accueil + Clients + Statistiques
-  tailleur: ['/', '/clients', '/commandes', '/tailleurs', '/stock', '/statistiques'],
+  tailleur: ['/', '/clients', '/statistiques'],
 };
 
 export const pageAccueil = (role: Role) => role === 'caissier' ? '/ventes' : role === 'tailleur' ? '/commandes' : '/';
