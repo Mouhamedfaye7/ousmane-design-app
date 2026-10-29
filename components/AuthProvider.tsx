@@ -35,7 +35,7 @@ const ACCES: Record<Role, string[]> = {
   ],
   caissier: ['/ventes', '/caisse'],
   // Tailleur : uniquement Accueil + Clients + Statistiques
-  tailleur: ['/', '/clients', '/statistiques'],
+  tailleur: ['/clients', '/commandes', '/tailleurs'],
 };
 
 export const pageAccueil = (role: Role) => role === 'caissier' ? '/ventes' : role === 'tailleur' ? '/commandes' : '/';
