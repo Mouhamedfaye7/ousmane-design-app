@@ -261,12 +261,16 @@ export default function TailleursPage() {
                       </div>
                     </div>
                     <div className="flex gap-1">
-                      <button onClick={() => ouvrirEdition(t)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500">
-                        <Pencil size={14} />
-                      </button>
-                      <button onClick={() => supprimer(t.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-500">
-                        <Trash2 size={14} />
-                      </button>
+                      {(monRole === 'admin' || monRole === 'gerant') && (
+                        <>
+                          <button onClick={() => ouvrirEdition(t)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500">
+                            <Pencil size={14} />
+                          </button>
+                          <button onClick={() => supprimer(t.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-500">
+                            <Trash2 size={14} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
 
