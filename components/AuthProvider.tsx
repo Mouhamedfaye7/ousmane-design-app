@@ -33,7 +33,7 @@ const ACCES: Record<Role, string[]> = {
     '/', '/ventes', '/clients', '/commandes', '/stock', '/catalogue',
     '/statistiques', '/tailleurs', '/depenses', '/caisse'
   ],
-  caissier: ['/ventes', '/caisse'],
+  caissier: ['/', '/ventes', '/catalogue', '/caisse', '/statistiques'],
   // Tailleur : uniquement Accueil + Clients + Statistiques
   tailleur: ['/', '/clients', '/commandes', '/tailleurs'],
 };
