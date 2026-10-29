@@ -606,6 +606,7 @@ export default function CommandesPage() {
                                   {c.code_commande}
                                 </span>
                               )}
+                              {monRole !== 'tailleur' && (
                               <button
                                 onClick={() => handleDeleteCommande(c)}
                                 className="text-slate-400 hover:text-rose-600 p-1 rounded-md transition-colors cursor-pointer"
@@ -613,12 +614,14 @@ export default function CommandesPage() {
                               >
                                 <Trash2 size={14} />
                               </button>
+                              )}
                             </div>
                           </div>
 
                           <p className="text-xs text-slate-700 font-medium">{getItemName(c)}</p>
 
-                          {/* RECAP FINANCIER + PRIX MODIFIABLE */}
+                          {/* RECAP FINANCIER + PRIX MODIFIABLE — masqué pour tailleur */}
+                          {monRole !== 'tailleur' && (
                           <div className="space-y-1.5 pt-2 border-t border-slate-200">
                             <div className="flex justify-between items-center text-xs">
                               <span className="text-slate-500 flex items-center gap-1">
