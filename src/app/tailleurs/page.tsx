@@ -50,6 +50,7 @@ const formVide = () => ({
 
 export default function TailleursPage() {
   const [droits, setDroits] = useState<'verification' | 'ok' | 'refuse'>('verification');
+  const [roleActuel, setRoleActuel] = useState<string | null>(null);
   const [tailleurs, setTailleurs] = useState<Tailleur[]>([]);
   const [commandes, setCommandes] = useState<CommandeLite[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,7 +69,7 @@ export default function TailleursPage() {
       const { data: profil } = await supabase
         .from('profils').select('role').eq('id', session.user.id).single();
       if (profil) setMonRole(profil.role);
-      if (profil && ROLES_AUTORISES.includes(profil.role)) setDroits('ok');
+      if (profil && ROLES_AUTORISES.includes(profil.role)) { setDroits('ok'); setRoleActuel(profil.role); }
       else setDroits('refuse');
     })();
   }, []);

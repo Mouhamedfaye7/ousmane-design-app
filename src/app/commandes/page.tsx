@@ -403,14 +403,14 @@ export default function CommandesPage() {
   });
 
   // Liste chronologique des prochains événements
-  type Evenement = { type: 'livraison' | 'essayage'; date: string; commande: Commande };
+  type Evenement = { type: 'livraison'; date: string; commande: Commande };
   const evenements: Evenement[] = [];
   commandes.forEach(c => {
     if (c.date_livraison_promise && c.statut !== 'Livrée') {
       evenements.push({ type: 'livraison', date: c.date_livraison_promise, commande: c });
     }
     if (c.date_essayage) {
-      evenements.push({ type: 'essayage', date: c.date_essayage, commande: c });
+      evenements.push({ type: 'livraison', date: c.date_essayage, commande: c });
     }
   });
   evenements.sort((a, b) => a.date.localeCompare(b.date));
@@ -511,7 +511,7 @@ export default function CommandesPage() {
               </div>
               <div>
                 <h2 className="font-display font-semibold text-sm leading-tight" style={{ color: NAVY }}>Planning atelier</h2>
-                <p className="text-[11px] text-slate-400">Livraisons · Essayages · Retards</p>
+                <p className="text-[11px] text-slate-400">Livraisons · Retards</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -519,7 +519,7 @@ export default function CommandesPage() {
                 { key: 'toutes', label: 'Toutes' },
                 { key: 'retard', label: `En retard (${nbEnRetard})` },
                 { key: 'semaine', label: `Livraisons (${nbLivraisonsSemaine})` },
-                { key: 'essayages', label: `Essayages (${nbEssayagesSemaine})` },
+                
               ].map(f => (
                 <button
                   key={f.key}
@@ -540,7 +540,7 @@ export default function CommandesPage() {
                 <div key={i} className="flex-shrink-0 rounded-xl px-3 py-2 text-xs border"
                   style={{ borderColor: e.type === 'livraison' ? '#C9A24B' : '#0891b2', backgroundColor: e.type === 'livraison' ? '#FDF8ED' : '#ECFEFF' }}>
                   <div className="font-bold" style={{ color: e.type === 'livraison' ? '#C9A24B' : '#0891b2' }}>
-                    {e.type === 'livraison' ? '📦 Livraison' : '🧵 Essayage'}
+                    {'📦 Livraison'}
                   </div>
                   <div className="font-semibold text-slate-800">{fmtDate(e.date)}</div>
                   <div className="text-slate-500 truncate max-w-[130px]">{e.commande.client_nom}</div>
