@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, Plus, Pencil, Trash2, X, Loader2, Wallet, PiggyBank,
   TrendingUp, ChevronLeft, ChevronRight, ShieldAlert, FileDown, BarChart3
-} from 'lucide-react';
+, MapPin, Phone } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { computeFinanceTotals, CommandeLike, VenteLike } from '@/lib/finance';
 
@@ -666,8 +666,11 @@ export default function DepensesPage() {
                   Ousmane Design
                 </h1>
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] mt-1.5" style={{ color: GOLD }}>
-                  Création &amp; Couture Contemporaine
-                </p>
+                  Création &amp; Couture Contemporaine</p>
+<div className="mt-3 space-y-1 text-[11px]" style={{ color: 'rgba(255,255,255,0.75)' }}>
+  <p className="flex items-center gap-1.5"><MapPin size={11} /> Hann Maristes, Dakar, Sénégal</p>
+  <p className="flex items-center gap-1.5"><Phone size={11} /> 77 646 21 02 / 70 348 26 82</p>
+</div>
               </div>
               <div className="text-right">
                 <p className="text-white text-sm font-semibold capitalize">{moisLabel}</p>
