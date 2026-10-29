@@ -38,7 +38,7 @@ const ACCES: Record<Role, string[]> = {
   tailleur: ['/', '/clients', '/commandes', '/tailleurs'],
 };
 
-export const pageAccueil = (role: Role) => role === 'caissier' ? '/ventes' : role === 'tailleur' ? '/commandes' : '/';
+export const pageAccueil = (role: Role) => '/';
 
 const peutAcceder = (role: Role, chemin: string) => {
   if (chemin === '/') return ACCES[role].includes('/');
