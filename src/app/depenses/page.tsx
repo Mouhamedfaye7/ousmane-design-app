@@ -225,82 +225,32 @@ export default function DepensesPage() {
   );
 
   const downloadRapportPDF = async () => {
-  setPdfLoading(true);
-  try {
-    const { default: html2canvas } = await import('html2canvas-pro');
-    const { default: jsPDF } = await import('jspdf');
+    setPdfLoading(true);
+    try {
+      const { default: html2canvas } = await import('html2canvas-pro');
+      const { default: jsPDF } = await import('jspdf');
+      const container = bilanRef.current;
+      if (!container) return;
 
-    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 10;
-    const usableWidth = pageWidth - margin * 2;
-    const usableHeight = pageHeight - margin * 2;
-
-    // === En-tête premium (comme la facture) ===
-    const header = document.createElement('div');
-    header.style.cssText = `
-      width: 800px;
-      background: #ffffff;
-      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-      position: relative;
-      overflow: hidden;
-    `;
-    header.innerHTML = `
-      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:0;">
-        <span style="font-family:Fraunces,Georgia,serif;font-style:italic;font-weight:700;font-size:92px;color:#1B3B6F;opacity:0.055;transform:rotate(-32deg);white-space:nowrap;">
-          Ousmane Design
-        </span>
-      </div>
-      <div style="position:relative;z-index:1;background:#1B3B6F;padding:32px 40px 28px;color:#fff;">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:20px;">
-          <div>
-            <h1 style="font-family:Fraunces,Georgia,serif;font-style:italic;font-weight:600;font-size:36px;margin:0;color:#fff;">
-              Ousmane Design
-            </h1>
-            <p style="margin:6px 0 0;font-size:11px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:#C9A24B;">
-              Création & Couture Contemporaine
-            </p>
-            <div style="margin-top:18px;font-size:12px;color:rgba(255,255,255,0.75);line-height:1.6;">
-              <div>📍 Hann Maristes, Dakar, Sénégal</div>
-              <div>📞 77 646 21 02 / 70 348 26 82</div>
-            </div>
-          </div>
-          <div style="text-align:right;">
-            <span style="display:inline-block;background:#C9A24B;color:#1B3B6F;font-size:11px;font-weight:700;padding:6px 16px;border-radius:999px;letter-spacing:0.05em;text-transform:uppercase;">
-              Rapport
-            </span>
-            <p style="margin:14px 0 0;font-size:13px;font-weight:600;color:rgba(255,255,255,0.8);">
-              Dépenses & Bénéfice
-            </p>
-            <p style="margin:4px 0 0;font-size:12px;color:rgba(255,255,255,0.6);">
-              ${moisLabel}
-            </p>
-          </div>
-        </div>
-      </div>
-      <div style="position:relative;z-index:1;padding:28px 40px;background:#fff;">
-        <p style="margin:0;font-size:13px;color:#64748b;">
-          Document généré le ${new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
-        </p>
-      </div>
-    `;
-    document.body.appendChild(header);
-
-    const headerCanvas = await html2canvas(header, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
-    const headerImg = headerCanvas.toDataURL('image/jpeg', 0.92);
-    const headerHeight = (headerCanvas.height * usableWidth) / headerCanvas.width;
-    pdf.addImage(headerImg, 'JPEG', margin, margin, usableWidth, Math.min(headerHeight, usableHeight));
-    document.body.removeChild(header);
-
-    // === Contenu existant (blocs .pdf-block) ===
-    const container = bilanRef.current;
-    if (container) {
       const blocks = Array.from(container.querySelectorAll<HTMLElement>('.pdf-block'));
-      let cursorY = margin + Math.min(headerHeight, usableHeight) + 4;
+      if (blocks.length === 0) return;
+
+      const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 10;
+      const usableWidth = pageWidth - margin * 2;
+      const usableHeight = pageHeight - margin * 2;
+      const gap = 3;
+
+      let cursorY = margin;
 
       for (const block of blocks) {
-        const canvas = await html2canvas(block, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+        const canvas = await html2canvas(block, {
+          scale: 2,
+          backgroundColor: '#ffffff',
+          useCORS: true,
+        });
         const imgData = canvas.toDataURL('image/jpeg', 0.92);
         const imgHeight = (canvas.height * usableWidth) / canvas.width;
 
@@ -310,21 +260,24 @@ export default function DepensesPage() {
         }
 
         let finalHeight = imgHeight;
-        if (finalHeight > usableHeight) finalHeight = usableHeight;
+        if (finalHeight > usableHeight) {
+          finalHeight = usableHeight;
+        }
 
         pdf.addImage(imgData, 'JPEG', margin, cursorY, usableWidth, finalHeight);
-        cursorY += finalHeight + 3;
+        cursorY += finalHeight + gap;
       }
-    }
 
-    pdf.save(`Rapport_Depenses_${mois}.pdf`);
-  } catch (e) {
-    console.error(e);
-    alert('Erreur lors de la génération du PDF');
-  } finally {
-    setPdfLoading(false);
-  }
-};// ========== CRUD ==========
+      pdf.save(`Rapport_Depenses_${mois}.pdf`);
+    } catch (e) {
+      console.error(e);
+      alert('Erreur lors de la génération du PDF');
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  // ========== CRUD ==========
   const ouvrirAjout = () => {
     setEditingId(null);
     setForm(formVide());
