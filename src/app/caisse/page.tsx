@@ -51,6 +51,7 @@ export default function CaissePage() {
   const [paiements, setPaiements] = useState<Paiement[]>([]);
   const [loading, setLoading] = useState(true);
   const [erreur, setErreur] = useState('');
+  const [afficherCloture, setAfficherCloture] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -287,7 +288,34 @@ export default function CaissePage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {paiements.map(p => (
+                      
+      {/* CLÔTURE DU JOUR */}
+      <div className="bg-white rounded-2xl p-5 mb-6 border border-slate-200">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-display italic text-xl" style={{ color: NAVY }}>Clôture du {dateJour}</h2>
+          <button
+            onClick={() => window.print()}
+            className="px-4 py-2 rounded-full text-sm font-bold"
+            style={{ backgroundColor: GOLD, color: NAVY }}
+          >
+            Imprimer
+          </button>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {parMode.filter(m => m.total > 0).map(m => (
+            <div key={m.nom} className="p-3 rounded-xl border" style={{ borderColor: m.couleur + '40' }}>
+              <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: m.couleur }}>{m.nom}</p>
+              <p className="text-lg font-bold mt-1">{fmt(m.total)} F</p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 pt-4 border-t flex justify-between items-center">
+          <span className="font-semibold text-slate-600">Total encaissé</span>
+          <span className="text-2xl font-bold" style={{ color: NAVY }}>{fmt(totalJour)} F</span>
+        </div>
+      </div>
+
+      {paiements.map(p => (
                         <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50/50">
                           <td className="py-2.5 text-slate-500 whitespace-nowrap">
                             {new Date(p.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
