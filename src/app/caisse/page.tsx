@@ -230,14 +230,7 @@ export default function CaissePage() {
             {/* CLÔTURE DU JOUR */}
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-display italic text-xl" style={{ color: NAVY }}>Clôture du jour</h2>
-              <button
-                onClick={() => window.print()}
-                className="px-4 py-2 rounded-full text-sm font-bold"
-                style={{ backgroundColor: GOLD, color: NAVY }}
-              >
-                Imprimer
-              </button>
-            </div>
+              </div>
 
             {/* Total du jour */}
             <div className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_-15px_rgba(23,27,46,0.15)] p-6 mb-5 flex items-center justify-between">
@@ -305,14 +298,7 @@ export default function CaissePage() {
       <div className="bg-white rounded-2xl p-5 mb-6 border border-slate-200">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-display italic text-xl" style={{ color: NAVY }}>Clôture du {dateJour}</h2>
-          <button
-            onClick={() => window.print()}
-            className="px-4 py-2 rounded-full text-sm font-bold"
-            style={{ backgroundColor: GOLD, color: NAVY }}
-          >
-            Imprimer
-          </button>
-        </div>
+          </div>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           {parMode.filter(m => m.total > 0).map(m => (
             <div key={m.nom} className="p-3 rounded-xl border" style={{ borderColor: m.couleur + '40' }}>
